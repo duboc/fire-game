@@ -1,6 +1,7 @@
 // Stream Processor — simulates GCP Dataflow stream aggregation
-import { pubsub, redis, bigtable } from '../gcp/index.js';
+import { pubsub, redis, bigtable, bigquery } from '../gcp/index.js';
 import { getActiveRound, getPlayer } from './db-service.js';
+import { recordTapRate } from './telemetry-service.js';
 
 let subscription = null;
 let running = false;
@@ -35,6 +36,9 @@ export async function startStreamProcessor() {
         const currentCount = await redis.client.zincrby(`round:${roundId}:scores`, n, id);
         const currentTotal = await redis.client.getClient().incrby(`round:${roundId}:totalTaps`, n);
         
+        // Report tap rate to Cloud Monitoring telemetry
+        await recordTapRate(Number(n)).catch(() => {});
+        
         // 2. Stream raw clickstream record to Cloud Bigtable (Column NoSQL)
         try {
           const btTable = bigtable.client.instance('tree-instance').table('clickstream-raw-logs');
@@ -61,6 +65,19 @@ export async function startStreamProcessor() {
         } catch (btErr) {
           // Stream processing must gracefully degrade if Bigtable log audit trails fail
           console.error('⚠️ [StreamProcessor] Failed to stream to Bigtable (audit log degraded):', btErr.message);
+        }
+
+        // 3. Stream clickstream record to Cloud BigQuery (OLAP / BI / Warehouse)
+        try {
+          const bqTable = bigquery.client.dataset('tree_analytics').table('clickstream_logs');
+          await bqTable.insert({
+            round_id: roundId,
+            player_id: id,
+            tap_count: Number(n),
+            timestamp: new Date(timestamp || Date.now())
+          });
+        } catch (bqErr) {
+          console.error('⚠️ [StreamProcessor] Failed to stream to BigQuery (BI telemetry degraded):', bqErr.message);
         }
       }
       

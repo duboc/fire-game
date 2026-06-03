@@ -10,6 +10,7 @@ import { generateIdentity } from './services/names-service.js';
 import { getPlayerView, getPublicState } from './services/player-view-service.js';
 import { startStreamProcessor, stopStreamProcessor } from './services/stream-processor.js';
 import { PHASE } from './game.js';
+import { initTelemetry, recordActivePlayers, exportRoundSummaryToBigQuery } from './services/telemetry-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -219,6 +220,9 @@ async function runStateMachineTick() {
       console.log(`⏱️ [StateMachine] Round ${active.roundId} ENDED. Winner: ${winner ? winner.name : 'None'} with ${winner ? winner.count : 0} taps.`);
       await saveActiveRound(active);
       
+      // Export finished round summary to BigQuery for tournament telemetry
+      await exportRoundSummaryToBigQuery(active).catch(() => {});
+      
       // 1. Spawning Certificate PDF Generation cloud run job asynchronously
       if (winner) {
         console.log(`⚙️ [CloudRunJobs] Spawning certificate-generator job for winner ${winner.id} (${winner.name})`);
@@ -231,6 +235,14 @@ async function runStateMachineTick() {
     // Only broadcast regularly if game is actively running (to fluidly stream score adjustments)
     if (active.phase === 'running') {
       broadcast();
+      
+      // Publish active players count metric to Cloud Monitoring
+      try {
+        const totalPlayers = await redis.client.getClient().zcard(`round:${active.roundId}:scores`);
+        await recordActivePlayers(totalPlayers).catch(() => {});
+      } catch (e) {
+        // ignore
+      }
     }
   } catch (err) {
     console.error('❌ Error in State Machine Tick:', err.message);
@@ -372,6 +384,9 @@ let server;
 async function bootstrap() {
   // 1. Initialize Distributed GCP Client Wrappers (Fallback to mock broker automatically)
   await initGcpServices();
+  
+  // 1.5 Initialize Telemetry & Cloud Monitoring Custom Descriptors
+  await initTelemetry();
   
   // 2. Start dataflow-like stream processor aggregator
   await startStreamProcessor();
