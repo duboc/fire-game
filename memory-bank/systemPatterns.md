@@ -1,11 +1,12 @@
 # System Patterns — Tap Race: Enterprise Edition (TREE)
 
 ## Core Architecture Design
-To transition from the monolithic design to a highly resilient distributed system, we adopt an **Event-Driven CQRS (Command Query Responsibility Segregation)** pattern.
+To transition from the monolithic design to a highly resilient distributed system, we adopt an **Event-Driven CQRS (Command Query Responsibility Segregation)** pattern. Detailed design choices are recorded in our [Architecture Decision Records (ADRs)](file:///home/admin_renanvn_altostrat_com/projects/GitHub/fire-game/docs/adr/README.md):
 
-- **Write Path (Command)**: Client Taps -> Load Balancer -> Apigee -> Cloud Run Ingest -> Pub/Sub -> Dataflow.
-- **Read Path (Query)**: Client / Screen -> Load Balancer -> Firebase Realtime DB / Redis -> Client SSE.
-- **System of Record**: Cloud Spanner (Transactional states, metadata, rounds, admin actions).
+- **Write Path (Command)**: Client Taps -> Load Balancer -> Apigee -> Cloud Run Ingest -> Pub/Sub -> Dataflow. *(See [ADR 0004](file:///home/admin_renanvn_altostrat_com/projects/GitHub/fire-game/docs/adr/0004-decoupled-tap-ingestion-pubsub-dataflow.md))*
+- **Read Path (Query)**: Client / Screen -> Load Balancer -> Firebase Realtime DB / Redis -> Client SSE. *(See [ADR 0001](file:///home/admin_renanvn_altostrat_com/projects/GitHub/fire-game/docs/adr/0001-hosting-on-cloud-run.md))*
+- **System of Record**: Cloud Spanner (Transactional states, metadata, rounds, admin actions). *(See [ADR 0002](file:///home/admin_renanvn_altostrat_com/projects/GitHub/fire-game/docs/adr/0002-operational-databases-spanner-redis.md))*
+
 
 ---
 
