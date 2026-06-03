@@ -47,6 +47,10 @@
 ### Phase 4: CI/CD & Deployment Automation
 - [x] Create GitHub Actions workflow (`.github/workflows/deploy.yml`) to run tests and deploy to Cloud Run automatically.
 - [x] Document hosting and operational database architecture mapping.
+- [x] Provision production Pub/Sub and Bigtable infrastructure in `project-pt-internal`:
+  - [x] Create and verify Pub/Sub topic `tap-events-topic` & subscription `tap-events-sub`.
+  - [x] Create and verify Bigtable instance `tree-instance` & table `clickstream-raw-logs` with column family `taps`.
+
 
 ---
 
