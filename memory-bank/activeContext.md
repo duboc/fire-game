@@ -33,4 +33,5 @@ We are converting the monolithic, single-instance local Tap Race game into a hig
 ## 📋 Next Steps
 1. **Looker Studio Dashboard & BigQuery Integration**: Direct logs to BigQuery for tournament analytical telemetry and aggregate visualizations.
 2. **Terraform Infrastructure-as-Code Setup**: Configure resource definitions for GKE, Spanner, Redis, Pub/Sub, Cloud Run, and Cloud Armor WAF rules to standardize production environments.
+3. **Gemini Live Voice-to-Tap Accessibility**: Implement token vending service and client WebSocket handlers for phonetic live tap translation ([PRD-001](file:///home/admin_renanvn_altostrat_com/projects/GitHub/fire-game/docs/backlog/PRD-001-gemini-live-accessibility-tapping.md)).
 

@@ -43,6 +43,8 @@
   - Direct logs to BigQuery for tournament telemetry.
 - [ ] **Terraform Infrastructure-as-Code Setup**:
   - Configure resource definitions for GKE, Spanner, Redis, Pub/Sub, and Armor rules.
+- [ ] **Gemini Live Voice-to-Tap Accessibility (Backlog)**:
+  - Implement dynamic phonetic syllable-to-tap stream translation via WebSocket connection ([PRD-001](file:///home/admin_renanvn_altostrat_com/projects/GitHub/fire-game/docs/backlog/PRD-001-gemini-live-accessibility-tapping.md)).
 
 ### Phase 4: CI/CD & Deployment Automation
 - [x] Create GitHub Actions workflow (`.github/workflows/deploy.yml`) to run tests and deploy to Cloud Run automatically.

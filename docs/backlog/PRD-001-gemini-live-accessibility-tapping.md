@@ -81,18 +81,16 @@ As the Gemini Live API streams back real-time text chunks (e.g., `{"text": "la l
 
 ---
 
-## 4. Security, Fraud Prevention & Guardrails
+## 4. Safety & Ingestion Guardrails
 
-Voice tapping must not be exploitable to gain an unfair advantage over physical tap players:
+To keep the accessibility feature purely focused on **fun, effortless participation, and maximum inclusivity**, there are **no anti-cheat checks or Vertex AI fraud filters applied to voice-vended taps**. Anyone using the vocal tap is welcome to make sounds as they wish without risk of being flagged or filtered.
 
-1.  **Syllable Rate Limiting (Client-side & Server-side)**:
-    *   Human speech limits rapid syllable repetition to approximately **8–10 syllables per second**.
-    *   The parser applies a hard clamp of **10 taps per second** (100ms interval) from voice input.
-2.  **Vertex AI Click Fraud Check**:
-    *   Since these vocal taps are routed through the identical `/tap` endpoint, they are still validated by the **Vertex AI Anti-Cheat service**.
-    *   If a player attempts to stream pre-recorded ultra-fast loop tracks (e.g., a synthesized 50Hz "la-la-la" wave), the anomaly detector flags the payload as fraudulent and discards the taps.
-3.  **Active Ingestion Control**:
-    *   The WebSocket session automatically terminates the moment the game phase transitions to `ended`.
+The only guardrails in place are for client browser performance stability:
+
+1.  **Rendering Stability Guardrail (Client-side)**:
+    *   To prevent excessive rendering updates from freezing the mobile device or WebGL animations, vocal taps are paced at a stable client-side limit of **12 taps per second**.
+2.  **Active Session Control**:
+    *   The WebSocket session to the Gemini Live API automatically terminates the moment the game phase transitions to `ended`.
 
 ---
 
@@ -111,4 +109,4 @@ Voice tapping must not be exploitable to gain an unfair advantage over physical 
 - [ ] Create robust JavaScript phonetic parser to count voice peaks and trigger client-side tap animations.
 - [ ] Add toggle-switch in mobile UI to calibrate the "Vocal Tap" mode.
 - [ ] Conduct end-to-end local integration tests (simulated audio streams yielding accurate `/tap` Pub/Sub payloads).
-- [ ] Verify rate-limiting guardrails and Vertex AI fraud filter compatibility.
+- [ ] Verify smooth syllable-to-tap rendering and client-side pacing to prevent device freeze.
