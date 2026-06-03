@@ -48,3 +48,10 @@
 - [x] Create GitHub Actions workflow (`.github/workflows/deploy.yml`) to run tests and deploy to Cloud Run automatically.
 - [x] Document hosting and operational database architecture mapping.
 
+---
+
+## ☁️ Production Cloud Provisioning Status
+- [x] **Cloud Spanner Instance (`tree-instance`)**: Provisioned in `project-pt-internal` under regional config `us-central1` (100 PU).
+- [x] **Cloud Spanner Database (`tree-db`)**: Created with production schemas for `Players` and `Rounds`.
+
+
