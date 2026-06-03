@@ -150,7 +150,7 @@ export async function exportRoundSummaryToBigQuery(activeRound) {
     // Get total players from Redis ZSET cardinality
     let totalPlayers = 0;
     try {
-      totalPlayers = await redis.client.getClient().zcard(`round:${activeRound.roundId}:scores`);
+      totalPlayers = await redis.getClient().zcard(`round:${activeRound.roundId}:scores`);
     } catch (e) {
       console.error('⚠️ [Telemetry] Could not retrieve player card from Redis:', e.message);
     }

@@ -214,7 +214,7 @@ async function runStateMachineTick() {
       
       active.winner = winner;
       
-      const totalTapsStr = await redis.client.getClient().get(`round:${active.roundId}:totalTaps`);
+      const totalTapsStr = await redis.getClient().get(`round:${active.roundId}:totalTaps`);
       active.totalTaps = totalTapsStr ? parseInt(totalTapsStr, 10) : 0;
       
       console.log(`⏱️ [StateMachine] Round ${active.roundId} ENDED. Winner: ${winner ? winner.name : 'None'} with ${winner ? winner.count : 0} taps.`);
@@ -238,7 +238,7 @@ async function runStateMachineTick() {
       
       // Publish active players count metric to Cloud Monitoring
       try {
-        const totalPlayers = await redis.client.getClient().zcard(`round:${active.roundId}:scores`);
+        const totalPlayers = await redis.getClient().zcard(`round:${active.roundId}:scores`);
         await recordActivePlayers(totalPlayers).catch(() => {});
       } catch (e) {
         // ignore
@@ -281,8 +281,8 @@ app.post('/admin/start', async (req, res) => {
     };
     
     // 1. Reset/Configure database schemas & cache states
-    await redis.client.getClient().del(`round:${newRoundId}:scores`);
-    await redis.client.getClient().del(`round:${newRoundId}:totalTaps`);
+    await redis.getClient().del(`round:${newRoundId}:scores`);
+    await redis.getClient().del(`round:${newRoundId}:totalTaps`);
     
     // 2. Commit transactionally to Spanner & sync with Redis cache
     await saveActiveRound(newRound);
@@ -313,8 +313,8 @@ app.post('/admin/reset', async (req, res) => {
       winner: null,
     };
     
-    await redis.client.getClient().del(`round:${newRoundId}:scores`);
-    await redis.client.getClient().del(`round:${newRoundId}:totalTaps`);
+    await redis.getClient().del(`round:${newRoundId}:scores`);
+    await redis.getClient().del(`round:${newRoundId}:totalTaps`);
     await saveActiveRound(resetRound);
     
     console.log(`👑 [Admin] Reset tournament state back to Lobby`);

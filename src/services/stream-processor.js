@@ -34,7 +34,7 @@ export async function startStreamProcessor() {
         
         // 1. Write transactional tap aggregation to MemoryStore Redis Cluster
         const currentCount = await redis.client.zincrby(`round:${roundId}:scores`, n, id);
-        const currentTotal = await redis.client.getClient().incrby(`round:${roundId}:totalTaps`, n);
+        const currentTotal = await redis.getClient().incrby(`round:${roundId}:totalTaps`, n);
         
         // Report tap rate to Cloud Monitoring telemetry
         await recordTapRate(Number(n)).catch(() => {});
