@@ -17,6 +17,10 @@ We are converting the monolithic, single-instance local Tap Race game into a hig
 - Built and pushed the Docker container image for `tap-race` via Google Cloud Build to `us-central1-docker.pkg.dev/project-pt-internal/tree-repo/tap-race:latest`.
 - Committed and pushed all local modifications and scaffolded files directly to the `main` and `renanvn` branches on the user's remote fork (`https://github.com/nansravn/fire-game`).
 - Provisioned the production Spanner instance `tree-instance` and database `tree-db` with schemas for `Players` and `Rounds` in project `project-pt-internal`.
+- Provisioned the production Cloud Memorystore Redis instance `tree-redis` (1GB size) on the custom VPC network `dev-vpc` (region `us-central1`, IP: `10.55.110.131`).
+- Configured and granted critical project-level IAM role permissions (`roles/pubsub.subscriber`, `roles/pubsub.publisher`, `roles/bigtable.user`, `roles/spanner.databaseUser`) to the default Compute Engine service account.
+- Successfully deployed the `tap-race` service to Google Cloud Run with Direct VPC Egress configured to route traffic seamlessly into `dev-vpc` and `dev-subnet`.
+
 
 ---
 

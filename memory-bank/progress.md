@@ -59,5 +59,8 @@
 ## ☁️ Production Cloud Provisioning Status
 - [x] **Cloud Spanner Instance (`tree-instance`)**: Provisioned in `project-pt-internal` under regional config `us-central1` (100 PU).
 - [x] **Cloud Spanner Database (`tree-db`)**: Created with production schemas for `Players` and `Rounds`.
+- [x] **Cloud Memorystore Redis Instance (`tree-redis`)**: Provisioned in `project-pt-internal` under region `us-central1` (1GB size, connected to custom `dev-vpc` network, host IP: `10.55.110.131`).
+- [x] **Cloud Run Service Deployment (`tap-race`)**: Successfully deployed to production on Cloud Run using direct VPC egress (peered to `dev-vpc` network and `dev-subnet` subnet) with live GCP client integrations.
+
 
 
