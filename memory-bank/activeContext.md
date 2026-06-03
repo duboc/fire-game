@@ -13,6 +13,8 @@ We are converting the monolithic, single-instance local Tap Race game into a hig
 - Implemented and published official Architecture Decision Records (ADRs) under [docs/adr/README.md](file:///home/admin_renanvn_altostrat_com/projects/GitHub/fire-game/docs/adr/README.md).
 - Finalized and integrated state-free microservices wrappers (Spanner, Redis, Pub/Sub, Bigtable) with fallback local modes and official integration test coverage (`test/gcp.test.js`).
 - Provisioned production GCP Pub/Sub topic `tap-events-topic`, subscription `tap-events-sub`, Bigtable Instance `tree-instance`, and Bigtable Table `clickstream-raw-logs` (with column family `taps`) in the `project-pt-internal` project.
+- Created and configured the production Google Artifact Registry repository `tree-repo` in `us-central1`.
+- Built and pushed the Docker container image for `tap-race` via Google Cloud Build to `us-central1-docker.pkg.dev/project-pt-internal/tree-repo/tap-race:latest`.
 - Committed and pushed all local modifications and scaffolded files directly to the `main` and `renanvn` branches on the user's remote fork (`https://github.com/nansravn/fire-game`).
 - Provisioned the production Spanner instance `tree-instance` and database `tree-db` with schemas for `Players` and `Rounds` in project `project-pt-internal`.
 
