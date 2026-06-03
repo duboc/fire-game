@@ -13,7 +13,9 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@google-cloud/bigquery": "^8.3.1",
     "@google-cloud/bigtable": "^6.5.0",
+    "@google-cloud/monitoring": "^5.3.2",
     "@google-cloud/pubsub": "^5.3.0",
     "@google-cloud/spanner": "^8.7.1",
     "express": "^4.21.2",

@@ -20,7 +20,7 @@ We are converting the monolithic, single-instance local Tap Race game into a hig
 - Provisioned the production Cloud Memorystore Redis instance `tree-redis` (1GB size) on the custom VPC network `dev-vpc` (region `us-central1`, IP: `10.55.110.131`).
 - Configured and granted critical project-level IAM role permissions (`roles/pubsub.subscriber`, `roles/pubsub.publisher`, `roles/bigtable.user`, `roles/spanner.databaseUser`) to the default Compute Engine service account.
 - Successfully deployed the `tap-race` service to Google Cloud Run with Direct VPC Egress configured to route traffic seamlessly into `dev-vpc` and `dev-subnet`.
-
+- Fully integrated the Voice-to-Tap Accessibility feature into `public/index.html` with a beautiful "Modo Voz (Inclusivo)" toggle button, pulsing visual feedback, and real-time client-side syllable analysis and tap simulation.
 
 ---
 
@@ -37,5 +37,4 @@ We are converting the monolithic, single-instance local Tap Race game into a hig
 ## 📋 Next Steps
 1. **Looker Studio Dashboard & BigQuery Integration**: Direct logs to BigQuery for tournament analytical telemetry and aggregate visualizations.
 2. **Terraform Infrastructure-as-Code Setup**: Configure resource definitions for GKE, Spanner, Redis, Pub/Sub, Cloud Run, and Cloud Armor WAF rules to standardize production environments.
-3. **Gemini Live Voice-to-Tap Accessibility**: Implement token vending service and client WebSocket handlers for phonetic live tap translation ([PRD-001](file:///home/admin_renanvn_altostrat_com/projects/GitHub/fire-game/docs/backlog/PRD-001-gemini-live-accessibility-tapping.md)).
 
