@@ -89,6 +89,49 @@
   .cd-sub{color:var(--muted); font-weight:700; letter-spacing:.2em; text-transform:uppercase; margin-top:8px;}
 
   .hidden{display:none !important;}
+
+  /* Accessibility Style */
+  .acc-wrap{
+    display: flex; justify-content: center; margin: 4px 0;
+  }
+  .acc-btn{
+    background: rgba(255, 255, 255, 0.04); border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 14px; padding: 10px 18px; font-size: 13px; font-weight: 700;
+    color: var(--muted); cursor: pointer; display: flex; align-items: center; gap: 8px;
+    transition: all 0.2s ease;
+  }
+  .acc-btn.active{
+    background: rgba(0, 230, 195, 0.12); border: 1px solid var(--p3);
+    color: var(--p3); box-shadow: 0 0 14px rgba(0, 230, 195, 0.15);
+  }
+  .acc-btn:hover{
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .acc-btn.active .acc-indicator{
+    width: 6px; height: 6px; background-color: var(--p3); border-radius: 50%;
+    animation: acc-pulse 1s infinite alternate;
+  }
+  @keyframes acc-pulse {
+    0% { transform: scale(0.8); opacity: 0.4; }
+    100% { transform: scale(1.4); opacity: 1; }
+  }
+  .audio-visualizer {
+    display: none; height: 3px; width: 44px; gap: 3px; align-items: center; margin-left: 6px;
+  }
+  .audio-visualizer.active {
+    display: flex;
+  }
+  .audio-bar {
+    background-color: var(--p3); width: 3px; height: 3px; border-radius: 99px;
+  }
+  .audio-visualizer.active .audio-bar:nth-child(1) { animation: soundWave 0.6s infinite alternate; }
+  .audio-visualizer.active .audio-bar:nth-child(2) { animation: soundWave 0.4s infinite alternate; }
+  .audio-visualizer.active .audio-bar:nth-child(3) { animation: soundWave 0.8s infinite alternate; }
+  .audio-visualizer.active .audio-bar:nth-child(4) { animation: soundWave 0.5s infinite alternate; }
+  @keyframes soundWave {
+    0% { height: 3px; }
+    100% { height: 14px; }
+  }
 </style>
 </head>
 <body>
@@ -102,6 +145,20 @@
       <div class="stat rank"><div class="k">Posição</div><div class="v" id="rank">—</div></div>
       <div class="stat count"><div class="k">Toques</div><div class="v" id="count">0</div></div>
       <div class="stat"><div class="k">Jogadores</div><div class="v" id="total">—</div></div>
+    </div>
+
+    <div class="acc-wrap">
+      <button class="acc-btn" id="btnAcc">
+        <span id="accMic">🎤</span>
+        <span>Modo Voz (Inclusivo)</span>
+        <span class="acc-indicator"></span>
+        <div class="audio-visualizer" id="visualizer">
+          <div class="audio-bar"></div>
+          <div class="audio-bar"></div>
+          <div class="audio-bar"></div>
+          <div class="audio-bar"></div>
+        </div>
+      </button>
     </div>
 
     <div class="timewrap" id="timewrap"><div class="timebar" id="timebar"></div></div>
@@ -131,6 +188,7 @@
     btn:$('btn'), btnlabel:$('btnlabel'), pulse:$('pulse'), arena:$('arena'),
     status:$('status'), timebar:$('timebar'), timewrap:$('timewrap'),
     overlay:$('overlay'), cd:$('cd'), cdsub:$('cdsub'),
+    btnAcc:$('btnAcc'), accMic:$('accMic'), visualizer:$('visualizer'),
   };
 
   const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', RUNNING:'running', ENDED:'ended' };
@@ -342,6 +400,136 @@
   }
   document.addEventListener('visibilitychange', ()=>{ if (document.hidden) flushBeacon(); });
   window.addEventListener('pagehide', flushBeacon);
+
+  // ---- accessibility (Vocal Tapping) --------------------------------------
+  let voiceActive = false;
+  let recognition = null;
+  let lastProcessedIndex = 0;
+
+  function triggerVocalTap() {
+    if (state.phase !== PHASE.RUNNING) return;
+    pending++; localTaps++;
+    serverCount = Math.max(serverCount, localTaps);
+    els.count.textContent = serverCount;
+    bounce();
+    
+    // Create floating +1 at a random location on the main button
+    const f = document.createElement('div');
+    f.className = 'float';
+    f.textContent = '+1';
+    const r = els.arena.getBoundingClientRect();
+    const offsetRange = 70;
+    const x = r.width / 2 + (Math.random() - 0.5) * offsetRange;
+    const y = r.height / 2 + (Math.random() - 0.5) * offsetRange;
+    f.style.left = x + 'px';
+    f.style.top = y + 'px';
+    els.arena.appendChild(f);
+    setTimeout(() => f.remove(), 700);
+    
+    vibe(12);
+  }
+
+  function initVoiceRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Seu navegador não suporta reconhecimento de voz. Tente usar o Google Chrome!');
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'pt-BR';
+
+    recognition.onstart = () => {
+      console.log('🎙️ Reconhecimento de voz iniciado.');
+      els.visualizer.classList.add('active');
+    };
+
+    recognition.onend = () => {
+      console.log('🎙️ Reconhecimento de voz encerrado.');
+      els.visualizer.classList.remove('active');
+      if (voiceActive) {
+        // Auto-restart if active to prevent continuous timeout drops
+        try { recognition.start(); } catch(_) {}
+      }
+    };
+
+    recognition.onerror = (e) => {
+      console.warn('🎙️ Erro no microfone:', e.error);
+    };
+
+    recognition.onresult = (event) => {
+      if (state.phase !== PHASE.RUNNING) return;
+      
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          processTranscriptText(event.results[i][0].transcript);
+          lastProcessedIndex = i + 1;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      
+      if (interimTranscript) {
+        processTranscriptText(interimTranscript);
+      }
+    };
+  }
+
+  let lastMatchedTextLength = 0;
+
+  function processTranscriptText(text) {
+    if (!text) return;
+    const clean = text.toLowerCase().trim();
+    
+    if (clean.length <= lastMatchedTextLength) {
+      if (clean.length < lastMatchedTextLength) {
+        lastMatchedTextLength = 0;
+      }
+      return;
+    }
+    
+    const newSegment = clean.substring(lastMatchedTextLength);
+    lastMatchedTextLength = clean.length;
+    
+    // Find valid syllable matches
+    const matches = newSegment.match(/(la|ta|pa|da|lo|to|po|do|pop|tap|lah|bah)/g);
+    if (matches && matches.length > 0) {
+      const count = Math.min(matches.length, 12);
+      for (let i = 0; i < count; i++) {
+        setTimeout(triggerVocalTap, i * 50); // cascading staggered micro-interactions
+      }
+    }
+  }
+
+  function toggleVoice() {
+    if (!recognition) initVoiceRecognition();
+    if (!recognition) return;
+
+    voiceActive = !voiceActive;
+    if (voiceActive) {
+      els.btnAcc.classList.add('active');
+      els.accMic.textContent = '🛑';
+      lastMatchedTextLength = 0;
+      try {
+        recognition.start();
+      } catch (err) {
+        console.warn('Failed to start speech recognition:', err);
+      }
+    } else {
+      els.btnAcc.classList.remove('active');
+      els.accMic.textContent = '🎤';
+      try {
+        recognition.stop();
+      } catch (err) {
+        console.warn('Failed to stop speech recognition:', err);
+      }
+    }
+  }
+
+  els.btnAcc.addEventListener('click', toggleVoice);
 
   // boot
   (async ()=>{ await join(); render(); loop(); requestAnimationFrame(frame); })();
