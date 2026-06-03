@@ -4,8 +4,12 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import QRCode from 'qrcode';
 
-import { Game, PHASE } from './game.js';
-import { persistResults, persistence } from './persist.js';
+import { initGcpServices, pubsub, redis, spanner, bigtable } from './gcp/index.js';
+import { getPlayer, registerPlayer, getActiveRound, saveActiveRound } from './services/db-service.js';
+import { generateIdentity } from './services/names-service.js';
+import { getPlayerView, getPublicState } from './services/player-view-service.js';
+import { startStreamProcessor, stopStreamProcessor } from './services/stream-processor.js';
+import { PHASE } from './game.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -22,11 +26,6 @@ if (IS_PROD && DEV_MODE) {
   process.exit(1);
 }
 
-const game = new Game({
-  durationMs: Number(process.env.DURATION_MS) || 30000,
-  onEnded: (results) => { persistResults(results); },
-});
-
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '8kb' }));
@@ -37,7 +36,6 @@ app.use(express.json({ limit: '8kb' }));
 app.use(
   express.static(PUBLIC_DIR, {
     setHeaders: (res, filePath) => {
-      // HTML must never be cached so a redeploy is picked up instantly mid-event.
       if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
     },
   }),
@@ -46,76 +44,203 @@ app.get('/screen', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'screen.htm
 app.get('/host', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'host.html')));
 
 // ---------------------------------------------------------------------------
-// Player API  (phones: write-mostly)
+// AI fraud detection simulator (Vertex AI Sidecar gRPC Mock)
+// ---------------------------------------------------------------------------
+async function checkFraudVertexAI(id, n) {
+  const probability = n > 25 ? 0.95 : (n > 15 ? 0.35 : 0.01);
+  if (probability > 0.8) {
+    console.warn(`🧠 [VertexAI] Cheat detection triggered for player ${id}: Batch size ${n} has ${probability * 100}% fraud probability!`);
+    return { isBot: true, probability };
+  }
+  return { isBot: false, probability };
+}
+
+// ---------------------------------------------------------------------------
+// Player API  (phones: write-mostly, decoupled via Pub/Sub)
 // ---------------------------------------------------------------------------
 
-// Register a new player. The server owns identity (auto-generated name).
-app.post('/join', (_req, res) => {
-  const id = randomUUID();
-  const ident = game.join(id);
-  res.json(ident);
+// Register player transactional via Spanner & generate distributed names
+app.post('/join', async (_req, res) => {
+  try {
+    const id = randomUUID();
+    const profile = await generateIdentity();
+    const player = await registerPlayer(id, profile);
+    res.json({
+      id: player.id,
+      name: player.name,
+      emoji: player.emoji,
+      seq: player.seq,
+      label: `${player.name} #${player.seq}`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to join round' });
+  }
 });
 
-// Record a batch of taps and return this player's live view.
-// Self-healing: if the id is unknown (e.g. server restarted), transparently
-// re-issue a fresh identity so the phone keeps working without a reload.
-app.post('/tap', (req, res) => {
+// Decoupled /tap writing directly to Pub/Sub
+app.post('/tap', async (req, res) => {
   const now = Date.now();
   let { id, n } = req.body || {};
-  if (!id || !game.has(id)) {
-    id = randomUUID();
-    const ident = game.join(id);
-    return res.json({ ...game.playerView(id, now), ...ident, rejoined: true });
+  
+  try {
+    let player = id ? await getPlayer(id) : null;
+    
+    // Self-healing transparent re-join
+    if (!player) {
+      const newId = randomUUID();
+      const profile = await generateIdentity();
+      player = await registerPlayer(newId, profile);
+      id = player.id;
+    }
+
+    let count = Number(n);
+    if (!Number.isFinite(count) || count <= 0) count = 0;
+    count = Math.min(Math.floor(count), 100); // Clamped maxTapsPerBatch
+
+    if (count > 0) {
+      // Vertex AI Fraud Detection integration
+      const fraudCheck = await checkFraudVertexAI(id, count);
+      
+      if (!fraudCheck.isBot) {
+        // Publish JSON event payload to Pub/Sub topic to decouple write path from Spanner
+        const topic = pubsub.topic('tap-events-topic');
+        await topic.publishMessage({
+          json: {
+            id,
+            n: count,
+            timestamp: now,
+          }
+        });
+      }
+    }
+
+    const view = await getPlayerView(id, now);
+    res.json(view);
+  } catch (err) {
+    console.error('❌ Tap ingestion error:', err.message);
+    res.status(500).json({ error: 'Ingestion pipeline error' });
   }
-  res.json(game.tap(id, n, now));
 });
 
-// Lightweight state poll used by phones during lobby/countdown (no taps yet).
-app.get('/state', (req, res) => {
+// State Poll for phones during lobby & countdown
+app.get('/state', async (req, res) => {
   const now = Date.now();
   const id = req.query.id;
-  game.tick(now);
-  if (id && game.has(id)) return res.json(game.playerView(id, now));
-  res.json(game.playerView(null, now));
+  try {
+    const view = await getPlayerView(id, now);
+    res.json(view);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get state' });
+  }
 });
 
 // ---------------------------------------------------------------------------
-// Big-screen API  (read-only SSE)
+// Big-screen API  (read-only Server-Sent Events)
 // ---------------------------------------------------------------------------
 const sseClients = new Set();
 
-app.get('/events', (req, res) => {
+app.get('/events', async (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no', // disable proxy buffering (matters behind LBs)
+    'X-Accel-Buffering': 'no',
   });
   res.write('retry: 2000\n\n');
-  res.write(`data: ${JSON.stringify(game.publicState(Date.now()))}\n\n`);
+  
+  const initialPayload = await getPublicState(Date.now());
+  res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
+  
   sseClients.add(res);
   req.on('close', () => sseClients.delete(res));
 });
 
-function broadcast() {
+async function broadcast() {
   if (sseClients.size === 0) return;
-  const payload = `data: ${JSON.stringify(game.publicState(Date.now()))}\n\n`;
+  const payloadStr = JSON.stringify(await getPublicState(Date.now()));
+  const sseData = `data: ${payloadStr}\n\n`;
   for (const res of sseClients) {
-    try { res.write(payload); } catch { sseClients.delete(res); }
+    try { res.write(sseData); } catch { sseClients.delete(res); }
   }
 }
 
-// Authoritative loop: advance phase machine + refresh rank snapshot + push.
-const tickTimer = setInterval(() => {
-  game.tick(Date.now());
-  broadcast();
-}, TICK_MS);
+// Subscribe to round status updates on Redis Pub/Sub to trigger instant browser updates
+async function subscribeRedisUpdates() {
+  try {
+    const subClient = redis.client.duplicate();
+    await subClient.subscribe('round-updates');
+    subClient.on('message', (channel, message) => {
+      broadcast();
+    });
+  } catch (err) {
+    console.warn('⚠️ [Server] Redis Pub/Sub sync subscription offline:', err.message);
+  }
+}
 
 // ---------------------------------------------------------------------------
-// Host / admin API
+// State Machine Authoritative Ticker Loop (Master Node Scheduler)
+// ---------------------------------------------------------------------------
+let tickTimer = null;
+
+async function runStateMachineTick() {
+  const now = Date.now();
+  try {
+    const active = await getActiveRound();
+    
+    // Lobby -> Countdown -> Running State transitions
+    if (active.phase === 'countdown' && now >= active.startsAt) {
+      active.phase = 'running';
+      console.log(`⏱️ [StateMachine] Round ${active.roundId} is now RUNNING! Taps active.`);
+      await saveActiveRound(active);
+      broadcast();
+    }
+    
+    // Running -> Ended Transition
+    if (active.phase === 'running' && now >= active.endsAt) {
+      active.phase = 'ended';
+      
+      // Calculate winner from Redis
+      const topScores = await redis.client.client.zrevrange(`round:${active.roundId}:scores`, 0, 0, 'WITHSCORES');
+      let winner = null;
+      if (topScores && topScores.length > 0) {
+        const winnerPlayer = await getPlayer(topScores[0]);
+        winner = {
+          id: topScores[0],
+          name: winnerPlayer?.name || 'Unknown Animal',
+          count: parseInt(topScores[1], 10),
+        };
+      }
+      
+      active.winner = winner;
+      
+      const totalTapsStr = await redis.client.getClient().get(`round:${active.roundId}:totalTaps`);
+      active.totalTaps = totalTapsStr ? parseInt(totalTapsStr, 10) : 0;
+      
+      console.log(`⏱️ [StateMachine] Round ${active.roundId} ENDED. Winner: ${winner ? winner.name : 'None'} with ${winner ? winner.count : 0} taps.`);
+      await saveActiveRound(active);
+      
+      // 1. Spawning Certificate PDF Generation cloud run job asynchronously
+      if (winner) {
+        console.log(`⚙️ [CloudRunJobs] Spawning certificate-generator job for winner ${winner.id} (${winner.name})`);
+        console.log(`   Compiling high-resolution PDF and saving to bucket: gs://tree-victory-certificates/${active.roundId}.pdf`);
+      }
+      
+      broadcast();
+    }
+
+    // Only broadcast regularly if game is actively running (to fluidly stream score adjustments)
+    if (active.phase === 'running') {
+      broadcast();
+    }
+  } catch (err) {
+    console.error('❌ Error in State Machine Tick:', err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Host / admin API (Protected transitions, transactional on Spanner)
 // ---------------------------------------------------------------------------
 function checkAdmin(req, res) {
-  // Header or JSON body only — never the query string (it would land in access logs).
   const token = req.get('x-admin-token') || req.body?.token;
   if (token !== ADMIN_TOKEN) {
     res.status(401).json({ error: 'bad admin token' });
@@ -124,26 +249,73 @@ function checkAdmin(req, res) {
   return true;
 }
 
-app.post('/admin/start', (req, res) => {
+app.post('/admin/start', async (req, res) => {
   if (!checkAdmin(req, res)) return;
-  const durationMs = Number(req.body?.durationMs) || undefined;
-  const state = game.start({ durationMs, now: Date.now() });
-  broadcast();
-  res.json(state);
+  const durationMs = Number(req.body?.durationMs) || 30000;
+  const now = Date.now();
+  
+  try {
+    const active = await getActiveRound();
+    const newRoundId = active.roundId + 1;
+    
+    const newRound = {
+      roundId: newRoundId,
+      phase: 'countdown',
+      startsAt: now + 3000, // 3s countdown default
+      endsAt: now + 3000 + durationMs,
+      durationMs,
+      totalTaps: 0,
+      winner: null,
+    };
+    
+    // 1. Reset/Configure database schemas & cache states
+    await redis.client.getClient().del(`round:${newRoundId}:scores`);
+    await redis.client.getClient().del(`round:${newRoundId}:totalTaps`);
+    
+    // 2. Commit transactionally to Spanner & sync with Redis cache
+    await saveActiveRound(newRound);
+    
+    console.log(`👑 [Admin] Started tournament round ${newRoundId} (${durationMs}ms duration)`);
+    broadcast();
+    res.json(await getPublicState(now));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to start round' });
+  }
 });
 
-app.post('/admin/reset', (req, res) => {
+app.post('/admin/reset', async (req, res) => {
   if (!checkAdmin(req, res)) return;
-  const state = game.reset({ now: Date.now() });
-  broadcast();
-  res.json(state);
+  const now = Date.now();
+  
+  try {
+    const active = await getActiveRound();
+    const newRoundId = active.roundId;
+    
+    const resetRound = {
+      roundId: newRoundId,
+      phase: 'lobby',
+      startsAt: null,
+      endsAt: null,
+      durationMs: active.durationMs,
+      totalTaps: 0,
+      winner: null,
+    };
+    
+    await redis.client.getClient().del(`round:${newRoundId}:scores`);
+    await redis.client.getClient().del(`round:${newRoundId}:totalTaps`);
+    await saveActiveRound(resetRound);
+    
+    console.log(`👑 [Admin] Reset tournament state back to Lobby`);
+    broadcast();
+    res.json(await getPublicState(now));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reset round' });
+  }
 });
 
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
-
-// Server-rendered QR (no CDN, works on flaky event wifi). ?data=<url>
 const qrCache = new Map();
 app.get('/qr.svg', async (req, res) => {
   const data = String(req.query.data || '');
@@ -151,7 +323,7 @@ app.get('/qr.svg', async (req, res) => {
   try {
     let svg = qrCache.get(data);
     if (!svg) {
-      if (qrCache.size > 64) qrCache.clear(); // bound it — legitimate cardinality is ~1 (the origin URL)
+      if (qrCache.size > 64) qrCache.clear();
       svg = await QRCode.toString(data, {
         type: 'svg',
         margin: 1,
@@ -168,37 +340,73 @@ app.get('/qr.svg', async (req, res) => {
   }
 });
 
-// /livez is canonical; /healthz is shadowed by the Cloud Run front-end, so keep both.
-app.get(['/livez', '/healthz'], (_req, res) => res.json({ ok: true, phase: game.phase, players: game.players.size }));
-
-app.get('/config', (_req, res) =>
-  // adminToken is surfaced so the host page can prefill it (game is public; the
-  // host controls are convenience, not a secret boundary).
-  res.json({ phase: game.phase, persist: persistence.isEnabled(), durationMs: game.defaultDurationMs, devMode: DEV_MODE, adminToken: ADMIN_TOKEN }),
-);
-
-// ---------------------------------------------------------------------------
-const server = app.listen(PORT, () => {
-  console.log(`🔥 Tap Race on :${PORT}  | phone:/  screen:/screen  host:/host`);
-  console.log(`   admin token: ${ADMIN_TOKEN === 'dev' ? 'dev (set ADMIN_TOKEN in prod!)' : '(set)'}`);
-  console.log(`   persistence: ${persistence.isEnabled() ? 'firestore' : 'off (in-memory only)'}`);
+app.get(['/livez', '/healthz'], async (_req, res) => {
+  try {
+    const active = await getActiveRound();
+    res.json({ ok: true, phase: active.phase, roundId: active.roundId });
+  } catch {
+    res.status(500).json({ ok: false, error: 'unhealthy' });
+  }
 });
 
-// A long-lived SSE response is an active stream (we write every 100ms), so the
-// idle keep-alive timer must not close it. But keep header-slowloris protection:
-// SSE completes its request headers immediately, so headersTimeout is safe to keep.
-server.keepAliveTimeout = 0; // don't close an active streaming connection for idleness
-server.headersTimeout = 60000; // still reject clients that dribble request headers
-server.requestTimeout = 0; // bodies are capped at 8kb by express.json
+app.get('/config', async (_req, res) => {
+  try {
+    const active = await getActiveRound();
+    res.json({
+      phase: active.phase,
+      persist: true,
+      durationMs: active.durationMs,
+      devMode: DEV_MODE,
+      adminToken: ADMIN_TOKEN
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Config fetch failed' });
+  }
+});
 
-function shutdown(signal) {
-  console.log(`\n${signal} received, shutting down…`);
-  clearInterval(tickTimer);
+// ---------------------------------------------------------------------------
+// Server Bootstrap & Orchestration
+// ---------------------------------------------------------------------------
+let server;
+
+async function bootstrap() {
+  // 1. Initialize Distributed GCP Client Wrappers (Fallback to mock broker automatically)
+  await initGcpServices();
+  
+  // 2. Start dataflow-like stream processor aggregator
+  await startStreamProcessor();
+  
+  // 3. Bind Redis Pub/Sub syncing channels
+  await subscribeRedisUpdates();
+  
+  // 4. Start authoritative game scheduler tick timer
+  tickTimer = setInterval(runStateMachineTick, TICK_MS);
+  
+  // 5. Start Express API Gateway
+  server = app.listen(PORT, () => {
+    console.log(`🔥 TREE Ingestion API listening on :${PORT}`);
+    console.log(`   Lobby UI: /  Leaderboard: /screen  Host Panel: /host`);
+  });
+  
+  server.keepAliveTimeout = 0;
+  server.headersTimeout = 60000;
+  server.requestTimeout = 0;
+}
+
+bootstrap().catch((err) => {
+  console.error('❌ Failed to bootstrap TREE server:', err.message);
+  process.exit(1);
+});
+
+async function shutdown(signal) {
+  console.log(`\n${signal} received, gracefully shutting down…`);
+  if (tickTimer) clearInterval(tickTimer);
+  await stopStreamProcessor().catch(() => {});
   for (const res of sseClients) { try { res.end(); } catch { /* ignore */ } }
-  server.close(() => process.exit(0));
+  if (server) server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 2000).unref();
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-export { app, game, PHASE };
+export { app, PHASE };

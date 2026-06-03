@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # MemoryStore for Redis Emulator
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: tree-redis-emulator
+    ports:
+      - "6379:6379"
+    command: redis-server --loglevel warning
+    networks:
+      - tree-network
+
+  # ---------------------------------------------------------------------------
+  # Cloud Pub/Sub Emulator
+  # ---------------------------------------------------------------------------
+  pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    container_name: tree-pubsub-emulator
+    ports:
+      - "8085:8085"
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+    networks:
+      - tree-network
+
+  # ---------------------------------------------------------------------------
+  # Cloud Spanner Emulator
+  # ---------------------------------------------------------------------------
+  spanner:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    container_name: tree-spanner-emulator
+    ports:
+      - "9010:9010"
+      - "9020:9020" # REST/gRPC ports
+    command: gcloud beta emulators spanner start --host-port=0.0.0.0:9010
+    networks:
+      - tree-network
+
+  # ---------------------------------------------------------------------------
+  # Cloud Bigtable Emulator
+  # ---------------------------------------------------------------------------
+  bigtable:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    container_name: tree-bigtable-emulator
+    ports:
+      - "8086:8086"
+    command: gcloud beta emulators bigtable start --host-port=0.0.0.0:8086
+    networks:
+      - tree-network
+
+networks:
+  tree-network:
+    driver: bridge
