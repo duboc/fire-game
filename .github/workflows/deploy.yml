@@ -26,8 +26,69 @@ jobs:
       - name: Run Unit Tests
         run: npm test
 
-  deploy:
-    name: Deploy to Google Cloud Run
+  deploy-dev:
+    name: Deploy to Dev (project-pt-internal)
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/renanvn'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Core App to Dev Cloud Run
+        run: |
+          gcloud run deploy "tap-race-dev" \
+            --project "project-pt-internal" \
+            --region "us-central1" \
+            --source . \
+            --allow-unauthenticated \
+            --min-instances 1 \
+            --max-instances 1 \
+            --concurrency 1000 \
+            --cpu 1 \
+            --memory 512Mi \
+            --no-cpu-throttling \
+            --timeout 3600 \
+            --port 8080 \
+            --set-env-vars "ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN || 'devsecret' }},PERSIST=on" \
+            --quiet
+
+      - name: Deploy Accessibility Microservice to Dev Cloud Run
+        run: |
+          gcloud run deploy "tap-race-accessibility" \
+            --project "project-pt-internal" \
+            --region "us-central1" \
+            --source . \
+            --command "node" \
+            --args "src/accessibility/server.js" \
+            --allow-unauthenticated \
+            --min-instances 1 \
+            --max-instances 5 \
+            --concurrency 500 \
+            --cpu 1 \
+            --memory 512Mi \
+            --timeout 600 \
+            --port 8081 \
+            --set-env-vars "NODE_ENV=production,USE_MOCKS=true" \
+            --quiet
+
+  deploy-prod:
+    name: Deploy to Production
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -40,24 +101,17 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Authentication via Workload Identity Federation (Recommended) or Service Account Key (Fallback)
       - name: Google Auth
         id: auth
         uses: google-github-actions/auth@v2
         with:
           token_format: 'access_token'
-          # Fill in these secrets in your GitHub repository:
-          # For Workload Identity Federation (Secure / Keyless):
-          # workload_identity_provider: ${{ secrets.GCP_WIP_PROVIDER }}
-          # service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          #
-          # For Service Account Key (Fallback):
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy to Cloud Run
+      - name: Deploy Core App to Prod Cloud Run
         run: |
           gcloud run deploy "${{ secrets.GCP_SERVICE_NAME || 'tap-race' }}" \
             --project "${{ secrets.GCP_PROJECT_ID }}" \
@@ -73,4 +127,23 @@ jobs:
             --timeout 3600 \
             --port 8080 \
             --set-env-vars "ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN }},PERSIST=on" \
+            --quiet
+
+      - name: Deploy Accessibility Microservice to Prod Cloud Run
+        run: |
+          gcloud run deploy "${{ secrets.GCP_SERVICE_NAME || 'tap-race' }}-accessibility" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region "${{ secrets.GCP_REGION || 'us-central1' }}" \
+            --source . \
+            --command "node" \
+            --args "src/accessibility/server.js" \
+            --allow-unauthenticated \
+            --min-instances 1 \
+            --max-instances 10 \
+            --concurrency 500 \
+            --cpu 1 \
+            --memory 512Mi \
+            --timeout 600 \
+            --port 8081 \
+            --set-env-vars "NODE_ENV=production,USE_MOCKS=true" \
             --quiet
