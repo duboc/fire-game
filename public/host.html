@@ -3,56 +3,63 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#ffffff" />
 <title>Tap Race — Host</title>
+<link rel="stylesheet" href="/theme.css" />
 <style>
-  :root{--bg:#0b0b16;--ink:#f4f3ff;--muted:#9b97c4;--p1:#ff3d81;--p2:#7b2bff;--p3:#00e6c3;--gold:#ffd23f;}
-  *{box-sizing:border-box;}
-  body{margin:0;min-height:100vh;background:
-      radial-gradient(120% 80% at 50% -10%, rgba(123,43,255,.30), transparent 60%),var(--bg);
-    color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    display:flex;justify-content:center;padding:24px;}
-  .card{width:min(720px,100%);display:flex;flex-direction:column;gap:18px;}
-  h1{font-size:32px;margin:0;font-weight:900;background:linear-gradient(90deg,var(--p1),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
-  .panel{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:18px;}
-  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
-  label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;}
-  input,select{background:#15132a;color:var(--ink);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 14px;font-size:16px;font-weight:700;}
-  input{width:160px;}
-  button{border:none;border-radius:14px;padding:16px 22px;font-size:18px;font-weight:900;cursor:pointer;color:#fff;transition:transform .06s,filter .15s;}
-  button:active{transform:scale(.97);}
-  .start{background:linear-gradient(90deg,#13b87a,#00e6c3);color:#062;flex:1;min-width:200px;}
-  .reset{background:rgba(255,255,255,.08);}
-  .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-  .stat .b{background:#15132a;border-radius:14px;padding:14px;text-align:center;}
-  .stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);}
-  .stat .v{font-size:30px;font-weight:900;font-variant-numeric:tabular-nums;}
-  .phase{font-weight:900;text-transform:uppercase;letter-spacing:.1em;}
-  .phase.lobby{color:var(--muted);} .phase.countdown{color:var(--gold);} .phase.running{color:var(--p3);} .phase.ended{color:var(--p1);}
-  .links{display:flex;gap:18px;align-items:center;flex-wrap:wrap;}
-  .qr{background:#fff;padding:10px;border-radius:14px;width:150px;height:150px;}
-  .qr svg{width:100%;height:100%;display:block;}
-  a{color:var(--p3);font-weight:800;text-decoration:none;font-size:18px;}
-  .msg{min-height:20px;font-weight:700;}
-  .msg.ok{color:var(--p3);} .msg.err{color:var(--p1);}
-  .hint{color:var(--muted);font-size:13px;}
-  .panel h2{margin:0 0 12px;font-size:16px;font-weight:800;letter-spacing:.02em;}
-  .rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
-  .rank li{display:grid;grid-template-columns:2.2em 1.4em 1fr auto;align-items:center;gap:10px;
-    background:#15132a;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px 14px;
-    transition:transform .35s cubic-bezier(.2,.8,.2,1);}
-  .rank li.r1{background:linear-gradient(90deg,#3a2e0a,#1c1830);border-color:rgba(255,210,63,.45);}
-  .rank li .rk{font-weight:900;color:var(--muted);font-variant-numeric:tabular-nums;}
-  .rank li.r1 .rk{color:var(--gold);} .rank li.r2 .rk{color:#dfe6ff;} .rank li.r3 .rk{color:#ffb27a;}
+  body{min-height:100vh; display:flex; justify-content:center; padding:24px;
+    background:radial-gradient(120% 60% at 50% -10%, rgba(66,133,244,.08), transparent 60%), var(--bg);}
+  .card{width:min(740px,100%); display:flex; flex-direction:column; gap:16px;}
+  .h1{display:flex; align-items:center; gap:10px; font-size:26px; font-weight:700; color:var(--ink); letter-spacing:-.01em;}
+  .h1 .cloud{font-size:24px;} .h1 .tag{color:var(--ink-2); font-weight:500;}
+  .h1 .gwm{font-size:16px; margin-left:auto;}
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1); padding:20px;}
+  .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center;}
+  label{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); display:block; margin-bottom:6px; font-weight:500;}
+  input,select{background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:var(--r-sm);
+    padding:12px 14px; font-size:16px; font-weight:500; font-family:var(--font);}
+  input{width:170px;} input:focus,select:focus{border-color:var(--g-blue); outline:none;}
+  button{border:none; border-radius:var(--r-full); padding:14px 24px; font-size:16px; font-weight:500; cursor:pointer;
+    font-family:var(--font); transition:transform .06s, box-shadow .15s, background .15s;}
+  button:active{transform:scale(.98);}
+  .start{background:var(--g-blue-700); color:#fff; box-shadow:var(--e1); flex:1; min-width:220px; font-weight:700;}
+  .start:hover{box-shadow:var(--e2); background:var(--g-blue);}
+  .reset{background:var(--surface); color:var(--g-blue-700); border:1px solid var(--line);}
+  .reset:hover{background:var(--surface-2);}
+  .stat{display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+  .stat .b{background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm); padding:14px; text-align:center;}
+  .stat .k{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-2); font-weight:500;}
+  .stat .v{font-size:30px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .phase{font-weight:700; text-transform:uppercase; letter-spacing:.06em;}
+  .phase.lobby{color:var(--ink-2);} .phase.countdown{color:var(--g-yellow-700);} .phase.running{color:var(--g-green-700);} .phase.ended{color:var(--g-blue-700);}
+  .links{display:flex; gap:18px; align-items:center; flex-wrap:wrap;}
+  .qr{background:#fff; padding:10px; border-radius:var(--r-sm); width:150px; height:150px; border:1px solid var(--line);}
+  .qr svg{width:100%; height:100%; display:block;}
+  a{color:var(--g-blue-700); font-weight:500; text-decoration:none; font-size:18px;}
+  a:hover{text-decoration:underline;}
+  .msg{min-height:20px; font-weight:500;}
+  .msg.ok{color:var(--g-green-700);} .msg.err{color:var(--g-red-700);}
+  .hint{color:var(--ink-2); font-size:13px;}
+  .panel h2{margin:0 0 14px; font-size:16px; font-weight:700; color:var(--ink); display:flex; align-items:center; gap:6px;}
+  .rank{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;}
+  .rank li{display:grid; grid-template-columns:2.2em 1.4em 1fr auto; align-items:center; gap:12px;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); padding:10px 14px; position:relative; overflow:hidden;}
+  .rank li.r1{border-color:var(--g-yellow); box-shadow:var(--e1);}
+  .rank li .rk{justify-self:center; min-width:1.7em; height:1.7em; display:flex; align-items:center; justify-content:center;
+    border-radius:50%; font-weight:700; color:#fff; background:var(--ink-3); font-size:14px; font-variant-numeric:tabular-nums;}
+  .rank li.r1 .rk{background:var(--g-yellow); color:#3c2c00;} .rank li.r2 .rk{background:var(--g-blue);} .rank li.r3 .rk{background:var(--g-green);}
   .rank li .em{font-size:20px;}
-  .rank li .nm{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .rank li .nm .seq{color:var(--muted);font-weight:700;font-size:.78em;}
-  .rank li .ct{font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums;}
-  .rank li.empty{display:block;color:var(--muted);font-weight:600;text-align:center;}
+  .rank li .nm{font-weight:500; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .rank li .nm .seq{color:var(--ink-3); font-weight:500; font-size:.8em;}
+  .rank li .ct{font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums;}
+  .rank li.empty{display:block; color:var(--ink-2); font-weight:500; text-align:center; background:var(--surface-2);}
 </style>
 </head>
 <body>
   <div class="card">
-    <h1>🔥 Tap Race — Host</h1>
+    <div class="h1"><span class="cloud">☁️</span> Tap Race <span class="tag">· Host</span>
+      <span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span>
+    </div>
 
     <div class="panel">
       <div class="row">
@@ -67,7 +74,7 @@
         </div>
       </div>
       <div class="row" style="margin-top:16px;">
-        <button class="start" id="start">▶ INICIAR (3 · 2 · 1 · VAI)</button>
+        <button class="start" id="start">▶ Iniciar (3 · 2 · 1 · VAI)</button>
         <button class="reset" id="reset">↺ Resetar p/ lobby</button>
       </div>
       <div class="msg" id="msg"></div>
@@ -146,7 +153,7 @@
     if(!top.length){ ol.innerHTML='<li class="empty">Sem jogadores ainda…</li>'; return; }
     ol.innerHTML=top.map(p=>{
       const cls=p.rank===1?' r1':p.rank===2?' r2':p.rank===3?' r3':'';
-      return `<li class="rank-item${cls}"><span class="rk">#${p.rank}</span><span class="em">${p.emoji||''}</span><span class="nm">${esc(p.name)} <span class="seq">#${p.seq}</span></span><span class="ct">${(p.count||0).toLocaleString('pt-BR')}</span></li>`;
+      return `<li class="rank-item${cls}"><span class="rk">${p.rank}</span><span class="em">${p.emoji||''}</span><span class="nm">${esc(p.name)} <span class="seq">#${p.seq}</span></span><span class="ct">${(p.count||0).toLocaleString('pt-BR')}</span></li>`;
     }).join('');
   }
   function tick(){

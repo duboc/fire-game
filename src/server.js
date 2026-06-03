@@ -37,8 +37,10 @@ app.use(express.json({ limit: '8kb' }));
 app.use(
   express.static(PUBLIC_DIR, {
     setHeaders: (res, filePath) => {
-      // HTML must never be cached so a redeploy is picked up instantly mid-event.
-      if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
+      // HTML/CSS must never be cached so a redeploy is picked up instantly mid-event.
+      if (filePath.endsWith('.html') || filePath.endsWith('.css')) res.setHeader('Cache-Control', 'no-store');
+      // Fonts are content-stable — cache hard so phones fetch them once.
+      else if (filePath.endsWith('.woff2')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     },
   }),
 );

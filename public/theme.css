@@ -1,0 +1,74 @@
+/* ============================================================
+   Tap Race — Google Cloud design system (light)
+   Self-hosted Roboto (no CDN), Google brand colors, Material elevation.
+   Shared by the phone (/), the big screen (/screen) and the host (/host).
+   ============================================================ */
+
+@font-face{font-family:Roboto;font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/roboto-400.woff2) format('woff2');}
+@font-face{font-family:Roboto;font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/roboto-500.woff2) format('woff2');}
+@font-face{font-family:Roboto;font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/roboto-700.woff2) format('woff2');}
+@font-face{font-family:Roboto;font-style:normal;font-weight:900;font-display:swap;src:url(/fonts/roboto-900.woff2) format('woff2');}
+
+:root{
+  /* Google brand colors */
+  --g-blue:#4285F4;   --g-blue-700:#1A73E8;  --g-blue-900:#174EA6;
+  --g-red:#EA4335;    --g-red-700:#C5221F;
+  --g-yellow:#FBBC04; --g-yellow-700:#F9AB00;
+  --g-green:#34A853;  --g-green-700:#188038;
+
+  /* surfaces & text (Google grey ramp) */
+  --bg:#F8F9FA;          /* grey 50  */
+  --surface:#FFFFFF;
+  --surface-2:#F1F3F4;   /* grey 100 */
+  --ink:#202124;         /* grey 900 */
+  --ink-2:#5F6368;       /* grey 700 */
+  --ink-3:#80868B;       /* grey 600 */
+  --line:#DADCE0;        /* grey 300 */
+
+  /* Material elevation */
+  --e1:0 1px 2px 0 rgba(60,64,67,.30), 0 1px 3px 1px rgba(60,64,67,.15);
+  --e2:0 1px 2px 0 rgba(60,64,67,.30), 0 2px 6px 2px rgba(60,64,67,.15);
+  --e3:0 4px 8px 3px rgba(60,64,67,.15), 0 1px 3px 0 rgba(60,64,67,.30);
+  --e4:0 6px 10px 4px rgba(60,64,67,.15), 0 2px 3px 0 rgba(60,64,67,.30);
+
+  --r-sm:8px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-full:999px;
+
+  --font:Roboto, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;}
+body{
+  font-family:var(--font);
+  color:var(--ink);
+  background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+
+/* --- Google wordmark (multi-color "Google" + grey "Cloud") --- */
+.gwm{font-weight:500; letter-spacing:-.01em; white-space:nowrap;}
+.gwm .b{color:var(--g-blue);} .gwm .r{color:var(--g-red);}
+.gwm .y{color:var(--g-yellow);} .gwm .g{color:var(--g-green);}
+.gwm .cloud{color:var(--ink-2); font-weight:500;}
+
+/* --- cards / chips --- */
+.gcard{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1);}
+.gchip{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1);}
+
+/* shared focus ring */
+:focus-visible{outline:3px solid rgba(66,133,244,.4); outline-offset:2px;}
+
+/* --- dark theme (Google dark palette) — opt-in via html.dark (telão/projetor) --- */
+html.dark{
+  color-scheme:dark;
+  --bg:#202124; --surface:#2a2b2f; --surface-2:#35363a;
+  --ink:#e8eaed; --ink-2:#bdc1c6; --ink-3:#9aa0a6; --line:#3c4043;
+  --g-blue:#8ab4f8;   --g-blue-700:#aecbfa;  --g-blue-900:#d2e3fc;
+  --g-red:#f28b82;    --g-red-700:#f6aea9;
+  --g-yellow:#fdd663; --g-yellow-700:#fde293;
+  --g-green:#81c995;  --g-green-700:#a8dab5;
+  --e1:0 1px 2px 0 rgba(0,0,0,.6), 0 1px 3px 1px rgba(0,0,0,.35);
+  --e2:0 1px 2px 0 rgba(0,0,0,.6), 0 2px 6px 2px rgba(0,0,0,.35);
+  --e3:0 4px 8px 3px rgba(0,0,0,.35), 0 1px 3px 0 rgba(0,0,0,.6);
+  --e4:0 6px 10px 4px rgba(0,0,0,.35), 0 2px 3px 0 rgba(0,0,0,.6);
+}

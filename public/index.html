@@ -3,95 +3,80 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#0b0b16" />
+<meta name="theme-color" content="#ffffff" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
-<title>Tap Race</title>
+<title>Tap Race — Google Cloud</title>
+<link rel="stylesheet" href="/theme.css" />
 <style>
-  :root{
-    --bg:#0b0b16; --ink:#f4f3ff; --muted:#9b97c4;
-    --p1:#ff3d81; --p2:#7b2bff; --p3:#00e6c3; --gold:#ffd23f;
-    --safe-top: env(safe-area-inset-top,0px);
-    --safe-bot: env(safe-area-inset-bottom,0px);
-  }
-  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
   body{
-    margin:0; background:var(--bg); color:var(--ink);
-    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     overflow:hidden; overscroll-behavior:none; touch-action:manipulation;
     -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent;
     display:flex; flex-direction:column;
-    background:
-      radial-gradient(120% 80% at 50% -10%, rgba(123,43,255,.35), transparent 60%),
-      radial-gradient(100% 60% at 50% 110%, rgba(255,61,129,.30), transparent 60%),
-      var(--bg);
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+    background:radial-gradient(130% 70% at 50% -25%, rgba(66,133,244,.10), transparent 60%), var(--bg);
   }
-  .wrap{flex:1; display:flex; flex-direction:column; padding:calc(14px + var(--safe-top)) 16px calc(14px + var(--safe-bot)); gap:12px; min-height:0;}
+  .appbar{display:flex; align-items:center; gap:8px; padding:calc(12px + var(--safe-top)) 18px 4px;}
+  .appbar .cloud{font-size:18px; line-height:1;}
+  .appbar .title{font-weight:700; font-size:18px; color:var(--ink); margin-right:auto; letter-spacing:-.01em;}
+  .appbar .gwm{font-size:14px;}
+  .wrap{flex:1; display:flex; flex-direction:column; padding:8px 16px calc(16px + var(--safe-bot)); gap:12px; min-height:0;}
 
-  /* identity card */
-  .id-card{
-    text-align:center; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
-    border-radius:20px; padding:12px 14px; backdrop-filter:blur(8px);
-  }
-  .id-card .who{font-size:12px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase;}
-  .id-card .name{font-size:clamp(22px,7vw,32px); font-weight:800; line-height:1.1; margin-top:2px;
-    background:linear-gradient(90deg,var(--p3),var(--gold)); -webkit-background-clip:text; background-clip:text; color:transparent;}
-  .id-card .name .emoji{-webkit-text-fill-color:initial;}
-  .id-card .seq{color:var(--muted); font-weight:700;}
+  .id-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--e1); text-align:center; padding:14px;}
+  .id-card .who{font-size:11px; letter-spacing:.12em; color:var(--ink-2); text-transform:uppercase; font-weight:500;}
+  .id-card .name{font-size:clamp(22px,7vw,30px); font-weight:700; line-height:1.15; margin-top:4px; color:var(--ink);}
+  .id-card .seq{color:var(--ink-3); font-weight:500;}
 
-  /* HUD */
-  .hud{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;}
-  .stat{background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07); border-radius:16px; padding:10px 6px; text-align:center;}
-  .stat .k{font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted);}
-  .stat .v{font-size:clamp(20px,6vw,28px); font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1;}
-  .stat.rank .v{color:var(--gold);}
-  .stat.count .v{color:var(--p3);}
+  .hud{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1); padding:12px 6px; text-align:center;}
+  .stat .k{font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); font-weight:500;}
+  .stat .v{font-size:clamp(22px,6.5vw,30px); font-weight:700; font-variant-numeric:tabular-nums; line-height:1.15; color:var(--ink);}
+  .stat.rank .v{color:var(--g-blue-700);}
+  .stat.count .v{color:var(--g-green-700);}
 
-  /* time bar */
-  .timewrap{height:10px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden;}
-  .timebar{height:100%; width:100%; border-radius:999px;
-    background:linear-gradient(90deg,var(--p3),var(--gold),var(--p1)); transition:none;}
+  .timewrap{height:8px; border-radius:var(--r-full); background:var(--surface-2); overflow:hidden; box-shadow:inset 0 0 0 1px var(--line);}
+  .timebar{height:100%; width:100%; border-radius:var(--r-full); background:linear-gradient(90deg,var(--g-blue),var(--g-green));}
 
-  /* button area */
   .arena{flex:1; display:flex; align-items:center; justify-content:center; position:relative; min-height:0;}
   .btn{
-    position:relative; width:min(78vw,360px); aspect-ratio:1/1; border-radius:50%; border:none;
-    color:#fff; font-weight:900; font-size:clamp(28px,9vw,44px); letter-spacing:.04em;
-    background:radial-gradient(circle at 35% 30%, #ff7ab0, var(--p1) 45%, var(--p2));
-    box-shadow:0 0 0 6px rgba(255,255,255,.06), 0 18px 50px rgba(255,61,129,.45), inset 0 -10px 30px rgba(0,0,0,.35);
-    touch-action:none; cursor:pointer; transition:transform .06s ease, filter .15s ease;
+    position:relative; width:min(76vw,330px); aspect-ratio:1/1; border-radius:50%; border:none;
+    color:#fff; font-weight:700; font-size:clamp(30px,9vw,46px); letter-spacing:.02em; font-family:var(--font);
+    background:radial-gradient(circle at 38% 30%, #6ea3ff, var(--g-blue) 42%, var(--g-blue-700));
+    box-shadow:var(--e4), 0 0 0 10px rgba(66,133,244,.12);
+    touch-action:none; cursor:pointer; transition:transform .06s ease, box-shadow .15s ease, background .2s;
     display:flex; align-items:center; justify-content:center; text-align:center; line-height:1.05;
+    -webkit-tap-highlight-color:transparent;
   }
-  .btn:active{transform:scale(.94);}
-  .btn.disabled{filter:grayscale(.7) brightness(.6); pointer-events:none; box-shadow:0 0 0 6px rgba(255,255,255,.04);}
-  .btn .pulse{position:absolute; inset:0; border-radius:50%; border:2px solid rgba(255,255,255,.5); animation:pulse 1.4s ease-out infinite;}
-  @keyframes pulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.5);opacity:0}}
-  .ring{position:absolute; width:min(78vw,360px); aspect-ratio:1/1; border-radius:50%; pointer-events:none; transform:rotate(-90deg);}
+  .btn:active{transform:scale(.94); box-shadow:var(--e2), 0 0 0 6px rgba(66,133,244,.2);}
+  .btn.disabled{background:radial-gradient(circle at 38% 30%, #cfd2d6, #9aa0a6); pointer-events:none; box-shadow:var(--e1), 0 0 0 8px rgba(154,160,166,.1);}
+  .btn .pulse{position:absolute; inset:-2px; border-radius:50%; border:3px solid rgba(66,133,244,.45); animation:pulse 1.5s ease-out infinite;}
+  @keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.45);opacity:0}}
 
-  /* floating +1 */
-  .float{position:absolute; pointer-events:none; font-weight:900; font-size:28px; color:var(--gold);
-    text-shadow:0 2px 12px rgba(0,0,0,.5); animation:floatUp .7s ease-out forwards;}
-  @keyframes floatUp{0%{opacity:1; transform:translateY(0) scale(1)}100%{opacity:0; transform:translateY(-90px) scale(1.4)}}
+  .float{position:absolute; pointer-events:none; font-weight:700; font-size:30px; color:var(--g-blue-700); animation:floatUp .7s ease-out forwards;}
+  @keyframes floatUp{0%{opacity:1; transform:translateY(0) scale(1)}100%{opacity:0; transform:translateY(-90px) scale(1.5)}}
 
-  /* status line */
-  .status{text-align:center; min-height:24px; font-weight:700; color:var(--muted); font-size:15px;}
-  .status.go{color:var(--p3);} .status.end{color:var(--gold);}
+  .status{text-align:center; min-height:22px; font-weight:500; color:var(--ink-2); font-size:15px;}
+  .status.go{color:var(--g-green-700); font-weight:700;} .status.end{color:var(--g-blue-700); font-weight:700;}
 
-  /* countdown overlay */
   .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
-    background:rgba(11,11,22,.86); backdrop-filter:blur(6px); z-index:50;}
+    background:rgba(248,249,250,.94); backdrop-filter:blur(4px); z-index:50;}
   .overlay.show{display:flex;}
-  .cd{font-size:clamp(120px,45vw,260px); font-weight:900; line-height:1;
-    background:linear-gradient(90deg,var(--p1),var(--gold)); -webkit-background-clip:text; background-clip:text; color:transparent;
-    animation:cdpop .9s ease-out;}
+  .cd{font-size:clamp(140px,46vw,260px); font-weight:900; line-height:1; color:var(--g-blue); animation:cdpop .9s ease-out;}
+  .cd.n3{color:var(--g-blue);} .cd.n2{color:var(--g-red);} .cd.n1{color:var(--g-yellow-700);} .cd.go{color:var(--g-green);}
   @keyframes cdpop{0%{transform:scale(.3);opacity:0}40%{transform:scale(1.15);opacity:1}100%{transform:scale(1)}}
-  .cd-sub{color:var(--muted); font-weight:700; letter-spacing:.2em; text-transform:uppercase; margin-top:8px;}
+  .cd-sub{color:var(--ink-2); font-weight:500; letter-spacing:.14em; text-transform:uppercase; margin-top:10px;}
 
   .hidden{display:none !important;}
 </style>
 </head>
 <body>
+  <div class="appbar">
+    <span class="cloud">☁️</span>
+    <span class="title">Tap Race</span>
+    <span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span>
+  </div>
   <div class="wrap">
     <div class="id-card">
       <div class="who">Você é</div>
@@ -279,6 +264,7 @@
       if (shown !== lastCdShown){
         lastCdShown = shown;
         els.cd.textContent = shown;
+        els.cd.className = 'cd ' + (num>=3?'n3':num===2?'n2':num===1?'n1':'go'); // Google color per count
         els.cd.style.animation='none'; void els.cd.offsetWidth; els.cd.style.animation='';
         vibe(num>0?20:60);
       }
