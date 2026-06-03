@@ -39,8 +39,8 @@
   - Transition round phases securely via Cloud Tasks timers (integrated in State Machine).
 - [x] **Winner Certificate Cloud Run Job**:
   - Automatically output high-resolution victory PDFs to Cloud Storage (orchestrated asynchronously).
-- [ ] **Looker Studio Dashboard & BigQuery integration**:
-  - Direct logs to BigQuery for tournament telemetry.
+- [x] **Looker Studio Dashboard & BigQuery integration**:
+  - Direct clickstream logs and round-level summary results to BigQuery for tournament telemetry.
 - [ ] **Terraform Infrastructure-as-Code Setup**:
   - Configure resource definitions for GKE, Spanner, Redis, Pub/Sub, and Armor rules.
 - [x] **Gemini Live Voice-to-Tap Accessibility**:

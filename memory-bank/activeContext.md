@@ -21,6 +21,7 @@ We are converting the monolithic, single-instance local Tap Race game into a hig
 - Configured and granted critical project-level IAM role permissions (`roles/pubsub.subscriber`, `roles/pubsub.publisher`, `roles/bigtable.user`, `roles/spanner.databaseUser`) to the default Compute Engine service account.
 - Successfully deployed the `tap-race` service to Google Cloud Run with Direct VPC Egress configured to route traffic seamlessly into `dev-vpc` and `dev-subnet`.
 - Fully integrated the Voice-to-Tap Accessibility feature into `public/index.html` with a beautiful "Modo Voz (Inclusivo)" toggle button, pulsing visual feedback, and real-time client-side syllable analysis and tap simulation.
+- Designed and integrated **Telemetry & BigQuery Analytics Warehousing**: Created a premium `TelemetryService` that streams custom real-time metrics (`active_players`, `tap_rate`) to Google Cloud Monitoring and logs finished round telemetry directly into Google BigQuery datasets (`tree_analytics.round_summaries` and `tree_analytics.clickstream_logs`) for high-fidelity Looker Studio visualization.
 
 ---
 
@@ -31,10 +32,11 @@ We are converting the monolithic, single-instance local Tap Race game into a hig
 4. **Vertex AI Sidecar**: The API service will perform a light gRPC call to Vertex AI to run anomaly detection models on the tap frequencies of players.
 5. **Cloud Run Hosting & Split Deployments**: The application services will run on Google Cloud Run, optimizing for scalability, zero cold starts (pinned settings for hot loops), and quick deployments.
 6. **Keyless Authentication**: Production deployments via GitHub Actions will leverage Workload Identity Federation (WIF) instead of static service account key files.
+7. **OLAP Analytics via BigQuery**: Final round states and streaming clickstreams are sent asynchronously to BigQuery so standard BI analytics can be ran directly in Looker Studio without impacting live game transactions.
 
 ---
 
 ## 📋 Next Steps
-1. **Looker Studio Dashboard & BigQuery Integration**: Direct logs to BigQuery for tournament analytical telemetry and aggregate visualizations.
-2. **Terraform Infrastructure-as-Code Setup**: Configure resource definitions for GKE, Spanner, Redis, Pub/Sub, Cloud Run, and Cloud Armor WAF rules to standardize production environments.
+1. **Terraform Infrastructure-as-Code Setup**: Configure resource definitions for GKE, Spanner, Redis, Pub/Sub, Cloud Run, and Cloud Armor WAF rules to standardize production environments.
+
 
