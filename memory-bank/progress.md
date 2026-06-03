@@ -16,29 +16,29 @@
 ## 🏗️ Remaining Work (GCP Overengineering Target)
 
 ### Phase 1: Local Infrastructure Emulators
-- [ ] Write a `docker-compose.emulator.yml` file to initialize:
+- [x] Write a `docker-compose.emulator.yml` file to initialize:
   - Google Pub/Sub emulator.
   - Google Cloud Spanner emulator.
   - Google Cloud Bigtable emulator.
   - Local Redis.
-- [ ] Create helper setup script (`emulators-init.sh`) to pre-create Spanner schemas, Pub/Sub topics, and Redis configurations.
+- [x] Create helper setup script (`emulators-init.sh`) to pre-create Spanner schemas, Pub/Sub topics, and Redis configurations.
 
 ### Phase 2: Microservice Split & API Refactoring
-- [ ] **State-Free Ingestion API**:
+- [x] **State-Free Ingestion API**:
   - Refactor `/tap` endpoint to publish raw tap events to Pub/Sub.
   - Refactor `/join` to record identities inside Cloud Spanner and return values.
-- [ ] **Stream Aggregate Pipeline (Dataflow Mock / Implementation)**:
+- [x] **Stream Aggregate Pipeline (Dataflow Mock / Implementation)**:
   - Consume Pub/Sub tap streams, accumulate totals, update MemoryStore Redis ZSET tables, and stream logs to Cloud Bigtable.
-- [ ] **SSE Leaderboard Streamer**:
+- [x] **SSE Leaderboard Streamer**:
   - Subscribe to Redis Pub/Sub topics, fetch Leaderboard ranges, and broadcast them as Server-Sent Events to the big screen.
 
 ### Phase 3: Enterprise Logging, Operations & AI
-- [ ] **Vertex AI Anti-Cheat sidecar**:
+- [x] **Vertex AI Anti-Cheat sidecar**:
   - Interface dynamic tap streams with Vertex AI endpoints for anomaly detection.
-- [ ] **Round Closure Cloud Task**:
-  - Transition round phases securely via Cloud Tasks timers.
-- [ ] **Winner Certificate Cloud Run Job**:
-  - Automatically output high-resolution victory PDFs to Cloud Storage.
+- [x] **Round Closure Cloud Task**:
+  - Transition round phases securely via Cloud Tasks timers (integrated in State Machine).
+- [x] **Winner Certificate Cloud Run Job**:
+  - Automatically output high-resolution victory PDFs to Cloud Storage (orchestrated asynchronously).
 - [ ] **Looker Studio Dashboard & BigQuery integration**:
   - Direct logs to BigQuery for tournament telemetry.
 - [ ] **Terraform Infrastructure-as-Code Setup**:
