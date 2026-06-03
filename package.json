@@ -1,0 +1,23 @@
+{
+  "name": "fire-game",
+  "version": "1.0.0",
+  "description": "Tap Race — a single Cloud Run instance, in-memory, real-time mass-tapping game for live events (300+ players).",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4"
+  },
+  "optionalDependencies": {
+    "@google-cloud/firestore": "^7.11.0"
+  },
+  "license": "MIT"
+}

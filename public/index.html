@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0b16" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Tap Race</title>
+<style>
+  :root{
+    --bg:#0b0b16; --ink:#f4f3ff; --muted:#9b97c4;
+    --p1:#ff3d81; --p2:#7b2bff; --p3:#00e6c3; --gold:#ffd23f;
+    --safe-top: env(safe-area-inset-top,0px);
+    --safe-bot: env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden; overscroll-behavior:none; touch-action:manipulation;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+    display:flex; flex-direction:column;
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(123,43,255,.35), transparent 60%),
+      radial-gradient(100% 60% at 50% 110%, rgba(255,61,129,.30), transparent 60%),
+      var(--bg);
+  }
+  .wrap{flex:1; display:flex; flex-direction:column; padding:calc(14px + var(--safe-top)) 16px calc(14px + var(--safe-bot)); gap:12px; min-height:0;}
+
+  /* identity card */
+  .id-card{
+    text-align:center; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+    border-radius:20px; padding:12px 14px; backdrop-filter:blur(8px);
+  }
+  .id-card .who{font-size:12px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase;}
+  .id-card .name{font-size:clamp(22px,7vw,32px); font-weight:800; line-height:1.1; margin-top:2px;
+    background:linear-gradient(90deg,var(--p3),var(--gold)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .id-card .name .emoji{-webkit-text-fill-color:initial;}
+  .id-card .seq{color:var(--muted); font-weight:700;}
+
+  /* HUD */
+  .hud{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;}
+  .stat{background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07); border-radius:16px; padding:10px 6px; text-align:center;}
+  .stat .k{font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted);}
+  .stat .v{font-size:clamp(20px,6vw,28px); font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1;}
+  .stat.rank .v{color:var(--gold);}
+  .stat.count .v{color:var(--p3);}
+
+  /* time bar */
+  .timewrap{height:10px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden;}
+  .timebar{height:100%; width:100%; border-radius:999px;
+    background:linear-gradient(90deg,var(--p3),var(--gold),var(--p1)); transition:none;}
+
+  /* button area */
+  .arena{flex:1; display:flex; align-items:center; justify-content:center; position:relative; min-height:0;}
+  .btn{
+    position:relative; width:min(78vw,360px); aspect-ratio:1/1; border-radius:50%; border:none;
+    color:#fff; font-weight:900; font-size:clamp(28px,9vw,44px); letter-spacing:.04em;
+    background:radial-gradient(circle at 35% 30%, #ff7ab0, var(--p1) 45%, var(--p2));
+    box-shadow:0 0 0 6px rgba(255,255,255,.06), 0 18px 50px rgba(255,61,129,.45), inset 0 -10px 30px rgba(0,0,0,.35);
+    touch-action:none; cursor:pointer; transition:transform .06s ease, filter .15s ease;
+    display:flex; align-items:center; justify-content:center; text-align:center; line-height:1.05;
+  }
+  .btn:active{transform:scale(.94);}
+  .btn.disabled{filter:grayscale(.7) brightness(.6); pointer-events:none; box-shadow:0 0 0 6px rgba(255,255,255,.04);}
+  .btn .pulse{position:absolute; inset:0; border-radius:50%; border:2px solid rgba(255,255,255,.5); animation:pulse 1.4s ease-out infinite;}
+  @keyframes pulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.5);opacity:0}}
+  .ring{position:absolute; width:min(78vw,360px); aspect-ratio:1/1; border-radius:50%; pointer-events:none; transform:rotate(-90deg);}
+
+  /* floating +1 */
+  .float{position:absolute; pointer-events:none; font-weight:900; font-size:28px; color:var(--gold);
+    text-shadow:0 2px 12px rgba(0,0,0,.5); animation:floatUp .7s ease-out forwards;}
+  @keyframes floatUp{0%{opacity:1; transform:translateY(0) scale(1)}100%{opacity:0; transform:translateY(-90px) scale(1.4)}}
+
+  /* status line */
+  .status{text-align:center; min-height:24px; font-weight:700; color:var(--muted); font-size:15px;}
+  .status.go{color:var(--p3);} .status.end{color:var(--gold);}
+
+  /* countdown overlay */
+  .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
+    background:rgba(11,11,22,.86); backdrop-filter:blur(6px); z-index:50;}
+  .overlay.show{display:flex;}
+  .cd{font-size:clamp(120px,45vw,260px); font-weight:900; line-height:1;
+    background:linear-gradient(90deg,var(--p1),var(--gold)); -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:cdpop .9s ease-out;}
+  @keyframes cdpop{0%{transform:scale(.3);opacity:0}40%{transform:scale(1.15);opacity:1}100%{transform:scale(1)}}
+  .cd-sub{color:var(--muted); font-weight:700; letter-spacing:.2em; text-transform:uppercase; margin-top:8px;}
+
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="id-card">
+      <div class="who">Você é</div>
+      <div class="name"><span class="emoji" id="emoji">🎮</span> <span id="name">Conectando…</span> <span class="seq" id="seq"></span></div>
+    </div>
+
+    <div class="hud">
+      <div class="stat rank"><div class="k">Posição</div><div class="v" id="rank">—</div></div>
+      <div class="stat count"><div class="k">Toques</div><div class="v" id="count">0</div></div>
+      <div class="stat"><div class="k">Jogadores</div><div class="v" id="total">—</div></div>
+    </div>
+
+    <div class="timewrap" id="timewrap"><div class="timebar" id="timebar"></div></div>
+
+    <div class="arena" id="arena">
+      <button class="btn disabled" id="btn" aria-label="Botão de toque">
+        <span class="pulse hidden" id="pulse"></span>
+        <span id="btnlabel">AGUARDE</span>
+      </button>
+    </div>
+
+    <div class="status" id="status">Aguardando o host iniciar…</div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="cd" id="cd">3</div>
+    <div class="cd-sub" id="cdsub">Prepare o dedo…</div>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    emoji:$('emoji'), name:$('name'), seq:$('seq'),
+    rank:$('rank'), count:$('count'), total:$('total'),
+    btn:$('btn'), btnlabel:$('btnlabel'), pulse:$('pulse'), arena:$('arena'),
+    status:$('status'), timebar:$('timebar'), timewrap:$('timewrap'),
+    overlay:$('overlay'), cd:$('cd'), cdsub:$('cdsub'),
+  };
+
+  const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', RUNNING:'running', ENDED:'ended' };
+
+  let me = { id: localStorage.getItem('tapId') || null, name:'', emoji:'', seq:0 };
+  let clockOffset = 0;            // serverNow - Date.now()
+  let pending = 0;                // taps not yet flushed
+  let localTaps = 0;             // optimistic running total this round
+  let serverCount = 0;
+  let state = { phase: PHASE.LOBBY, startsAt:null, endsAt:null, durationMs:30000, countdownMs:3000, total:0 };
+  let lastRoundSeenRunning = false;
+  let lastCdShown = null;
+  let myRoundId = null;
+  let reregistering = false;
+
+  const estServerNow = () => Date.now() + clockOffset;
+
+  function applyState(s){
+    if (!s) return;
+    if (typeof s.serverNow === 'number') clockOffset = s.serverNow - Date.now();
+    // Server forgot us (restart between rounds): re-register so /state recovers too.
+    if (s.known === false && me.id) reregister();
+    // New round: drop optimistic counts so they never carry over (back-to-back rounds
+    // skip the lobby, so we key off roundId, not the lobby branch).
+    if (typeof s.roundId === 'number' && s.roundId !== myRoundId){
+      myRoundId = s.roundId; localTaps = 0; serverCount = 0;
+    }
+    state = Object.assign(state, {
+      phase:s.phase, startsAt:s.startsAt, endsAt:s.endsAt,
+      durationMs:s.durationMs, countdownMs:s.countdownMs, total:s.total,
+    });
+    if (typeof s.yourCount === 'number') serverCount = s.yourCount;
+    if (typeof s.yourRank === 'number') els.rank.textContent = '#' + s.yourRank;
+    if (typeof s.total === 'number') els.total.textContent = s.total;
+    if (s.name && (s.rejoined || !me.name)) setIdentity(s);
+    render();
+  }
+
+  async function reregister(){
+    if (reregistering) return; reregistering = true;
+    try{
+      const r = await fetch('/join', { method:'POST' });
+      const s = await r.json();
+      localTaps = 0; serverCount = 0; myRoundId = null;
+      setIdentity(s);
+    }catch(_){ /* retry on next loop */ }
+    finally{ reregistering = false; }
+  }
+
+  function setIdentity(s){
+    if (s.id){ me.id = s.id; localStorage.setItem('tapId', s.id); }
+    me.name = s.name || me.name; me.emoji = s.emoji || me.emoji; me.seq = s.seq || me.seq;
+    els.emoji.textContent = me.emoji || '🎮';
+    els.name.textContent = me.name || '—';
+    els.seq.textContent = me.seq ? ('#' + me.seq) : '';
+  }
+
+  // ---- networking ---------------------------------------------------------
+  async function join(){
+    try{
+      // try to resume an existing identity first
+      if (me.id){
+        const r = await fetch('/state?id='+encodeURIComponent(me.id));
+        const s = await r.json();
+        if (s.known){ setIdentity(s); applyState(s); return; }
+      }
+      const r = await fetch('/join', { method:'POST' });
+      const s = await r.json();
+      setIdentity(s);
+    }catch(e){ els.status.textContent='Sem conexão… tentando de novo'; }
+  }
+
+  async function flushTaps(){
+    const n = pending; pending = 0;
+    try{
+      const r = await fetch('/tap', {
+        method:'POST', keepalive:true,
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ id: me.id, n }),
+      });
+      const s = await r.json();
+      if (s.rejoined){ localTaps = 0; }
+      applyState(s);
+    }catch(e){ pending += n; /* retry next loop */ }
+  }
+
+  async function pollState(){
+    try{
+      const r = await fetch('/state?id='+encodeURIComponent(me.id||''));
+      applyState(await r.json());
+    }catch(e){}
+  }
+
+  // single adaptive loop
+  function loop(){
+    const p = state.phase;
+    let delay = 600;
+    if (p === PHASE.RUNNING){ delay = 150; flushTaps(); }
+    else if (p === PHASE.COUNTDOWN){ delay = 200; pollState(); }
+    else if (p === PHASE.ENDED){ delay = 1500; if (pending>0) flushTaps(); else pollState(); }
+    else { delay = 600; pollState(); }
+    setTimeout(loop, delay);
+  }
+
+  // ---- input --------------------------------------------------------------
+  // vibrate only when the page has a user gesture (avoids the browser's
+  // "Blocked call to navigator.vibrate" intervention before the first tap)
+  function vibe(ms){
+    try{
+      if (!navigator.vibrate) return;
+      const ua = navigator.userActivation;
+      if (ua && !ua.hasBeenActive) return;
+      navigator.vibrate(ms);
+    }catch(_){}
+  }
+  function onTap(e){
+    e.preventDefault();
+    if (state.phase !== PHASE.RUNNING) return;
+    pending++; localTaps++;
+    serverCount = Math.max(serverCount, localTaps);
+    els.count.textContent = serverCount;
+    bounce(); floatPlus(e); vibe(12);
+  }
+  els.btn.addEventListener('pointerdown', onTap, { passive:false });
+  els.btn.addEventListener('touchstart', (e)=>e.preventDefault(), { passive:false });
+  els.btn.addEventListener('contextmenu', (e)=>e.preventDefault());
+
+  function bounce(){ els.btn.style.transform='scale(.94)'; clearTimeout(bounce._t); bounce._t=setTimeout(()=>els.btn.style.transform='',60); }
+  function floatPlus(e){
+    const f=document.createElement('div'); f.className='float'; f.textContent='+1';
+    const r=els.arena.getBoundingClientRect();
+    const x=(e.clientX||r.left+r.width/2)-r.left, y=(e.clientY||r.top+r.height/2)-r.top;
+    f.style.left=(x-10)+'px'; f.style.top=(y-20)+'px';
+    els.arena.appendChild(f); setTimeout(()=>f.remove(),700);
+  }
+
+  // ---- render -------------------------------------------------------------
+  function render(){
+    const p = state.phase;
+    // countdown overlay
+    if (p === PHASE.COUNTDOWN){
+      const ms = state.startsAt - estServerNow();
+      const num = Math.ceil(ms/1000);
+      els.overlay.classList.add('show');
+      const shown = num > 0 ? String(num) : 'VAI!';
+      if (shown !== lastCdShown){
+        lastCdShown = shown;
+        els.cd.textContent = shown;
+        els.cd.style.animation='none'; void els.cd.offsetWidth; els.cd.style.animation='';
+        vibe(num>0?20:60);
+      }
+      els.cdsub.textContent = num>0 ? 'Prepare o dedo…' : '';
+    } else {
+      els.overlay.classList.remove('show'); lastCdShown=null;
+    }
+
+    // button + status
+    if (p === PHASE.RUNNING){
+      lastRoundSeenRunning = true;
+      els.btn.classList.remove('disabled'); els.pulse.classList.add('hidden');
+      els.btnlabel.textContent='TOCA!';
+      els.status.className='status go'; els.status.textContent='VAI VAI VAI! 🔥';
+    } else if (p === PHASE.ENDED){
+      els.btn.classList.add('disabled'); els.pulse.classList.add('hidden');
+      els.btnlabel.textContent='ACABOU!';
+      els.status.className='status end';
+      els.status.textContent = els.rank.textContent && els.rank.textContent!=='—'
+        ? `Você ficou em ${els.rank.textContent} • Olhe para a tela! 🏆`
+        : 'Fim de jogo! Olhe para a tela 🏆';
+    } else if (p === PHASE.COUNTDOWN){
+      els.btn.classList.add('disabled'); els.btnlabel.textContent='JÁ JÁ…';
+      els.status.className='status'; els.status.textContent='Prepare-se!';
+    } else { // lobby
+      // new round reset
+      if (lastRoundSeenRunning){ lastRoundSeenRunning=false; localTaps=0; serverCount=0; els.count.textContent='0'; }
+      els.btn.classList.add('disabled'); els.pulse.classList.remove('hidden');
+      els.btnlabel.textContent='AGUARDE';
+      els.status.className='status'; els.status.textContent='Aguardando o host iniciar…';
+    }
+    // Optimistic (instant) only while RUNNING; once the round is over, trust the
+    // server's final count so the phone agrees with the big screen at the climax.
+    els.count.textContent = (p === PHASE.RUNNING) ? Math.max(serverCount, localTaps) : serverCount;
+  }
+
+  // smooth time bar via rAF
+  function frame(){
+    const p = state.phase;
+    if (p === PHASE.RUNNING && state.endsAt){
+      const remain = Math.max(0, state.endsAt - estServerNow());
+      const frac = Math.max(0, Math.min(1, remain / state.durationMs));
+      els.timebar.style.width = (frac*100).toFixed(2)+'%';
+      els.timewrap.style.opacity='1';
+      // re-check countdown -> ended edge for snappier UI
+      render();
+    } else if (p === PHASE.COUNTDOWN){
+      els.timewrap.style.opacity='.4'; els.timebar.style.width='100%'; render();
+    } else {
+      els.timewrap.style.opacity='.25'; els.timebar.style.width = p===PHASE.ENDED?'0%':'100%';
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // flush on background/close so final taps count (the climax!)
+  function flushBeacon(){
+    if (pending>0 && me.id){
+      const body = JSON.stringify({ id: me.id, n: pending }); pending=0;
+      if (navigator.sendBeacon) navigator.sendBeacon('/tap', new Blob([body],{type:'application/json'}));
+    }
+  }
+  document.addEventListener('visibilitychange', ()=>{ if (document.hidden) flushBeacon(); });
+  window.addEventListener('pagehide', flushBeacon);
+
+  // boot
+  (async ()=>{ await join(); render(); loop(); requestAnimationFrame(frame); })();
+})();
+</script>
+</body>
+</html>

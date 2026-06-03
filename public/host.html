@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tap Race — Host</title>
+<style>
+  :root{--bg:#0b0b16;--ink:#f4f3ff;--muted:#9b97c4;--p1:#ff3d81;--p2:#7b2bff;--p3:#00e6c3;--gold:#ffd23f;}
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;background:
+      radial-gradient(120% 80% at 50% -10%, rgba(123,43,255,.30), transparent 60%),var(--bg);
+    color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex;justify-content:center;padding:24px;}
+  .card{width:min(720px,100%);display:flex;flex-direction:column;gap:18px;}
+  h1{font-size:32px;margin:0;font-weight:900;background:linear-gradient(90deg,var(--p1),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .panel{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:18px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+  label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;}
+  input,select{background:#15132a;color:var(--ink);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 14px;font-size:16px;font-weight:700;}
+  input{width:160px;}
+  button{border:none;border-radius:14px;padding:16px 22px;font-size:18px;font-weight:900;cursor:pointer;color:#fff;transition:transform .06s,filter .15s;}
+  button:active{transform:scale(.97);}
+  .start{background:linear-gradient(90deg,#13b87a,#00e6c3);color:#062;flex:1;min-width:200px;}
+  .reset{background:rgba(255,255,255,.08);}
+  .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .stat .b{background:#15132a;border-radius:14px;padding:14px;text-align:center;}
+  .stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);}
+  .stat .v{font-size:30px;font-weight:900;font-variant-numeric:tabular-nums;}
+  .phase{font-weight:900;text-transform:uppercase;letter-spacing:.1em;}
+  .phase.lobby{color:var(--muted);} .phase.countdown{color:var(--gold);} .phase.running{color:var(--p3);} .phase.ended{color:var(--p1);}
+  .links{display:flex;gap:18px;align-items:center;flex-wrap:wrap;}
+  .qr{background:#fff;padding:10px;border-radius:14px;width:150px;height:150px;}
+  .qr svg{width:100%;height:100%;display:block;}
+  a{color:var(--p3);font-weight:800;text-decoration:none;font-size:18px;}
+  .msg{min-height:20px;font-weight:700;}
+  .msg.ok{color:var(--p3);} .msg.err{color:var(--p1);}
+  .hint{color:var(--muted);font-size:13px;}
+  .panel h2{margin:0 0 12px;font-size:16px;font-weight:800;letter-spacing:.02em;}
+  .rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+  .rank li{display:grid;grid-template-columns:2.2em 1.4em 1fr auto;align-items:center;gap:10px;
+    background:#15132a;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px 14px;
+    transition:transform .35s cubic-bezier(.2,.8,.2,1);}
+  .rank li.r1{background:linear-gradient(90deg,#3a2e0a,#1c1830);border-color:rgba(255,210,63,.45);}
+  .rank li .rk{font-weight:900;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .rank li.r1 .rk{color:var(--gold);} .rank li.r2 .rk{color:#dfe6ff;} .rank li.r3 .rk{color:#ffb27a;}
+  .rank li .em{font-size:20px;}
+  .rank li .nm{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .rank li .nm .seq{color:var(--muted);font-weight:700;font-size:.78em;}
+  .rank li .ct{font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums;}
+  .rank li.empty{display:block;color:var(--muted);font-weight:600;text-align:center;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔥 Tap Race — Host</h1>
+
+    <div class="panel">
+      <div class="row">
+        <div><label>Token admin</label><input id="token" placeholder="token admin" autocomplete="off" /></div>
+        <div><label>Duração</label>
+          <select id="dur">
+            <option value="15000">15 s</option>
+            <option value="30000" selected>30 s</option>
+            <option value="45000">45 s</option>
+            <option value="60000">60 s</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:16px;">
+        <button class="start" id="start">▶ INICIAR (3 · 2 · 1 · VAI)</button>
+        <button class="reset" id="reset">↺ Resetar p/ lobby</button>
+      </div>
+      <div class="msg" id="msg"></div>
+      <div class="hint">Dica: deixe a <a href="/screen" target="_blank">/screen</a> no telão. Iniciar zera os contadores e dispara a contagem.</div>
+    </div>
+
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;">
+        <div>Estado: <span class="phase lobby" id="phase">LOBBY</span></div>
+      </div>
+      <div class="stat" style="margin-top:14px;">
+        <div class="b"><div class="k">Jogadores</div><div class="v" id="players">0</div></div>
+        <div class="b"><div class="k">Toques</div><div class="v" id="taps">0</div></div>
+        <div class="b"><div class="k">Tempo</div><div class="v" id="time">—</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>🏆 Ranking ao vivo</h2>
+      <ol class="rank" id="rank"><li class="empty">Sem jogadores ainda…</li></ol>
+    </div>
+
+    <div class="panel">
+      <div class="links">
+        <div class="qr" id="qr"></div>
+        <div>
+          <label>Link do jogador</label>
+          <a id="phoneurl" href="/" target="_blank">/</a>
+          <div style="margin-top:14px;"><label>Telão</label><a href="/screen" target="_blank">/screen</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(()=>{
+  const $=(id)=>document.getElementById(id);
+  const origin=location.origin;
+  $('phoneurl').textContent=origin.replace(/^https?:\/\//,'');
+  $('phoneurl').href=origin;
+  fetch('/qr.svg?data='+encodeURIComponent(origin)).then(r=>r.text()).then(s=>$('qr').innerHTML=s).catch(()=>{});
+  // Prefill the admin token straight from the server so the host has zero friction.
+  fetch('/config').then(r=>r.json()).then(c=>{ if(c.adminToken && !$('token').value) $('token').value=c.adminToken; }).catch(()=>{});
+  const esc=(s)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  let clockOffset=0, st={phase:'lobby'};
+  function msg(t,ok){ const m=$('msg'); m.textContent=t; m.className='msg '+(ok?'ok':'err'); }
+
+  async function post(path){
+    try{
+      const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':$('token').value},
+        body:JSON.stringify({durationMs:Number($('dur').value)})});
+      if(r.status===401){ msg('Token admin incorreto.',false); return; }
+      await r.json(); msg(path==='/admin/start'?'Rodada iniciada! 🚀':'Resetado para lobby.',true);
+    }catch(e){ msg('Falha de rede.',false); }
+  }
+  $('start').onclick=()=>post('/admin/start');
+  $('reset').onclick=()=>post('/admin/reset');
+
+  function connect(){
+    const es=new EventSource('/events');
+    es.onmessage=(e)=>{ try{ render(JSON.parse(e.data)); }catch(_){}};
+    es.onerror=()=>{ es.close(); setTimeout(connect,1500); };
+  }
+  function render(s){
+    if(typeof s.serverNow==='number') clockOffset=s.serverNow-Date.now();
+    st=s;
+    $('phase').textContent=s.phase.toUpperCase();
+    $('phase').className='phase '+s.phase;
+    $('players').textContent=s.total;
+    $('taps').textContent=(s.totalTaps||0).toLocaleString('pt-BR');
+    renderRank(s.top||[]);
+  }
+  function renderRank(top){
+    const ol=$('rank');
+    if(!top.length){ ol.innerHTML='<li class="empty">Sem jogadores ainda…</li>'; return; }
+    ol.innerHTML=top.map(p=>{
+      const cls=p.rank===1?' r1':p.rank===2?' r2':p.rank===3?' r3':'';
+      return `<li class="rank-item${cls}"><span class="rk">#${p.rank}</span><span class="em">${p.emoji||''}</span><span class="nm">${esc(p.name)} <span class="seq">#${p.seq}</span></span><span class="ct">${(p.count||0).toLocaleString('pt-BR')}</span></li>`;
+    }).join('');
+  }
+  function tick(){
+    const now=Date.now()+clockOffset;
+    if(st.phase==='running'&&st.endsAt) $('time').textContent=Math.max(0,Math.ceil((st.endsAt-now)/1000))+'s';
+    else if(st.phase==='countdown'&&st.startsAt) $('time').textContent=Math.max(0,Math.ceil((st.startsAt-now)/1000));
+    else $('time').textContent='—';
+    requestAnimationFrame(tick);
+  }
+  connect(); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
