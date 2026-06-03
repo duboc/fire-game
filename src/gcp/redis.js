@@ -169,11 +169,21 @@ export class RedisClient {
     }
     try {
       const { default: Redis } = await import('ioredis');
-      this.client = new Redis(this.redisUrl, {
-        maxRetriesPerRequest: 3,
-        enableOfflineQueue: true,
-      });
-      console.log(`🧠 [Redis] Initialized official ioredis client (${this.redisUrl})`);
+      if (process.env.REDIS_HOST) {
+        this.client = new Redis({
+          host: process.env.REDIS_HOST,
+          port: parseInt(process.env.REDIS_PORT || '6379', 10),
+          maxRetriesPerRequest: 3,
+          enableOfflineQueue: true,
+        });
+        console.log(`🧠 [Redis] Initialized official ioredis client with host: ${process.env.REDIS_HOST}:${process.env.REDIS_PORT || '6379'}`);
+      } else {
+        this.client = new Redis(this.redisUrl, {
+          maxRetriesPerRequest: 3,
+          enableOfflineQueue: true,
+        });
+        console.log(`🧠 [Redis] Initialized official ioredis client (${this.redisUrl})`);
+      }
     } catch (err) {
       console.warn('⚠️ [Redis] Failed to load official library/connect, falling back to in-memory:', err.message);
       this.useMock = true;
