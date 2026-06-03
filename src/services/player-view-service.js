@@ -105,7 +105,7 @@ export async function getPublicState(now) {
     totalTaps = totalTapsStr ? parseInt(totalTapsStr, 10) : 0;
 
     // 3. Fetch Top 10 from Redis
-    const scores = await redis.client.client.zrevrange(`round:${roundId}:scores`, 0, 9, 'WITHSCORES');
+    const scores = await redis.client.zrevrange(`round:${roundId}:scores`, 0, 9, 'WITHSCORES');
     for (let i = 0; i < scores.length; i += 2) {
       const pId = scores[i];
       const pScore = parseInt(scores[i+1], 10);

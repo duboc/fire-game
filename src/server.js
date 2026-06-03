@@ -201,7 +201,7 @@ async function runStateMachineTick() {
       active.phase = 'ended';
       
       // Calculate winner from Redis
-      const topScores = await redis.client.client.zrevrange(`round:${active.roundId}:scores`, 0, 0, 'WITHSCORES');
+      const topScores = await redis.client.zrevrange(`round:${active.roundId}:scores`, 0, 0, 'WITHSCORES');
       let winner = null;
       if (topScores && topScores.length > 0) {
         const winnerPlayer = await getPlayer(topScores[0]);
