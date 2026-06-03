@@ -43,16 +43,28 @@ jobs:
       - name: Check GCP Credentials Availability
         id: check_creds
         run: |
+          if [ -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ]; then
+            echo "has_wif=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_wif=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ -n "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "has_key=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_key=false" >> $GITHUB_OUTPUT
+          fi
+
           if [ -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ] || [ -n "${{ secrets.GCP_SA_KEY }}" ]; then
             echo "has_creds=true" >> $GITHUB_OUTPUT
             echo "🔑 GCP Credentials found. Proceeding with authentication and deployment."
           else
             echo "has_creds=false" >> $GITHUB_OUTPUT
-            echo "⚠️ No GCP credentials found (GCP_SA_KEY or GCP_WORKLOAD_IDENTITY_PROVIDER is empty). Skipping authentication and deployment."
+            echo "⚠️ No GCP credentials found. Skipping authentication and deployment."
           fi
 
       - name: Google Auth via WIF
-        if: steps.check_creds.outputs.has_creds == 'true' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
+        if: steps.check_creds.outputs.has_wif == 'true'
         id: auth_wif
         uses: google-github-actions/auth@v2
         with:
@@ -61,7 +73,7 @@ jobs:
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
       - name: Google Auth via SA Key
-        if: steps.check_creds.outputs.has_creds == 'true' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER == '' && secrets.GCP_SA_KEY != ''
+        if: steps.check_creds.outputs.has_wif == 'false' && steps.check_creds.outputs.has_key == 'true'
         id: auth_key
         uses: google-github-actions/auth@v2
         with:
@@ -128,16 +140,28 @@ jobs:
       - name: Check GCP Credentials Availability
         id: check_creds
         run: |
+          if [ -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ]; then
+            echo "has_wif=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_wif=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ -n "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "has_key=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_key=false" >> $GITHUB_OUTPUT
+          fi
+
           if [ -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ] || [ -n "${{ secrets.GCP_SA_KEY }}" ]; then
             echo "has_creds=true" >> $GITHUB_OUTPUT
             echo "🔑 GCP Credentials found. Proceeding with authentication and deployment."
           else
             echo "has_creds=false" >> $GITHUB_OUTPUT
-            echo "⚠️ No GCP credentials found (GCP_SA_KEY or GCP_WORKLOAD_IDENTITY_PROVIDER is empty). Skipping authentication and deployment."
+            echo "⚠️ No GCP credentials found. Skipping authentication and deployment."
           fi
 
       - name: Google Auth via WIF
-        if: steps.check_creds.outputs.has_creds == 'true' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
+        if: steps.check_creds.outputs.has_wif == 'true'
         id: auth_wif
         uses: google-github-actions/auth@v2
         with:
@@ -146,7 +170,7 @@ jobs:
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
       - name: Google Auth via SA Key
-        if: steps.check_creds.outputs.has_creds == 'true' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER == '' && secrets.GCP_SA_KEY != ''
+        if: steps.check_creds.outputs.has_wif == 'false' && steps.check_creds.outputs.has_key == 'true'
         id: auth_key
         uses: google-github-actions/auth@v2
         with:
