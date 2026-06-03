@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { generateEphemeralGeminiToken, parseSyllablesToTaps, dispatchVocalTapsToPubSub } from './gemini-gateway.js';
 import { initGcpServices } from '../gcp/index.js';
 
-const PORT = Number(process.env.ACCESSIBILITY_PORT) || 8081;
+const PORT = Number(process.env.PORT) || Number(process.env.ACCESSIBILITY_PORT) || 8081;
 const app = express();
 
 app.disable('x-powered-by');
