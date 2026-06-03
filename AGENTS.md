@@ -23,6 +23,32 @@ Before writing any code or changing any infrastructure, follow this strict proto
 
 ---
 
+## 🔄 Step-by-Step Version Control & Rollback Protocol
+
+To ensure continuous integration safety, auditability, and easy rollbacks during this 1-hour challenge, we enforce strict step-by-step git version control:
+
+1. **Use Your Dedicated Branch**: All updates must be made to your dedicated feature branch (e.g., `renanvn`).
+2. **Incremental Commits**: Commit after completing every logical step or slice. Never bundle unrelated service refactors.
+   ```bash
+   git add .
+   git commit -m "slice: [Service Name] - [Brief explanation of changes]"
+   ```
+3. **Continuous Remote Pushing**: Push to your remote fork (`origin`) immediately after every commit:
+   ```bash
+   git push origin renanvn
+   ```
+4. **Automated Rollback Safeguard**: If a step breaks the test suite or introduces architectural defects, roll back to the last known stable state:
+   - Identify the previous commit hash: `git --no-pager log --oneline -n 10`
+   - Hard reset to that commit: `git reset --hard <commit-hash>`
+   - Push to remote: `git push origin renanvn --force`
+5. **GitHub CLI (`gh`) Integration**: Use `gh` commands to inspect pull request statuses, link issues, or view deployment details:
+   - Create a pull request when the slice is fully polished: `gh pr create --title "feat: [Slice Name]" --body "Closes #[Issue Number]"`
+   - Check the PR/CI status: `gh pr status`
+
+---
+
+---
+
 ## 🏗️ The Overengineered GCP Architecture
 
 Instead of the simple single-instance Cloud Run server, our architecture uses a decoupled, event-driven pattern designed to absorb millions of taps per second:
