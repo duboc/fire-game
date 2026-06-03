@@ -40,17 +40,40 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Google Auth
-        id: auth
+      - name: Check GCP Credentials Availability
+        id: check_creds
+        run: |
+          if [ -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ] || [ -n "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "has_creds=true" >> $GITHUB_OUTPUT
+            echo "🔑 GCP Credentials found. Proceeding with authentication and deployment."
+          else
+            echo "has_creds=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No GCP credentials found (GCP_SA_KEY or GCP_WORKLOAD_IDENTITY_PROVIDER is empty). Skipping authentication and deployment."
+          fi
+
+      - name: Google Auth via WIF
+        if: steps.check_creds.outputs.has_creds == 'true' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
+        id: auth_wif
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Google Auth via SA Key
+        if: steps.check_creds.outputs.has_creds == 'true' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER == '' && secrets.GCP_SA_KEY != ''
+        id: auth_key
         uses: google-github-actions/auth@v2
         with:
           token_format: 'access_token'
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up gcloud SDK
+        if: steps.check_creds.outputs.has_creds == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy Core App to Dev Cloud Run
+        if: steps.check_creds.outputs.has_creds == 'true'
         run: |
           gcloud run deploy "tap-race-dev" \
             --project "project-pt-internal" \
@@ -69,6 +92,7 @@ jobs:
             --quiet
 
       - name: Deploy Accessibility Microservice to Dev Cloud Run
+        if: steps.check_creds.outputs.has_creds == 'true'
         run: |
           gcloud run deploy "tap-race-accessibility" \
             --project "project-pt-internal" \
@@ -101,17 +125,40 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Google Auth
-        id: auth
+      - name: Check GCP Credentials Availability
+        id: check_creds
+        run: |
+          if [ -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ] || [ -n "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "has_creds=true" >> $GITHUB_OUTPUT
+            echo "🔑 GCP Credentials found. Proceeding with authentication and deployment."
+          else
+            echo "has_creds=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No GCP credentials found (GCP_SA_KEY or GCP_WORKLOAD_IDENTITY_PROVIDER is empty). Skipping authentication and deployment."
+          fi
+
+      - name: Google Auth via WIF
+        if: steps.check_creds.outputs.has_creds == 'true' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
+        id: auth_wif
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Google Auth via SA Key
+        if: steps.check_creds.outputs.has_creds == 'true' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER == '' && secrets.GCP_SA_KEY != ''
+        id: auth_key
         uses: google-github-actions/auth@v2
         with:
           token_format: 'access_token'
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up gcloud SDK
+        if: steps.check_creds.outputs.has_creds == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy Core App to Prod Cloud Run
+        if: steps.check_creds.outputs.has_creds == 'true'
         run: |
           gcloud run deploy "${{ secrets.GCP_SERVICE_NAME || 'tap-race' }}" \
             --project "${{ secrets.GCP_PROJECT_ID }}" \
@@ -130,6 +177,7 @@ jobs:
             --quiet
 
       - name: Deploy Accessibility Microservice to Prod Cloud Run
+        if: steps.check_creds.outputs.has_creds == 'true'
         run: |
           gcloud run deploy "${{ secrets.GCP_SERVICE_NAME || 'tap-race' }}-accessibility" \
             --project "${{ secrets.GCP_PROJECT_ID }}" \
