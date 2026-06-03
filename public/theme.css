@@ -1,74 +1,102 @@
 /* ============================================================
-   Tap Race — Google Cloud design system (light)
-   Self-hosted Roboto (no CDN), Google brand colors, Material elevation.
-   Shared by the phone (/), the big screen (/screen) and the host (/host).
+   Tap Race — ArtLens AI design system  ("Black + Google Blue")
+   Dark, premium AI aesthetic: pure-black canvas, dark glass surfaces,
+   Google Blue primary with blue glow, 4-color Google shimmer accents,
+   subtle noise texture. Google Sans (CDN) + self-hosted Roboto fallback +
+   self-hosted JetBrains Mono for numbers. Shared by /, /screen and /host.
    ============================================================ */
 
+/* Roboto = graceful fallback if the Google Sans CDN is unreachable (event wifi) */
 @font-face{font-family:Roboto;font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/roboto-400.woff2) format('woff2');}
 @font-face{font-family:Roboto;font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/roboto-500.woff2) format('woff2');}
 @font-face{font-family:Roboto;font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/roboto-700.woff2) format('woff2');}
 @font-face{font-family:Roboto;font-style:normal;font-weight:900;font-display:swap;src:url(/fonts/roboto-900.woff2) format('woff2');}
+/* JetBrains Mono = self-hosted, for all numerics (counts, ranks, timers) */
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/jbmono-400.woff2) format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/jbmono-500.woff2) format('woff2');}
 
 :root{
-  /* Google brand colors */
-  --g-blue:#4285F4;   --g-blue-700:#1A73E8;  --g-blue-900:#174EA6;
-  --g-red:#EA4335;    --g-red-700:#C5221F;
-  --g-yellow:#FBBC04; --g-yellow-700:#F9AB00;
-  --g-green:#34A853;  --g-green-700:#188038;
+  --bg:#000000;
+  --surface:#1a1a1a; --surface-2:#242424; --surface-glass:rgba(26,26,26,.9);
+  --ink:#e8eaed; --ink-2:#9aa0a6; --ink-3:#5f6368;
+  --line:rgba(66,133,244,.14);
+  --primary:#4285F4; --primary-dark:#3367D6; --primary-dim:rgba(66,133,244,.12);
 
-  /* surfaces & text (Google grey ramp) */
-  --bg:#F8F9FA;          /* grey 50  */
-  --surface:#FFFFFF;
-  --surface-2:#F1F3F4;   /* grey 100 */
-  --ink:#202124;         /* grey 900 */
-  --ink-2:#5F6368;       /* grey 700 */
-  --ink-3:#80868B;       /* grey 600 */
-  --line:#DADCE0;        /* grey 300 */
+  --g-blue:#4285F4; --g-red:#EA4335; --g-yellow:#FBBC04; --g-green:#34A853;
+  /* lighter variants read better on black */
+  --g-blue-700:#8ab4f8; --g-green-700:#81c995; --g-red-700:#f28b82; --g-yellow-700:#fdd663;
 
-  /* Material elevation */
-  --e1:0 1px 2px 0 rgba(60,64,67,.30), 0 1px 3px 1px rgba(60,64,67,.15);
-  --e2:0 1px 2px 0 rgba(60,64,67,.30), 0 2px 6px 2px rgba(60,64,67,.15);
-  --e3:0 4px 8px 3px rgba(60,64,67,.15), 0 1px 3px 0 rgba(60,64,67,.30);
-  --e4:0 6px 10px 4px rgba(60,64,67,.15), 0 2px 3px 0 rgba(60,64,67,.30);
+  --glow:0 0 20px rgba(66,133,244,.15);
+  --glow-strong:0 0 44px rgba(66,133,244,.34);
+  --e1:0 1px 3px rgba(0,0,0,.6), 0 0 0 1px rgba(66,133,244,.08);
+  --e2:0 6px 18px rgba(0,0,0,.55), 0 0 0 1px rgba(66,133,244,.10);
+  --e3:0 12px 34px rgba(0,0,0,.6), 0 0 0 1px rgba(66,133,244,.12);
+  --e4:0 18px 50px rgba(0,0,0,.62), var(--glow);
 
-  --r-sm:8px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-full:999px;
+  --r-sm:10px; --r-md:16px; --r-lg:22px; --r-xl:28px; --r-full:999px;
 
-  --font:Roboto, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font:'Google Sans Text', Roboto, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-display:'Google Sans', 'Google Sans Text', Roboto, system-ui, sans-serif;
+  --font-mono:'JetBrains Mono', ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 *{box-sizing:border-box;}
 html,body{margin:0;}
 body{
-  font-family:var(--font);
-  color:var(--ink);
-  background:var(--bg);
-  -webkit-font-smoothing:antialiased;
+  font-family:var(--font); color:var(--ink); background:var(--bg);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
 }
 
-/* --- Google wordmark (multi-color "Google" + grey "Cloud") --- */
-.gwm{font-weight:500; letter-spacing:-.01em; white-space:nowrap;}
-.gwm .b{color:var(--g-blue);} .gwm .r{color:var(--g-red);}
-.gwm .y{color:var(--g-yellow);} .gwm .g{color:var(--g-green);}
-.gwm .cloud{color:var(--ink-2); font-weight:500;}
+/* subtle global noise texture (ArtLens signature) */
+.noise-bg::before{
+  content:''; position:fixed; inset:0; z-index:9999; pointer-events:none; opacity:.02;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat:repeat; background-size:256px 256px;
+}
 
-/* --- cards / chips --- */
+/* glassmorphism surface */
+.glass{background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid var(--line);}
 .gcard{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1);}
-.gchip{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1);}
 
-/* shared focus ring */
-:focus-visible{outline:3px solid rgba(66,133,244,.4); outline-offset:2px;}
+/* 4-color Google shimmer text */
+.shimmer{
+  background:linear-gradient(110deg,#4285F4 0%,#EA4335 25%,#FBBC04 50%,#34A853 75%,#4285F4 100%);
+  background-size:200% auto; -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; color:transparent; animation:shimmer 4s ease-in-out infinite;
+}
+@keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
 
-/* --- dark theme (Google dark palette) — opt-in via html.dark (telão/projetor) --- */
-html.dark{
-  color-scheme:dark;
-  --bg:#202124; --surface:#2a2b2f; --surface-2:#35363a;
-  --ink:#e8eaed; --ink-2:#bdc1c6; --ink-3:#9aa0a6; --line:#3c4043;
-  --g-blue:#8ab4f8;   --g-blue-700:#aecbfa;  --g-blue-900:#d2e3fc;
-  --g-red:#f28b82;    --g-red-700:#f6aea9;
-  --g-yellow:#fdd663; --g-yellow-700:#fde293;
-  --g-green:#81c995;  --g-green-700:#a8dab5;
-  --e1:0 1px 2px 0 rgba(0,0,0,.6), 0 1px 3px 1px rgba(0,0,0,.35);
-  --e2:0 1px 2px 0 rgba(0,0,0,.6), 0 2px 6px 2px rgba(0,0,0,.35);
-  --e3:0 4px 8px 3px rgba(0,0,0,.35), 0 1px 3px 0 rgba(0,0,0,.6);
-  --e4:0 6px 10px 4px rgba(0,0,0,.35), 0 2px 3px 0 rgba(0,0,0,.6);
+/* smooth Google gradient (bars / accents) */
+.ggrad{background:linear-gradient(90deg,#EA4335,#FBBC04,#34A853,#4285F4);}
+
+/* blue glow */
+.glow{box-shadow:var(--glow);}
+@keyframes glowPulse{0%,100%{box-shadow:0 0 20px rgba(66,133,244,.15)}50%{box-shadow:0 0 40px rgba(66,133,244,.3)}}
+.glow-pulse{animation:glowPulse 3s ease-in-out infinite;}
+
+/* entrance animations */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes reveal{from{opacity:0; transform:translateY(16px)}to{opacity:1; transform:translateY(0)}}
+.reveal{animation:reveal .6s cubic-bezier(.22,1,.36,1) both;}
+
+/* numerics in mono */
+.mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums;}
+
+/* Google wordmark (multi-color "Google" + grey "Cloud") */
+.gwm{font-family:var(--font-display); font-weight:500; letter-spacing:-.01em; white-space:nowrap;}
+.gwm .b{color:var(--g-blue);} .gwm .r{color:var(--g-red);} .gwm .y{color:var(--g-yellow);}
+.gwm .g{color:var(--g-green);} .gwm .cloud{color:var(--ink-2);}
+
+:focus-visible{outline:3px solid rgba(66,133,244,.5); outline-offset:2px;}
+
+/* iOS: never let inputs trigger focus-zoom; no text auto-resize */
+html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
+input,textarea,select{font-size:16px;}
+
+/* Respect reduced-motion: kill animations/transitions, drop blur to solid, hide noise.
+   Glass surfaces are inlined per-page, so name them explicitly with !important. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important;}
+  .glass,.id-card,.chip,.champ,.panel{backdrop-filter:none!important; -webkit-backdrop-filter:none!important; background:rgba(26,26,26,.95)!important;}
+  .noise-bg::before{display:none!important;}
 }

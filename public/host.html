@@ -3,61 +3,64 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#ffffff" />
+<meta name="theme-color" content="#000000" />
 <title>Tap Race — Host</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/theme.css" />
 <style>
   body{min-height:100vh; display:flex; justify-content:center; padding:24px;
-    background:radial-gradient(120% 60% at 50% -10%, rgba(66,133,244,.08), transparent 60%), var(--bg);}
+    background:radial-gradient(120% 60% at 50% -10%, rgba(66,133,244,.16), transparent 60%), var(--bg);}
   .card{width:min(740px,100%); display:flex; flex-direction:column; gap:16px;}
-  .h1{display:flex; align-items:center; gap:10px; font-size:26px; font-weight:700; color:var(--ink); letter-spacing:-.01em;}
+  .h1{display:flex; align-items:center; gap:10px; font-family:var(--font-display); font-size:26px; font-weight:700; color:var(--ink); letter-spacing:-.01em;}
   .h1 .cloud{font-size:24px;} .h1 .tag{color:var(--ink-2); font-weight:500;}
   .h1 .gwm{font-size:16px; margin-left:auto;}
-  .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1); padding:20px;}
+  .panel{background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1); padding:20px;}
   .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center;}
   label{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); display:block; margin-bottom:6px; font-weight:500;}
-  input,select{background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:var(--r-sm);
+  input,select{background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:var(--r-sm);
     padding:12px 14px; font-size:16px; font-weight:500; font-family:var(--font);}
-  input{width:170px;} input:focus,select:focus{border-color:var(--g-blue); outline:none;}
+  input{width:200px; font-family:var(--font-mono);} input:focus,select:focus{border-color:var(--g-blue); outline:none; box-shadow:0 0 0 3px rgba(66,133,244,.2);}
   button{border:none; border-radius:var(--r-full); padding:14px 24px; font-size:16px; font-weight:500; cursor:pointer;
-    font-family:var(--font); transition:transform .06s, box-shadow .15s, background .15s;}
+    font-family:var(--font-display); transition:transform .06s, box-shadow .15s, background .15s;}
   button:active{transform:scale(.98);}
-  .start{background:var(--g-blue-700); color:#fff; box-shadow:var(--e1); flex:1; min-width:220px; font-weight:700;}
-  .start:hover{box-shadow:var(--e2); background:var(--g-blue);}
-  .reset{background:var(--surface); color:var(--g-blue-700); border:1px solid var(--line);}
-  .reset:hover{background:var(--surface-2);}
+  .start{background:var(--primary); color:#fff; box-shadow:var(--glow); flex:1; min-width:220px; font-weight:700;}
+  .start:hover{box-shadow:var(--glow-strong); background:#5a95f5;}
+  .reset{background:var(--surface-2); color:var(--g-blue-700); border:1px solid var(--line);}
+  .reset:hover{border-color:var(--g-blue);}
   .stat{display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
-  .stat .b{background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm); padding:14px; text-align:center;}
+  .stat .b{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); padding:14px; text-align:center;}
   .stat .k{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-2); font-weight:500;}
-  .stat .v{font-size:30px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .stat .v{font-family:var(--font-mono); font-size:30px; font-weight:500; font-variant-numeric:tabular-nums; color:var(--ink);}
   .phase{font-weight:700; text-transform:uppercase; letter-spacing:.06em;}
   .phase.lobby{color:var(--ink-2);} .phase.countdown{color:var(--g-yellow-700);} .phase.running{color:var(--g-green-700);} .phase.ended{color:var(--g-blue-700);}
   .links{display:flex; gap:18px; align-items:center; flex-wrap:wrap;}
-  .qr{background:#fff; padding:10px; border-radius:var(--r-sm); width:150px; height:150px; border:1px solid var(--line);}
+  .qr{background:#fff; padding:10px; border-radius:var(--r-sm); width:150px; height:150px; border:1px solid rgba(66,133,244,.3); box-shadow:0 0 24px rgba(66,133,244,.18);}
   .qr svg{width:100%; height:100%; display:block;}
-  a{color:var(--g-blue-700); font-weight:500; text-decoration:none; font-size:18px;}
+  a{color:var(--g-blue-700); font-weight:500; text-decoration:none; font-size:18px; font-family:var(--font-mono);}
   a:hover{text-decoration:underline;}
   .msg{min-height:20px; font-weight:500;}
   .msg.ok{color:var(--g-green-700);} .msg.err{color:var(--g-red-700);}
   .hint{color:var(--ink-2); font-size:13px;}
-  .panel h2{margin:0 0 14px; font-size:16px; font-weight:700; color:var(--ink); display:flex; align-items:center; gap:6px;}
+  .panel h2{margin:0 0 14px; font-family:var(--font-display); font-size:16px; font-weight:700; color:var(--ink); display:flex; align-items:center; gap:6px;}
   .rank{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;}
   .rank li{display:grid; grid-template-columns:2.2em 1.4em 1fr auto; align-items:center; gap:12px;
     background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); padding:10px 14px; position:relative; overflow:hidden;}
-  .rank li.r1{border-color:var(--g-yellow); box-shadow:var(--e1);}
+  .rank li.r1{border-color:rgba(66,133,244,.5); box-shadow:0 0 18px rgba(66,133,244,.15);}
   .rank li .rk{justify-self:center; min-width:1.7em; height:1.7em; display:flex; align-items:center; justify-content:center;
-    border-radius:50%; font-weight:700; color:#fff; background:var(--ink-3); font-size:14px; font-variant-numeric:tabular-nums;}
-  .rank li.r1 .rk{background:var(--g-yellow); color:#3c2c00;} .rank li.r2 .rk{background:var(--g-blue);} .rank li.r3 .rk{background:var(--g-green);}
+    border-radius:50%; font-family:var(--font-mono); font-weight:500; color:#fff; background:var(--ink-3); font-size:14px; font-variant-numeric:tabular-nums;}
+  .rank li.r1 .rk{background:var(--g-yellow); color:#241a00;} .rank li.r2 .rk{background:var(--g-blue);} .rank li.r3 .rk{background:var(--g-green);}
   .rank li .em{font-size:20px;}
-  .rank li .nm{font-weight:500; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .rank li .nm .seq{color:var(--ink-3); font-weight:500; font-size:.8em;}
-  .rank li .ct{font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums;}
+  .rank li .nm{font-family:var(--font-display); font-weight:500; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .rank li .nm .seq{font-family:var(--font-mono); color:var(--ink-3); font-weight:400; font-size:.8em;}
+  .rank li .ct{font-family:var(--font-mono); font-weight:500; color:var(--ink); font-variant-numeric:tabular-nums;}
   .rank li.empty{display:block; color:var(--ink-2); font-weight:500; text-align:center; background:var(--surface-2);}
 </style>
 </head>
-<body>
+<body class="noise-bg">
   <div class="card">
-    <div class="h1"><span class="cloud">☁️</span> Tap Race <span class="tag">· Host</span>
+    <div class="h1"><span class="cloud">☁️</span> <span class="shimmer">Tap Race</span> <span class="tag">· Host</span>
       <span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span>
     </div>
 
@@ -153,7 +156,7 @@
     if(!top.length){ ol.innerHTML='<li class="empty">Sem jogadores ainda…</li>'; return; }
     ol.innerHTML=top.map(p=>{
       const cls=p.rank===1?' r1':p.rank===2?' r2':p.rank===3?' r3':'';
-      return `<li class="rank-item${cls}"><span class="rk">${p.rank}</span><span class="em">${p.emoji||''}</span><span class="nm">${esc(p.name)} <span class="seq">#${p.seq}</span></span><span class="ct">${(p.count||0).toLocaleString('pt-BR')}</span></li>`;
+      return `<li class="${cls.trim()}"><span class="rk">${p.rank}</span><span class="em">${p.emoji||''}</span><span class="nm">${esc(p.name)} <span class="seq">#${p.seq}</span></span><span class="ct">${(p.count||0).toLocaleString('pt-BR')}</span></li>`;
     }).join('');
   }
   function tick(){
