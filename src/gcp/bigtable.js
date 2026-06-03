@@ -32,6 +32,11 @@ export class BigtableClient {
     if (this.useMock) {
       console.log('📊 [Bigtable] Using in-memory local fallback tables');
       this.mockTableInstance = new MockTable();
+      this.client = {
+        instance: (id) => ({
+          table: (tableId) => this.mockTableInstance
+        })
+      };
       return;
     }
     try {
@@ -42,6 +47,11 @@ export class BigtableClient {
       console.warn('⚠️ [Bigtable] Failed to load official library, falling back to in-memory tables:', err.message);
       this.useMock = true;
       this.mockTableInstance = new MockTable();
+      this.client = {
+        instance: (id) => ({
+          table: (tableId) => this.mockTableInstance
+        })
+      };
     }
   }
 

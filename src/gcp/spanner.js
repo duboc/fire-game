@@ -100,6 +100,11 @@ export class SpannerClient {
     if (this.useMock) {
       console.log('💾 [Spanner] Using in-memory local fallback database');
       this.mockDbInstance = new MockDatabase();
+      this.client = {
+        instance: (id) => ({
+          database: (dbId) => this.mockDbInstance
+        })
+      };
       return;
     }
     try {
@@ -110,6 +115,11 @@ export class SpannerClient {
       console.warn('⚠️ [Spanner] Failed to load official library, falling back to in-memory store:', err.message);
       this.useMock = true;
       this.mockDbInstance = new MockDatabase();
+      this.client = {
+        instance: (id) => ({
+          database: (dbId) => this.mockDbInstance
+        })
+      };
     }
   }
 

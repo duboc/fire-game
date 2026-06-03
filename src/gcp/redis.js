@@ -5,8 +5,70 @@ import { EventEmitter } from 'node:events';
 class MockRedisClient extends EventEmitter {
   constructor() {
     super();
-    this.zsets = new Map(); // key -> Map(member -> score)
+    this.zsets = new Map(); // key -> Map(member -> score) or value string
     this.subscribers = new Map(); // channel -> Set(callback)
+  }
+
+  async incr(key) {
+    const val = this.zsets.get(key);
+    const next = (val !== undefined ? Number(val) : 0) + 1;
+    this.zsets.set(key, String(next));
+    return next;
+  }
+
+  async incrby(key, increment) {
+    const val = this.zsets.get(key);
+    const next = (val !== undefined ? Number(val) : 0) + Number(increment);
+    this.zsets.set(key, String(next));
+    return next;
+  }
+
+  async hset(key, ...args) {
+    if (!this.zsets.has(key)) {
+      this.zsets.set(key, new Map());
+    }
+    const map = this.zsets.get(key);
+    if (!(map instanceof Map)) {
+      this.zsets.set(key, new Map());
+    }
+    const activeMap = this.zsets.get(key);
+    
+    if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+      for (const [f, v] of Object.entries(args[0])) {
+        activeMap.set(f, String(v));
+      }
+    } else {
+      const [field, value] = args;
+      activeMap.set(field, String(value));
+    }
+    return 1;
+  }
+
+  async hgetall(key) {
+    const map = this.zsets.get(key);
+    if (!map || !(map instanceof Map)) return {};
+    return Object.fromEntries(map.entries());
+  }
+
+  async expire(key, seconds) {
+    return 1;
+  }
+
+  async get(key) {
+    const val = this.zsets.get(key);
+    if (val instanceof Map) return null;
+    return val !== undefined ? String(val) : null;
+  }
+
+  async set(key, value) {
+    this.zsets.set(key, String(value));
+    return 'OK';
+  }
+
+  async zcard(key) {
+    const zset = this.zsets.get(key);
+    if (!zset || !(zset instanceof Map)) return 0;
+    return zset.size;
   }
 
   // Zincrby
@@ -15,16 +77,20 @@ class MockRedisClient extends EventEmitter {
       this.zsets.set(key, new Map());
     }
     const zset = this.zsets.get(key);
-    const current = zset.get(member) || 0;
-    const next = current + Number(increment);
-    zset.set(member, next);
+    if (!(zset instanceof Map)) {
+      this.zsets.set(key, new Map());
+    }
+    const activeZset = this.zsets.get(key);
+    const current = activeZset.get(member) || 0;
+    const next = Number(current) + Number(increment);
+    activeZset.set(member, next);
     return next;
   }
 
   // Zscore
   async zscore(key, member) {
     const zset = this.zsets.get(key);
-    if (!zset) return null;
+    if (!zset || !(zset instanceof Map)) return null;
     const val = zset.get(member);
     return val !== undefined ? String(val) : null;
   }
@@ -32,7 +98,7 @@ class MockRedisClient extends EventEmitter {
   // Zrevrank (0-based rank)
   async zrevrank(key, member) {
     const zset = this.zsets.get(key);
-    if (!zset || !zset.has(member)) return null;
+    if (!zset || !(zset instanceof Map) || !zset.has(member)) return null;
     
     // Sort descending by score, ties broken alphabetically
     const sorted = Array.from(zset.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -43,7 +109,7 @@ class MockRedisClient extends EventEmitter {
   // Zrevrange (retrieves elements descending)
   async zrevrange(key, start, stop, withScores) {
     const zset = this.zsets.get(key);
-    if (!zset) return [];
+    if (!zset || !(zset instanceof Map)) return [];
 
     const sorted = Array.from(zset.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     const slice = sorted.slice(start, stop === -1 ? undefined : stop + 1);
@@ -55,7 +121,7 @@ class MockRedisClient extends EventEmitter {
       }
       return res;
     }
-    return slice.map(e => entry[0]);
+    return slice.map(entry => entry[0]);
   }
 
   // Del

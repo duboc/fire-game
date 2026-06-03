@@ -17,7 +17,7 @@ export async function getPlayerView(id, now) {
       totalPlayers = parseInt(rows[0]?.count || '0', 10);
     } else {
       // In game, pull from Redis sorted set card
-      totalPlayers = await redis.client.getClient().zcard(`round:${roundId}:scores`);
+      totalPlayers = await redis.client.zcard(`round:${roundId}:scores`);
       if (totalPlayers === 0) {
         // Fallback to Spanner if Redis is empty/fresh
         const db = spanner.client.instance('tree-instance').database('tree-db');
@@ -93,7 +93,7 @@ export async function getPublicState(now) {
 
   try {
     // 1. Total players
-    totalPlayers = await redis.client.getClient().zcard(`round:${roundId}:scores`);
+    totalPlayers = await redis.client.zcard(`round:${roundId}:scores`);
     if (totalPlayers === 0) {
       const db = spanner.client.instance('tree-instance').database('tree-db');
       const [rows] = await db.run('SELECT COUNT(*) as count FROM Players');
@@ -101,7 +101,7 @@ export async function getPublicState(now) {
     }
 
     // 2. Total taps
-    const totalTapsStr = await redis.client.getClient().get(`round:${roundId}:totalTaps`);
+    const totalTapsStr = await redis.client.get(`round:${roundId}:totalTaps`);
     totalTaps = totalTapsStr ? parseInt(totalTapsStr, 10) : 0;
 
     // 3. Fetch Top 10 from Redis

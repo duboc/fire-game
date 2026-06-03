@@ -12,7 +12,7 @@ export async function getPlayer(id) {
 
   // 1. Try Redis cache
   try {
-    const cached = await redis.client.getClient().hgetall(`player:${id}`);
+    const cached = await redis.client.hgetall(`player:${id}`);
     if (cached && cached.name) {
       const p = {
         id,
@@ -45,7 +45,7 @@ export async function getPlayer(id) {
       playerCache.set(id, p);
       
       // Sync back to Redis cache
-      await redis.client.getClient().hset(`player:${id}`, {
+      await redis.client.hset(`player:${id}`, {
         name: p.name,
         emoji: p.emoji,
         seq: String(p.seq),
@@ -88,13 +88,13 @@ export async function registerPlayer(id, profile) {
 
   // 2. Cache in Redis
   try {
-    await redis.client.getClient().hset(`player:${id}`, {
+    await redis.client.hset(`player:${id}`, {
       name: player.name,
       emoji: player.emoji,
       seq: String(player.seq),
     });
     // Set TTL on player cache so it self-cleans
-    await redis.client.getClient().expire(`player:${id}`, 86400); // 24 hours
+    await redis.client.expire(`player:${id}`, 86400); // 24 hours
   } catch (err) {
     console.error('[db-service] Redis player caching failed:', err.message);
   }
@@ -105,7 +105,7 @@ export async function registerPlayer(id, profile) {
 export async function getActiveRound() {
   // 1. Check Redis first
   try {
-    const roundStr = await redis.client.getClient().get('round:active');
+    const roundStr = await redis.client.get('round:active');
     if (roundStr) {
       const active = JSON.parse(roundStr);
       return active;
@@ -137,7 +137,7 @@ export async function getActiveRound() {
       };
 
       // Populate Redis cache
-      await redis.client.getClient().set('round:active', JSON.stringify(active)).catch(() => {});
+      await redis.client.set('round:active', JSON.stringify(active)).catch(() => {});
       return active;
     }
   } catch (err) {
@@ -162,8 +162,8 @@ export async function getActiveRound() {
 export async function saveActiveRound(roundState) {
   // 1. Save to Redis
   try {
-    await redis.client.getClient().set('round:active', JSON.stringify(roundState));
-    await redis.client.getClient().publish('round-updates', JSON.stringify(roundState));
+    await redis.client.set('round:active', JSON.stringify(roundState));
+    await redis.client.publish('round-updates', JSON.stringify(roundState));
   } catch (err) {
     console.error('[db-service] Redis saveActiveRound failed:', err.message);
   }

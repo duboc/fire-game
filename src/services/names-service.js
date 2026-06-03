@@ -8,7 +8,7 @@ export async function generateIdentity() {
   try {
     // High-performance Redis sequence generator
     if (redis.client) {
-      seq = await redis.client.getClient().incr('player:seq');
+      seq = await redis.client.incr('player:seq');
     }
   } catch (err) {
     console.warn('[names-service] Redis increment failed, falling back to Spanner:', err.message);
@@ -18,7 +18,7 @@ export async function generateIdentity() {
     try {
       // Fallback Spanner transaction to compute/increment sequence
       if (spanner.client) {
-        const db = spanner.spanner.instance('tree-instance').database('tree-db');
+        const db = spanner.client.instance('tree-instance').database('tree-db');
         await db.runTransactionAsync(async (transaction) => {
           const [rows] = await transaction.run('SELECT COUNT(*) as count FROM Players');
           seq = parseInt(rows[0]?.count || '0', 10) + 1;
