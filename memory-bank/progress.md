@@ -57,10 +57,23 @@
 ---
 
 ## ☁️ Production Cloud Provisioning Status
-- [x] **Cloud Spanner Instance (`tree-instance`)**: Provisioned in `project-pt-internal` under regional config `us-central1` (100 PU).
-- [x] **Cloud Spanner Database (`tree-db`)**: Created with production schemas for `Players` and `Rounds`.
-- [x] **Cloud Memorystore Redis Instance (`tree-redis`)**: Provisioned in `project-pt-internal` under region `us-central1` (1GB size, connected to custom `dev-vpc` network, host IP: `10.55.110.131`).
-- [x] **Cloud Run Service Deployment (`tap-race`)**: Successfully deployed to production on Cloud Run using direct VPC egress (peered to `dev-vpc` network and `dev-subnet` subnet) with live GCP client integrations. Fixed 500 error on /admin/start and /admin/reset by resolving Redis client method signature mismatches and configuring environment variables (GCP_PROJECT_ID, REDIS_HOST).
+- [ ] **Cloud Spanner Instance (`tree-instance`)**: Provisioned in `project-pt-internal` under regional config `us-central1` (100 PU). [FULLY DECOMMISSIONED]
+- [ ] **Cloud Spanner Database (`tree-db`)**: Created with production schemas for `Players` and `Rounds`. [FULLY DECOMMISSIONED]
+- [ ] **Cloud Memorystore Redis Instance (`tree-redis`)**: Provisioned in `project-pt-internal` under region `us-central1` (1GB size, connected to custom `dev-vpc` network, host IP: `10.55.110.131`). [FULLY DECOMMISSIONED]
+- [ ] **Cloud Run Service Deployment (`tap-race`)**: Successfully deployed to production on Cloud Run using direct VPC egress (peered to `dev-vpc` network and `dev-subnet` subnet) with live GCP client integrations. [FULLY DECOMMISSIONED]
+
+## 🔄 Infrastructure Decommissioning (Option 3)
+- [x] **Option 3 Executed**: Teardown GCP resources only, keeping branch history intact.
+- [x] **Decommissioned Resources**:
+  - [x] Cloud Run Service: `tap-race` and `tap-race-accessibility`
+  - [x] Pub/Sub: topic `tap-events-topic` and subscription `tap-events-sub`
+  - [x] Spanner: instance `tree-instance` & database `tree-db` (manually resolved backups deletion)
+  - [x] Memorystore: Redis instance `tree-redis`
+  - [x] Bigtable: instance `tree-instance` & table `clickstream-raw-logs`
+  - [x] Artifact Registry: repository `tree-repo`
+  - [x] BigQuery: Speculatively removed `tree_analytics`
+  - [x] Verification: Successfully ran checklist listing `0` active resources across all of the above.
+
 
 
 
