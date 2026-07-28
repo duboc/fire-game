@@ -87,6 +87,10 @@
   .pod{background:var(--surface); border:1px solid var(--line); box-shadow:var(--e1); border-radius:var(--r-md); padding:12px 20px; font-weight:500; font-size:clamp(14px,1.5vw,24px); color:var(--ink);}
   .pod b{font-family:var(--font-mono); color:var(--g-blue-700);}
   .again{color:var(--ink-2); font-size:clamp(16px,1.7vw,26px); margin-top:1vh;}
+  /* settling beat: the round is over but late batches are still landing */
+  .champ.settling .em{animation:settlepulse 1s ease-in-out infinite;}
+  .champ.settling .nm{font-size:clamp(28px,3.6vw,60px); font-weight:500; color:var(--ink-2);}
+  @keyframes settlepulse{0%,100%{transform:scale(1); opacity:.65} 50%{transform:scale(1.08); opacity:1}}
 
   .hidden{display:none !important;}
 </style>
@@ -131,7 +135,7 @@
 
   <!-- ENDED -->
   <div class="stage" id="ended">
-    <div class="champlabel">🏆 Campeão 🏆</div>
+    <div class="champlabel" id="champlabel">🏆 Campeão 🏆</div>
     <div class="champ" id="champ"></div>
     <div class="podium" id="podium"></div>
     <div class="again">Aguardando o host… (pode iniciar uma nova rodada)</div>
@@ -145,9 +149,27 @@
   const stages={lobby:$('lobby'),countdown:$('countdown'),run:$('run'),ended:$('ended')};
   function showStage(name){ for(const k in stages) stages[k].classList.toggle('show', k===name); }
 
-  let clockOffset=0;
+  let clockOffset=0, bestRtt=Infinity;
   const estServerNow=()=>Date.now()+clockOffset;
-  let cur=PHASE.LOBBY, lastCd=null, endedShownRound=-1;
+  let cur=PHASE.LOBBY, lastCd=null, endedShownRound=-1, settleShownRound=-1;
+
+  // SSE is one-way, so it can't measure latency: a `serverNow - Date.now()`
+  // offset taken from an event is wrong by the whole delivery delay, which is
+  // what made the 3·2·1 drift on distant screens. Poll /state occasionally
+  // instead and keep the least-delayed round trip (NTP style). This is a single
+  // client, not 5.000 phones, so the extra request is free.
+  async function sampleClock(){
+    const t0=Date.now();
+    try{
+      const r=await fetch('/state');
+      const s=await r.json();
+      const t1=Date.now(), rtt=t1-t0;
+      if(typeof s.serverNow!=='number' || rtt<0 || rtt>5000) return;
+      if(Math.abs((s.serverNow-t1)-clockOffset)>5000) bestRtt=Infinity; // local clock jumped
+      if(rtt>bestRtt) return;
+      bestRtt=rtt; clockOffset=s.serverNow+rtt/2-t1;
+    }catch(_){}
+  }
 
   // ---- lobby setup ----
   const origin=location.origin;
@@ -162,7 +184,8 @@
   }
 
   function onState(s){
-    if(typeof s.serverNow==='number') clockOffset=s.serverNow-Date.now();
+    // Only as a fallback — sampleClock() supersedes this as soon as it lands.
+    if(bestRtt===Infinity && typeof s.serverNow==='number') clockOffset=s.serverNow-Date.now();
     state=s;
     const changed = s.phase!==cur;
     cur=s.phase; // set BEFORE enterPhase so confetti's phase guard sees 'ended'
@@ -172,6 +195,9 @@
       $('rTotal').textContent=s.total; $('rTaps').textContent=fmt(s.totalTaps);
       updateBoard(s.top||[]);
     }
+    // Re-run on every ENDED frame, not just the transition: the reveal is
+    // driven by `settled` flipping, which happens after the phase change.
+    if(s.phase===PHASE.ENDED){ renderEnded(s); }
   }
 
   let state={phase:PHASE.LOBBY,top:[],total:0,totalTaps:0};
@@ -180,7 +206,7 @@
     if(phase===PHASE.LOBBY){ stopConfetti(); showStage('lobby'); clearBoard(); }
     else if(phase===PHASE.COUNTDOWN){ stopConfetti(); showStage('countdown'); lastCd=null; clearBoard(); }
     else if(phase===PHASE.RUNNING){ stopConfetti(); showStage('run'); }
-    else if(phase===PHASE.ENDED){ showEnded(s); }
+    else if(phase===PHASE.ENDED){ renderEnded(s); }
   }
 
   // ---- countdown ----
@@ -274,10 +300,30 @@
   }
 
   // ---- ended ----
-  function showEnded(s){
+  // Two beats. The buzzer ends the round but not the counting: batches tapped
+  // before it are still arriving from far-away phones for the length of the
+  // grace window. Revealing a champion now risks visibly replacing them a second
+  // later, so hold on "apurando" until the server says the result is settled.
+  // Idempotent — called on every ENDED frame.
+  function renderEnded(s){
     showStage('ended');
+    if(!s.settled){
+      if(settleShownRound!==s.roundId){
+        settleShownRound=s.roundId;
+        $('champlabel').textContent='⏳ Apurando…';
+        const champ=$('champ');
+        champ.classList.add('settling');
+        champ.innerHTML='<div class="em">⏳</div><div class="info"><div class="nm">Contando os últimos toques</div></div>';
+        $('podium').innerHTML='';
+      }
+      return;
+    }
+    if(endedShownRound===s.roundId) return; // already revealed
+    endedShownRound=s.roundId;
+    $('champlabel').textContent='🏆 Campeão 🏆';
     const w=s.winner; const top=s.top||[];
     const champ=$('champ');
+    champ.classList.remove('settling');
     if(w){
       champ.innerHTML=`<div class="em">${w.emoji}</div><div class="info"><div class="nm">${escapeHtml(w.name)} <span class="seq">#${w.seq}</span></div><div class="ct">${fmt(w.count)} toques</div></div>`;
     } else {
@@ -289,7 +335,7 @@
       d.innerHTML=`<b>#${p.rank}</b> ${p.emoji} ${escapeHtml(p.name)} <span class="seq">#${p.seq}</span> — ${fmt(p.count)}`;
       pod.appendChild(d);
     });
-    if(s.roundId!==endedShownRound){ endedShownRound=s.roundId; launchConfetti(); }
+    launchConfetti();
   }
   function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -332,6 +378,10 @@
 
   // boot
   connect();
+  // A short burst first (min-RTT needs a few samples to find a clean one), then
+  // a slow heartbeat to ride out drift over a long event.
+  for(let i=0;i<4;i++) setTimeout(sampleClock, i*200);
+  setInterval(sampleClock, 15000);
   requestAnimationFrame(tickCountdown);
   requestAnimationFrame(tweenCounts);
 })();

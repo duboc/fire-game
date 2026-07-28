@@ -42,6 +42,13 @@
   a:hover{text-decoration:underline;}
   .msg{min-height:20px; font-weight:500;}
   .msg.ok{color:var(--g-green-700);} .msg.err{color:var(--g-red-700);}
+  .pwwrap{position:relative; display:flex; align-items:center;}
+  .pwwrap input{flex:1; padding-right:38px;}
+  .peek{position:absolute; right:4px; background:none; border:0; cursor:pointer; font-size:15px; opacity:.55; padding:4px 6px;}
+  .peek:hover{opacity:1;}
+  .authed{display:flex; align-items:center; gap:10px; color:var(--g-green-700); font-weight:500; padding:10px 0;}
+  .linkish{background:none; border:0; color:var(--ink-2); font-size:13px; cursor:pointer; text-decoration:underline; padding:0;}
+  .linkish:hover{color:var(--g-blue-700);}
   .hint{color:var(--ink-2); font-size:13px;}
   .panel h2{margin:0 0 14px; font-family:var(--font-display); font-size:16px; font-weight:700; color:var(--ink); display:flex; align-items:center; gap:6px;}
   .rank{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;}
@@ -66,7 +73,15 @@
 
     <div class="panel">
       <div class="row">
-        <div><label>Token admin</label><input id="token" placeholder="token admin" autocomplete="off" /></div>
+        <div id="authbox"><label>Senha admin</label>
+          <div class="pwwrap">
+            <input id="token" type="password" placeholder="senha admin" autocomplete="current-password" />
+            <button type="button" id="peek" class="peek" title="Mostrar/ocultar">👁</button>
+          </div>
+        </div>
+        <div id="authok" hidden><label>Sessão</label>
+          <div class="authed">🔓 autenticado <button type="button" id="logout" class="linkish">sair</button></div>
+        </div>
         <div><label>Duração</label>
           <select id="dur">
             <option value="15000">15 s</option>
@@ -119,23 +134,54 @@
   $('phoneurl').textContent=origin.replace(/^https?:\/\//,'');
   $('phoneurl').href=origin;
   fetch('/qr.svg?data='+encodeURIComponent(origin)).then(r=>r.text()).then(s=>$('qr').innerHTML=s).catch(()=>{});
-  // Prefill the admin token straight from the server so the host has zero friction.
-  fetch('/config').then(r=>r.json()).then(c=>{ if(c.adminToken && !$('token').value) $('token').value=c.adminToken; }).catch(()=>{});
   const esc=(s)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   let clockOffset=0, st={phase:'lobby'};
   function msg(t,ok){ const m=$('msg'); m.textContent=t; m.className='msg '+(ok?'ok':'err'); }
 
-  async function post(path){
+  // The password is never stored — not in /config, not in localStorage, not in a
+  // variable that outlives this function. It is typed once, exchanged for an
+  // HttpOnly cookie the page itself cannot read, and wiped from the field. A
+  // laptop mirrored to the projector shows "autenticado", never the password.
+  $('peek').onclick=()=>{ const i=$('token'); i.type = i.type==='password' ? 'text' : 'password'; i.focus(); };
+
+  function setAuthed(on){
+    $('authbox').hidden = on;
+    $('authok').hidden = !on;
+    if(on) $('token').value='';
+  }
+  fetch('/admin/session').then(r=>r.json()).then(s=>setAuthed(!!s.authenticated)).catch(()=>{});
+
+  async function login(){
+    const pw=$('token').value;
+    if(!pw){ msg('Informe a senha admin.',false); $('token').focus(); return false; }
     try{
-      const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':$('token').value},
+      const r=await fetch('/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({token:pw})});
+      if(!r.ok){ msg('Senha admin incorreta.',false); $('token').select(); return false; }
+      setAuthed(true); msg('Autenticado.',true); return true;
+    }catch(e){ msg('Falha de rede.',false); return false; }
+  }
+
+  $('logout').onclick=async()=>{
+    try{ await fetch('/admin/logout',{method:'POST'}); }catch(e){}
+    setAuthed(false); msg('Sessão encerrada.',true);
+  };
+
+  async function post(path){
+    // Not authenticated yet? The click doubles as the login.
+    const authed = !$('authok').hidden;
+    if(!authed && !(await login())) return;
+    try{
+      const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({durationMs:Number($('dur').value)})});
-      if(r.status===401){ msg('Token admin incorreto.',false); return; }
+      if(r.status===401){ setAuthed(false); msg('Sessão expirou — informe a senha novamente.',false); return; }
       await r.json(); msg(path==='/admin/start'?'Rodada iniciada! 🚀':'Resetado para lobby.',true);
     }catch(e){ msg('Falha de rede.',false); }
   }
   $('start').onclick=()=>post('/admin/start');
   $('reset').onclick=()=>post('/admin/reset');
+  $('token').addEventListener('keydown',(e)=>{ if(e.key==='Enter') login(); });
 
   function connect(){
     const es=new EventSource('/events');

@@ -130,11 +130,14 @@
   const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', RUNNING:'running', ENDED:'ended' };
 
   let me = { id: localStorage.getItem('tapId') || null, name:'', emoji:'', seq:0 };
-  let clockOffset = 0;            // serverNow - Date.now()
+  let clockOffset = 0;            // estimated (serverNow - Date.now()), RTT-compensated
+  let bestRtt = Infinity;         // least-delayed sample seen; see syncClock
   let pending = 0;                // taps not yet flushed
   let localTaps = 0;             // optimistic running total this round
   let serverCount = 0;
-  let state = { phase: PHASE.LOBBY, startsAt:null, endsAt:null, durationMs:30000, countdownMs:3000, total:0 };
+  let state = { phase: PHASE.LOBBY, startsAt:null, endsAt:null, settlesAt:null, settled:true, graceMs:1500,
+                durationMs:30000, countdownMs:3000, total:0, tapIntervalMs:150, pollIntervalMs:600 };
+  let finalJitter = null;         // this phone's personal delay for the last flush
   let lastRoundSeenRunning = false;
   let lastCdShown = null;
   let myRoundId = null;
@@ -142,19 +145,60 @@
 
   const estServerNow = () => Date.now() + clockOffset;
 
+  // NTP-style clock sync. The naive `serverNow - Date.now()` is wrong by exactly
+  // one-way latency, which made every distant player start late AND get cut off
+  // early — a systematic bias against whoever is furthest from the region.
+  // serverNow was stamped roughly rtt/2 ago, so add that back, and keep only the
+  // least-delayed sample: a fast round trip is the least distorted by queueing.
+  function syncClock(serverNow, t0, t1){
+    if (typeof serverNow !== 'number') return;
+    const rtt = t1 - t0;
+    if (rtt < 0 || rtt > 5000) return; // nonsense sample (suspended tab, dead link)
+    // If the device clock itself jumped (NTP correction, user edit), every past
+    // sample is void — start the search over rather than trusting a stale min.
+    if (Math.abs((serverNow - t1) - clockOffset) > 5000) bestRtt = Infinity;
+    if (rtt > bestRtt) return;
+    bestRtt = rtt;
+    clockOffset = serverNow + rtt / 2 - t1;
+  }
+
+  // Every response is a clock sample, so there is no separate sync traffic —
+  // at 5.000 players we cannot afford extra requests just to measure latency.
+  //
+  // The timeout is not politeness, it is load control. fetch() has no default
+  // one, so a stalled request hangs for minutes; the loop below would keep
+  // firing new ones on top, and 5.000 phones each stacking dead requests turns
+  // a one-second server hiccup into a stampede exactly when it cannot absorb
+  // it. Give up quickly instead — nothing is lost, the caller re-queues.
+  async function apiJson(url, opts, timeoutMs){
+    const t0 = Date.now();
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs || 8000);
+    try{
+      const r = await fetch(url, Object.assign({ signal: ctl.signal }, opts));
+      const s = await r.json();
+      syncClock(s && s.serverNow, t0, Date.now());
+      return s;
+    } finally { clearTimeout(timer); }
+  }
+
   function applyState(s){
     if (!s) return;
-    if (typeof s.serverNow === 'number') clockOffset = s.serverNow - Date.now();
     // Server forgot us (restart between rounds): re-register so /state recovers too.
     if (s.known === false && me.id) reregister();
     // New round: drop optimistic counts so they never carry over (back-to-back rounds
     // skip the lobby, so we key off roundId, not the lobby branch).
     if (typeof s.roundId === 'number' && s.roundId !== myRoundId){
-      myRoundId = s.roundId; localTaps = 0; serverCount = 0;
+      myRoundId = s.roundId; localTaps = 0; serverCount = 0; finalJitter = null;
     }
     state = Object.assign(state, {
       phase:s.phase, startsAt:s.startsAt, endsAt:s.endsAt,
+      settlesAt:s.settlesAt, settled:s.settled !== false,
+      graceMs: s.graceMs != null ? s.graceMs : state.graceMs,
       durationMs:s.durationMs, countdownMs:s.countdownMs, total:s.total,
+      // Server-driven cadence: the room's size decides how often we may call.
+      tapIntervalMs: s.tapIntervalMs || state.tapIntervalMs,
+      pollIntervalMs: s.pollIntervalMs || state.pollIntervalMs,
     });
     if (typeof s.yourCount === 'number') serverCount = s.yourCount;
     if (typeof s.yourRank === 'number') els.rank.textContent = '#' + s.yourRank;
@@ -164,14 +208,18 @@
   }
 
   async function reregister(){
+    // Guarded by `reregistering`, so it also needs the timeout: a hung /join
+    // would otherwise leave the flag set and the phone unable to ever recover.
     if (reregistering) return; reregistering = true;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
     try{
-      const r = await fetch('/join', { method:'POST' });
+      const r = await fetch('/join', { method:'POST', signal: ctl.signal });
       const s = await r.json();
       localTaps = 0; serverCount = 0; myRoundId = null;
       setIdentity(s);
     }catch(_){ /* retry on next loop */ }
-    finally{ reregistering = false; }
+    finally{ clearTimeout(timer); reregistering = false; }
   }
 
   function setIdentity(s){
@@ -187,45 +235,93 @@
     try{
       // try to resume an existing identity first
       if (me.id){
-        const r = await fetch('/state?id='+encodeURIComponent(me.id));
-        const s = await r.json();
+        const s = await apiJson('/state?id='+encodeURIComponent(me.id));
         if (s.known){ setIdentity(s); applyState(s); return; }
       }
-      const r = await fetch('/join', { method:'POST' });
-      const s = await r.json();
+      const s = await apiJson('/join', { method:'POST' });
       setIdentity(s);
     }catch(e){ els.status.textContent='Sem conexão… tentando de novo'; }
   }
 
+  // One request of each kind in flight at a time. The loop is on a timer, so
+  // without this a slow response silently becomes two, then four, concurrent
+  // requests from the same phone. Taps are never lost by skipping: they stay in
+  // `pending` and ride along with the next flush.
+  let tapInFlight = false, pollInFlight = false;
+
+  // Allow two cadence intervals before declaring a request dead, so a phone that
+  // has been told to back off to 3s (a 5.000-player room) is not aborting
+  // perfectly healthy requests.
+  const netTimeout = () => Math.max(5000, state.tapIntervalMs * 2);
+
   async function flushTaps(){
+    if (tapInFlight) return;
     const n = pending; pending = 0;
+    tapInFlight = true;
     try{
-      const r = await fetch('/tap', {
+      const s = await apiJson('/tap', {
         method:'POST', keepalive:true,
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ id: me.id, n }),
-      });
-      const s = await r.json();
+      }, netTimeout());
       if (s.rejoined){ localTaps = 0; }
       applyState(s);
     }catch(e){ pending += n; /* retry next loop */ }
+    finally{ tapInFlight = false; }
   }
 
   async function pollState(){
+    if (pollInFlight) return;
+    pollInFlight = true;
     try{
-      const r = await fetch('/state?id='+encodeURIComponent(me.id||''));
-      applyState(await r.json());
+      applyState(await apiJson('/state?id='+encodeURIComponent(me.id||''), null, netTimeout()));
     }catch(e){}
+    finally{ pollInFlight = false; }
+  }
+
+  // The server is authoritative, but at event scale a poll can be seconds away,
+  // so we cross the start/end boundaries on the synced clock instead of waiting
+  // to be told. Everyone's button therefore goes live — and dies — together.
+  function localPhase(){
+    const now = estServerNow();
+    let p = state.phase;
+    // Chained, not exclusive: a phone that was suspended across the whole round
+    // must land on ENDED, not wake up thinking the button is live.
+    if (p === PHASE.COUNTDOWN && state.startsAt != null && now >= state.startsAt) p = PHASE.RUNNING;
+    if (p === PHASE.RUNNING && state.endsAt != null && now >= state.endsAt) p = PHASE.ENDED;
+    return p;
   }
 
   // single adaptive loop
   function loop(){
-    const p = state.phase;
-    let delay = 600;
-    if (p === PHASE.RUNNING){ delay = 150; flushTaps(); }
-    else if (p === PHASE.COUNTDOWN){ delay = 200; pollState(); }
-    else if (p === PHASE.ENDED){ delay = 1500; if (pending>0) flushTaps(); else pollState(); }
-    else { delay = 600; pollState(); }
+    const p = localPhase();
+    let delay = state.pollIntervalMs;
+    if (p === PHASE.RUNNING){
+      // Flush on the server's cadence, but never sleep past the buzzer — the
+      // last batch has to land inside the grace window.
+      //
+      // Waking *exactly* at endsAt would be the obvious thing and is wrong at
+      // scale: every phone is clock-synced, so all of them would fire at the
+      // same instant and the server would spend longer draining that one herd
+      // than the whole window lasts (measured 2.107ms for 5.000; docs/SCALE.md,
+      // finding 8). Credit depends on when a tap was *made*, not when it lands,
+      // so each phone waits its own slice of the window and nothing is lost but
+      // a moment of suspense. The slice tracks the cadence the server handed
+      // out, which is already a measure of how crowded the room is.
+      const remain = state.endsAt != null ? state.endsAt - estServerNow() : Infinity;
+      delay = Math.max(30, Math.min(state.tapIntervalMs, remain));
+      if (remain <= state.tapIntervalMs && remain > 0){
+        if (finalJitter == null) finalJitter = Math.random() * Math.min(state.tapIntervalMs, state.graceMs * 0.6);
+        delay = Math.max(30, remain + finalJitter);
+      }
+      flushTaps();
+    } else if (p === PHASE.ENDED){
+      // Getting the final batch in beats learning the result a second sooner.
+      if (pending > 0){ delay = 250; flushTaps(); }
+      else pollState();
+    } else { // lobby / countdown — cheap, and the countdown runs off the local clock
+      pollState();
+    }
     setTimeout(loop, delay);
   }
 
@@ -242,7 +338,10 @@
   }
   function onTap(e){
     e.preventDefault();
-    if (state.phase !== PHASE.RUNNING) return;
+    // Gated on the synced clock, not the last poll: a phone whose poll is in
+    // flight must not keep scoring after the buzzer, and must not be blocked
+    // for the first second of the round while it waits to hear the start.
+    if (localPhase() !== PHASE.RUNNING) return;
     pending++; localTaps++;
     serverCount = Math.max(serverCount, localTaps);
     els.count.textContent = serverCount;
@@ -263,7 +362,7 @@
 
   // ---- render -------------------------------------------------------------
   function render(){
-    const p = state.phase;
+    const p = localPhase();
     // countdown overlay
     if (p === PHASE.COUNTDOWN){
       const ms = state.startsAt - estServerNow();
@@ -292,9 +391,12 @@
       els.btn.classList.add('disabled'); els.pulse.classList.add('hidden');
       els.btnlabel.textContent='ACABOU!';
       els.status.className='status end';
-      els.status.textContent = els.rank.textContent && els.rank.textContent!=='—'
-        ? `Você ficou em ${els.rank.textContent} • Olhe para a tela! 🏆`
-        : 'Fim de jogo! Olhe para a tela 🏆';
+      // Don't announce a position while late batches can still reorder it.
+      els.status.textContent = !state.settled
+        ? 'Apurando os últimos toques… ⏳'
+        : (els.rank.textContent && els.rank.textContent!=='—'
+          ? `Você ficou em ${els.rank.textContent} • Olhe para a tela! 🏆`
+          : 'Fim de jogo! Olhe para a tela 🏆');
     } else if (p === PHASE.COUNTDOWN){
       els.btn.classList.add('disabled'); els.btnlabel.textContent='JÁ JÁ…';
       els.status.className='status'; els.status.textContent='Prepare-se!';
@@ -305,14 +407,21 @@
       els.btnlabel.textContent='AGUARDE';
       els.status.className='status'; els.status.textContent='Aguardando o host iniciar…';
     }
-    // Optimistic (instant) only while RUNNING; once the round is over, trust the
-    // server's final count so the phone agrees with the big screen at the climax.
-    els.count.textContent = (p === PHASE.RUNNING) ? Math.max(serverCount, localTaps) : serverCount;
+    // Optimistic (instant) until the server declares the round settled — at
+    // which point its count is final and includes our late batch, so we switch
+    // to it and agree with the big screen at the climax. Keying this on `settled`
+    // rather than the phase is what stops the number visibly dipping at the
+    // buzzer and then climbing back once the last flush is acknowledged.
+    els.count.textContent = state.settled ? serverCount : Math.max(serverCount, localTaps);
   }
 
   // smooth time bar via rAF
+  let lastFramePhase = null;
   function frame(){
-    const p = state.phase;
+    const p = localPhase();
+    // Repaint the instant the local clock crosses a boundary, without waiting
+    // for the next poll to confirm it.
+    if (p !== lastFramePhase){ lastFramePhase = p; render(); }
     if (p === PHASE.RUNNING && state.endsAt){
       const remain = Math.max(0, state.endsAt - estServerNow());
       const frac = Math.max(0, Math.min(1, remain / state.durationMs));
