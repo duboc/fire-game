@@ -79,7 +79,7 @@ so the service is pinned `min=max=1`. Firestore can't drive the real-time loop
 | Teams vs individual | **Individual** ranking, top-10 live leaderboard |
 | Names | **Auto-generated** (adjective + animal + `#seq`), no typing, no moderation |
 | Phone shows rank? | **Yes** — `#47` updates from each `/tap` response |
-| Anti-cheat | **None.** Only an anti-*accident* clamp (`n ≤ 100` per batch) |
+| Anti-cheat | **None.** Only an anti-*accident* clamp (`n ≤ 400` per batch) |
 | Countdown source of truth | **Server** timestamps; phones/screen render from them |
 | Climax | Confetti + winner **only on the big screen** |
 
