@@ -109,6 +109,40 @@ such a rule would happily rewrite. To add a language: copy a locale file,
 translate all 42 animals from `src/locales/animals.js`, and register it in
 `src/names.js` — a missing animal fails at boot, not on the big screen.
 
+## Interface language
+
+All three surfaces — phone, projector, host panel — render in the same six
+languages as the names, with the same English fallback. The phone carries a
+picker in the top bar; everything else follows the browser.
+
+Resolution order, applied on the client and mirrored on the server so the chrome
+and the generated name always agree: **`?lang=`** → **`localStorage.tapLang`**
+(what the picker writes) → **`navigator.languages`** → English. First tag we
+actually speak wins, so a Chinese browser that also asks for French gets French
+rather than the fallback. `?lang=` is useful for a projector on venue wifi in the
+wrong country: `…/screen?lang=fr`.
+
+Switching with the picker is a re-render, not a reload — player id, rank and
+banked taps all survive. The player's *name* stays in the language it was minted
+in; a new name in the new language arrives on their next join.
+
+Strings live in **`src/locales/ui.js`**, one object per surface. The server
+splices each page's subset into its `<head>` at boot (`src/i18n-inject.js`,
+called from `precompress`), before the ETag is computed and before gzip/brotli
+run, so a translation edit busts the cache correctly.
+
+All six languages ship in every page and the client picks. That costs about
+**2,8 KB brotli** on `/` — ~13 MiB across 5.000 phones on a cold lobby load, on
+top of the ~56 MiB the room already pulls — and buys no `Vary: Accept-Language`,
+no cache fragmentation, and one shared 304 entry per URL. Warm reloads cost
+nothing.
+
+To add or change a string: edit `src/locales/ui.js` and bind it in the markup
+with `data-i18n="key"` (or `data-i18n-placeholder`, `-title`, `-aria-label`,
+`-content` for attributes). A key missing from any language, a lost `{placeholder}`
+or a plural that lost a form throws **at boot** — `validateUi()` runs on import,
+so it fails on deploy rather than on the projector.
+
 ## Admin access
 
 `/host` is a public URL, so `/admin/start` and `/admin/reset` are behind a

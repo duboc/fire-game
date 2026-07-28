@@ -1,5 +1,7 @@
 <!doctype html>
-<html lang="pt-BR">
+<!-- lang is rewritten by the i18n runtime once it has resolved the visitor's
+     language; this is only what the parser sees for the half-millisecond before. -->
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
@@ -7,10 +9,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>Tap Race</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- No external font link: Roboto is self-hosted in theme.css and is next in
+     the --font-display stack. Event wifi is the one thing we cannot fix, and a
+     render-blocking request to a third-party font host is a blank phone. -->
 <link rel="stylesheet" href="/theme.css" />
+<!--I18N-->
 <style>
   html,body{height:100%;}
   body{
@@ -24,6 +27,12 @@
   .appbar .cloud{font-size:18px; line-height:1;}
   .appbar .title{font-family:var(--font-display); font-weight:700; font-size:18px; color:var(--ink); margin-right:auto; letter-spacing:-.01em;}
   .appbar .gwm{font-size:14px;}
+  /* Small, but a real <select>: the native picker is the one control every
+     phone renders correctly and every screen reader already knows. */
+  .langpick{appearance:none; -webkit-appearance:none; background:var(--surface-2); color:var(--ink-2);
+    border:1px solid var(--line); border-radius:var(--r-full); font:inherit; font-size:12px; font-weight:500;
+    padding:4px 8px; cursor:pointer; max-width:112px;}
+  .langpick:focus-visible{outline:2px solid var(--g-blue); outline-offset:2px;}
   .wrap{flex:1; display:flex; flex-direction:column; padding:8px 16px calc(16px + var(--safe-bot)); gap:12px; min-height:0;}
 
   .id-card{background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid var(--line);
@@ -84,35 +93,36 @@
   <div class="appbar">
     <span class="cloud">☁️</span>
     <span class="title shimmer">Tap Race</span>
+    <select class="langpick" id="lang" data-i18n-aria-label="langLabel"></select>
     <span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span>
   </div>
   <div class="wrap">
     <div class="id-card">
-      <div class="who">Você é</div>
-      <div class="name"><span class="emoji" id="emoji">🎮</span> <span id="name">Conectando…</span> <span class="seq" id="seq"></span></div>
+      <div class="who" data-i18n="whoLabel"></div>
+      <div class="name"><span class="emoji" id="emoji">🎮</span> <span id="name" data-i18n="connecting"></span> <span class="seq" id="seq"></span></div>
     </div>
 
     <div class="hud">
-      <div class="stat rank"><div class="k">Posição</div><div class="v" id="rank">—</div></div>
-      <div class="stat count"><div class="k">Toques</div><div class="v" id="count">0</div></div>
-      <div class="stat"><div class="k">Jogadores</div><div class="v" id="total">—</div></div>
+      <div class="stat rank"><div class="k" data-i18n="statRank"></div><div class="v" id="rank">—</div></div>
+      <div class="stat count"><div class="k" data-i18n="statTaps"></div><div class="v" id="count">0</div></div>
+      <div class="stat"><div class="k" data-i18n="statPlayers"></div><div class="v" id="total">—</div></div>
     </div>
 
     <div class="timewrap" id="timewrap"><div class="timebar" id="timebar"></div></div>
 
     <div class="arena" id="arena">
-      <button class="btn disabled" id="btn" aria-label="Botão de toque">
+      <button class="btn disabled" id="btn" data-i18n-aria-label="btnAria">
         <span class="pulse hidden" id="pulse"></span>
-        <span id="btnlabel">AGUARDE</span>
+        <span id="btnlabel" data-i18n="btnWait"></span>
       </button>
     </div>
 
-    <div class="status" id="status">Aguardando o host iniciar…</div>
+    <div class="status" id="status" data-i18n="statusLobby"></div>
   </div>
 
   <div class="overlay" id="overlay">
     <div class="cd n3" id="cd">3</div>
-    <div class="cd-sub" id="cdsub">Prepare o dedo…</div>
+    <div class="cd-sub" id="cdsub" data-i18n="cdSub"></div>
   </div>
 
 <script>
@@ -124,8 +134,12 @@
     rank:$('rank'), count:$('count'), total:$('total'),
     btn:$('btn'), btnlabel:$('btnlabel'), pulse:$('pulse'), arena:$('arena'),
     status:$('status'), timebar:$('timebar'), timewrap:$('timewrap'),
-    overlay:$('overlay'), cd:$('cd'), cdsub:$('cdsub'),
+    overlay:$('overlay'), cd:$('cd'), cdsub:$('cdsub'), lang:$('lang'),
   };
+
+  // Injected into <head> by the server (src/i18n-inject.js): already resolved
+  // the visitor's language and filled every [data-i18n] before this runs.
+  const t = (k, v) => I18N.t(k, v);
 
   const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', RUNNING:'running', ENDED:'ended' };
 
@@ -138,6 +152,8 @@
   let state = { phase: PHASE.LOBBY, startsAt:null, endsAt:null, settlesAt:null, settled:true, graceMs:1500,
                 durationMs:30000, countdownMs:3000, total:0, tapIntervalMs:150, pollIntervalMs:600 };
   let finalJitter = null;         // this phone's personal delay for the last flush
+  let myRank = null;              // kept as a number so it can be re-grouped on a language switch
+  let seenState = false;
   let lastRoundSeenRunning = false;
   let lastCdShown = null;
   let myRoundId = null;
@@ -201,10 +217,19 @@
       pollIntervalMs: s.pollIntervalMs || state.pollIntervalMs,
     });
     if (typeof s.yourCount === 'number') serverCount = s.yourCount;
-    if (typeof s.yourRank === 'number') els.rank.textContent = '#' + s.yourRank;
-    if (typeof s.total === 'number') els.total.textContent = s.total;
+    if (typeof s.yourRank === 'number') myRank = s.yourRank;
+    if (typeof s.total === 'number') seenState = true;
+    renderNumbers();
     if (s.name && (s.rejoined || !me.name)) setIdentity(s);
     render();
+  }
+
+  // Grouped for the reader's locale ("5.000" / "5,000" / "5 000"), and kept in
+  // one place so switching language re-formats what is already on screen.
+  function renderNumbers(){
+    if (myRank != null) els.rank.textContent = '#' + I18N.n(myRank);
+    if (seenState) els.total.textContent = I18N.n(state.total);
+    els.count.textContent = I18N.n(state.settled ? serverCount : Math.max(serverCount, localTaps));
   }
 
   async function reregister(){
@@ -214,7 +239,7 @@
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 8000);
     try{
-      const r = await fetch('/join', { method:'POST', signal: ctl.signal });
+      const r = await fetch(joinUrl(), { method:'POST', signal: ctl.signal });
       const s = await r.json();
       localTaps = 0; serverCount = 0; myRoundId = null;
       setIdentity(s);
@@ -228,7 +253,15 @@
     els.emoji.textContent = me.emoji || '🎮';
     els.name.textContent = me.name || '—';
     els.seq.textContent = me.seq ? ('#' + me.seq) : '';
+    // The slot held the "Connecting…" placeholder; drop the binding so a later
+    // language switch re-translates the chrome around the name but not the name.
+    els.name.removeAttribute('data-i18n');
   }
+
+  // Tell the server which language to mint our name in, rather than letting it
+  // guess from Accept-Language — otherwise a player who picked Italian on a
+  // German phone would be given a German name.
+  const joinUrl = () => '/join?lang=' + encodeURIComponent(I18N.lang);
 
   // ---- networking ---------------------------------------------------------
   async function join(){
@@ -238,9 +271,9 @@
         const s = await apiJson('/state?id='+encodeURIComponent(me.id));
         if (s.known){ setIdentity(s); applyState(s); return; }
       }
-      const s = await apiJson('/join', { method:'POST' });
+      const s = await apiJson(joinUrl(), { method:'POST' });
       setIdentity(s);
-    }catch(e){ els.status.textContent='Sem conexão… tentando de novo'; }
+    }catch(e){ els.status.textContent = t('offline'); }
   }
 
   // One request of each kind in flight at a time. The loop is on a timer, so
@@ -344,7 +377,7 @@
     if (localPhase() !== PHASE.RUNNING) return;
     pending++; localTaps++;
     serverCount = Math.max(serverCount, localTaps);
-    els.count.textContent = serverCount;
+    els.count.textContent = I18N.n(serverCount);
     bounce(); floatPlus(e); vibe(12);
   }
   els.btn.addEventListener('pointerdown', onTap, { passive:false });
@@ -368,7 +401,7 @@
       const ms = state.startsAt - estServerNow();
       const num = Math.ceil(ms/1000);
       els.overlay.classList.add('show');
-      const shown = num > 0 ? String(num) : 'VAI!';
+      const shown = num > 0 ? String(num) : t('go');
       if (shown !== lastCdShown){
         lastCdShown = shown;
         els.cd.textContent = shown;
@@ -376,7 +409,7 @@
         els.cd.style.animation='none'; void els.cd.offsetWidth; els.cd.style.animation='';
         vibe(num>0?20:60);
       }
-      els.cdsub.textContent = num>0 ? 'Prepare o dedo…' : '';
+      els.cdsub.textContent = num>0 ? t('cdSub') : '';
     } else {
       els.overlay.classList.remove('show'); lastCdShown=null;
     }
@@ -385,34 +418,34 @@
     if (p === PHASE.RUNNING){
       lastRoundSeenRunning = true;
       els.btn.classList.remove('disabled'); els.pulse.classList.add('hidden');
-      els.btnlabel.textContent='TOCA!';
-      els.status.className='status go'; els.status.textContent='VAI VAI VAI! 🔥';
+      els.btnlabel.textContent = t('btnTap');
+      els.status.className='status go'; els.status.textContent = t('statusGo');
     } else if (p === PHASE.ENDED){
       els.btn.classList.add('disabled'); els.pulse.classList.add('hidden');
-      els.btnlabel.textContent='ACABOU!';
+      els.btnlabel.textContent = t('btnOver');
       els.status.className='status end';
       // Don't announce a position while late batches can still reorder it.
       els.status.textContent = !state.settled
-        ? 'Apurando os últimos toques… ⏳'
-        : (els.rank.textContent && els.rank.textContent!=='—'
-          ? `Você ficou em ${els.rank.textContent} • Olhe para a tela! 🏆`
-          : 'Fim de jogo! Olhe para a tela 🏆');
+        ? t('statusSettling')
+        : (myRank != null
+          ? t('statusRanked', { rank: '#' + I18N.n(myRank) })
+          : t('statusEnded'));
     } else if (p === PHASE.COUNTDOWN){
-      els.btn.classList.add('disabled'); els.btnlabel.textContent='JÁ JÁ…';
-      els.status.className='status'; els.status.textContent='Prepare-se!';
+      els.btn.classList.add('disabled'); els.btnlabel.textContent = t('btnSoon');
+      els.status.className='status'; els.status.textContent = t('statusReady');
     } else { // lobby
       // new round reset
-      if (lastRoundSeenRunning){ lastRoundSeenRunning=false; localTaps=0; serverCount=0; els.count.textContent='0'; }
+      if (lastRoundSeenRunning){ lastRoundSeenRunning=false; localTaps=0; serverCount=0; }
       els.btn.classList.add('disabled'); els.pulse.classList.remove('hidden');
-      els.btnlabel.textContent='AGUARDE';
-      els.status.className='status'; els.status.textContent='Aguardando o host iniciar…';
+      els.btnlabel.textContent = t('btnWait');
+      els.status.className='status'; els.status.textContent = t('statusLobby');
     }
     // Optimistic (instant) until the server declares the round settled — at
     // which point its count is final and includes our late batch, so we switch
     // to it and agree with the big screen at the climax. Keying this on `settled`
     // rather than the phase is what stops the number visibly dipping at the
     // buzzer and then climbing back once the last flush is acknowledged.
-    els.count.textContent = state.settled ? serverCount : Math.max(serverCount, localTaps);
+    els.count.textContent = I18N.n(state.settled ? serverCount : Math.max(serverCount, localTaps));
   }
 
   // smooth time bar via rAF
@@ -446,6 +479,23 @@
   }
   document.addEventListener('visibilitychange', ()=>{ if (document.hidden) flushBeacon(); });
   window.addEventListener('pagehide', flushBeacon);
+
+  // ---- language picker ----------------------------------------------------
+  // Switching is a re-render, never a reload: a player who changes language
+  // mid-round keeps their id, their rank and every tap they have banked. Their
+  // *name* stays in the language it was minted in, which is consistent with a
+  // leaderboard that already mixes languages by design.
+  for (const code of I18N.langs){
+    const o = document.createElement('option');
+    o.value = code; o.textContent = I18N.names[code];
+    els.lang.appendChild(o);
+  }
+  els.lang.value = I18N.lang;
+  els.lang.addEventListener('change', () => I18N.set(els.lang.value));
+  window.addEventListener('i18n:change', () => {
+    lastCdShown = null;      // force the countdown digit/word to repaint
+    renderNumbers(); render();
+  });
 
   // boot
   (async ()=>{ await join(); render(); loop(); requestAnimationFrame(frame); })();

@@ -7,6 +7,7 @@ import zlib from 'node:zlib';
 import QRCode from 'qrcode';
 
 import { Game, PHASE } from './game.js';
+import { injectI18n } from './i18n-inject.js';
 import { persistResults, persistence } from './persist.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -214,8 +215,14 @@ app.use(express.json({ limit: '8kb' }));
 /** @type {Map<string, {type:string, etag:string, raw:Buffer, gzip:Buffer, br:Buffer}>} */
 const TEXT_ASSETS = new Map();
 
-function precompress(file, type, urls) {
-  const raw = fs.readFileSync(path.join(PUBLIC_DIR, file));
+/**
+ * @param {(text: string) => string} [transform] - rewrites the file before it is
+ *   hashed and compressed, so the ETag content-addresses what we actually serve
+ *   and editing a translation busts the cache with no extra bookkeeping.
+ */
+function precompress(file, type, urls, transform) {
+  let raw = fs.readFileSync(path.join(PUBLIC_DIR, file));
+  if (transform) raw = Buffer.from(transform(raw.toString('utf8')), 'utf8');
   const entry = {
     type,
     // Content-addressed, so a redeploy that changes nothing still revalidates
@@ -234,9 +241,12 @@ function precompress(file, type, urls) {
   return entry;
 }
 
-precompress('index.html', 'text/html; charset=utf-8', ['/', '/index.html']);
-precompress('screen.html', 'text/html; charset=utf-8', ['/screen', '/screen.html']);
-precompress('host.html', 'text/html; charset=utf-8', ['/host', '/host.html']);
+// Each page carries all six languages and picks client-side, so there is no
+// Vary: Accept-Language and the 304 path below stays a single shared entry.
+const HTML = 'text/html; charset=utf-8';
+precompress('index.html', HTML, ['/', '/index.html'], injectI18n('phone'));
+precompress('screen.html', HTML, ['/screen', '/screen.html'], injectI18n('screen'));
+precompress('host.html', HTML, ['/host', '/host.html'], injectI18n('host'));
 precompress('theme.css', 'text/css; charset=utf-8', ['/theme.css']);
 
 app.use((req, res, next) => {
@@ -289,15 +299,24 @@ app.use(
 // The player's language comes from Accept-Language rather than a field the
 // phone has to send: every browser already sets it, it rides along on the
 // self-healing rejoin below for free, and it costs no bytes on the hot path.
+//
+// `?lang=` overrides it, and is what the phone sends once it has resolved its
+// own UI language — so a player who picked Italian gets an Italian name, not
+// one from the header their browser happens to advertise. normalizeLocale
+// already bounds and sanitises anything arriving here (src/names.js:49).
 app.post('/join', (req, res) => {
   const id = randomUUID();
-  const ident = game.join(id, req.get('accept-language'));
+  const ident = game.join(id, req.query.lang || req.get('accept-language'));
   res.json(ident);
 });
 
 // Record a batch of taps and return this player's live view.
 // Self-healing: if the id is unknown (e.g. server restarted), transparently
 // re-issue a fresh identity so the phone keeps working without a reload.
+// This path stays on Accept-Language: /tap is the hot path and carrying a
+// `lang` on every batch would cost the whole room bandwidth to serve a rejoin
+// that only happens after a restart. The re-minted name may then differ from a
+// picker choice — names already mix by design (README, "Player names").
 app.post('/tap', (req, res) => {
   const now = Date.now();
   let { id, n } = req.body || {};
