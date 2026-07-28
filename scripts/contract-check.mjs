@@ -135,6 +135,11 @@ try {
     body: JSON.stringify({ id: me.id, n: 9 }),
   })).json();
   ok(tapped.yourCount === 9, `tap counted (${tapped.yourCount})`);
+  // A reloading phone rebuilds its whole identity from these two responses.
+  ok(tapped.seq === me.seq, 'a /tap response carries seq back');
+  const resumed = await (await fetch(B + '/state?id=' + me.id)).json();
+  ok(resumed.seq === me.seq && resumed.name === me.name,
+    `a resumed /state rebuilds the full identity (${resumed.name} #${resumed.seq})`);
   ok(tapped.yourRank === 1, `rank served from the snapshot (#${tapped.yourRank})`);
   await sleep(2600);
   const done = await (await fetch(B + '/state?id=' + me.id)).json();

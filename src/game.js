@@ -323,6 +323,9 @@ export class Game {
       id: p.id,
       name: p.name,
       emoji: p.emoji,
+      // The phone persists only its id, so identity has to be re-derivable from
+      // this view alone — without seq, every reload blanked the player's #number.
+      seq: p.seq,
       label: `${p.name} #${p.seq}`,
       yourRank: p.rank || this.players.size, // 0 = joined since the last tick ⇒ last place
       yourCount: p.count,

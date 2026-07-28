@@ -79,6 +79,17 @@ try {
   await phone.waitForFunction(() => document.getElementById('name')?.textContent !== 'Connecting…', null, { timeout: 5000 });
   ok(true, 'phone got an identity');
 
+  // The phone persists only its id, so everything else has to come back from
+  // /state. It used to come back without `seq`, and the player's #number
+  // vanished on every reload — the one thing that makes two Turbo Lions tellable
+  // apart on the leaderboard.
+  const seqBefore = (await phone.textContent('#seq')).trim();
+  ok(/^#\d+$/.test(seqBefore), `phone shows its number (${seqBefore})`);
+  await phone.reload({ waitUntil: 'networkidle' });
+  await phone.waitForFunction(() => document.getElementById('name')?.textContent !== 'Connecting…', null, { timeout: 5000 });
+  ok((await phone.textContent('#seq')).trim() === seqBefore, 'and still shows it after a reload');
+  ok((await phone.textContent('#name')).trim().length > 1, 'along with the same name');
+
   const screen = await ctx.newPage();
   await screen.goto(B + '/screen', { waitUntil: 'domcontentloaded' });
 

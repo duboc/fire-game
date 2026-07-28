@@ -223,6 +223,17 @@ test('playerView reports rank, count and total', () => {
   assert.equal(g.playerView('a', 3500).yourRank, 2);
 });
 
+test('playerView carries seq, so a phone that reloads keeps its number', () => {
+  const g = freshGame();
+  g.join('p1');
+  // The phone stores only its id; name, emoji and seq all come back from the
+  // server on the next /state. Dropping seq here blanked the "#142" on every
+  // reload — visible to the player, invisible to every other assertion.
+  const v = g.playerView('p1', 0);
+  assert.equal(v.seq, 1);
+  assert.equal(v.label, 'Alfa #1');
+});
+
 test('start zeroes counts for a new round and increments roundId', () => {
   const g = freshGame();
   g.join('a');
