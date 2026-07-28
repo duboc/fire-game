@@ -121,6 +121,21 @@ try {
     ok(new Set(tags).size === 3, 'each page has its own content-addressed ETag');
   }
 
+  console.log('\n== a JSON API answers errors in JSON ==');
+  {
+    // A phone on bad wifi can truncate a body. Express's default handler answers
+    // with an HTML page, so the client's r.json() throws on the error path and
+    // the real status is lost — and off a dev build the page carries a stack.
+    const bad = await fetch(B + '/tap', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"id":"x",',
+    });
+    ok(bad.status === 400, `a truncated /tap body is a 400 (${bad.status})`);
+    ok((bad.headers.get('content-type') || '').includes('application/json'), 'and the answer is JSON');
+    const body = await bad.text();
+    ok(!/<html/i.test(body), 'not an HTML error page');
+    ok(!/at \s|\.js:\d+/.test(body), 'and it leaks no stack trace');
+  }
+
   console.log('\n== admin token is no longer public ==');
   const cfg = await (await fetch(B + '/config')).json();
   ok(!('adminToken' in cfg), '/config does not return adminToken');

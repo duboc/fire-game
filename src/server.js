@@ -507,6 +507,21 @@ app.get('/config', (_req, res) =>
   res.json({ phase: game.phase, persist: persistence.isEnabled(), durationMs: game.defaultDurationMs }),
 );
 
+// Everything this server answers is JSON or a static page, and static pages
+// never reach here — so an error is always a JSON client's problem. Express's
+// default handler renders an HTML page instead, which makes the phone's
+// `r.json()` throw on the error path (losing the real status) and, off a
+// non-production build, ships a stack trace to whoever sent the bad body.
+// The 4-arity signature is what marks this as an error handler; `_next` is
+// required for that and deliberately unused.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, _next) => {
+  const status = Number(err?.status || err?.statusCode) || 500;
+  if (status >= 500) console.error(`unhandled ${req.method} ${req.path}`, err);
+  if (res.headersSent) return res.end();
+  res.status(status).json({ error: status === 400 ? 'bad request' : status === 413 ? 'body too large' : 'server error' });
+});
+
 // ---------------------------------------------------------------------------
 const server = app.listen(PORT, () => {
   console.log(`🔥 Tap Race on :${PORT}  | phone:/  screen:/screen  host:/host`);
