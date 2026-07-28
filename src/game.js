@@ -48,6 +48,14 @@ export const DEFAULTS = Object.freeze({
  * that reads the real clock.
  */
 export class Game {
+  // Only the authenticated host can set a round length, so this is not a
+  // defence against an attacker — it is a defence against a typo, a stale
+  // replayed request, or a client that sends NaN-adjacent nonsense. Without it
+  // `durationMs: 1e15` parks the game in RUNNING for thirty millennia, and the
+  // only way out is /admin/reset, which the room cannot reach.
+  static MIN_DURATION_MS = 1000;
+  static MAX_DURATION_MS = 10 * 60 * 1000;
+
   /**
    * @param {object} [opts]
    * @param {number} [opts.countdownMs]
@@ -163,7 +171,8 @@ export class Game {
    * @param {object} [opts] { durationMs, now }
    */
   start({ durationMs, now } = {}) {
-    const dur = Number.isFinite(durationMs) && durationMs > 0 ? Math.floor(durationMs) : this.defaultDurationMs;
+    const asked = Number.isFinite(durationMs) && durationMs > 0 ? Math.floor(durationMs) : this.defaultDurationMs;
+    const dur = Math.min(Game.MAX_DURATION_MS, Math.max(Game.MIN_DURATION_MS, asked));
     for (const p of this.players.values()) p.count = 0;
     this.totalTaps = 0;
     this.winner = null;

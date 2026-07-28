@@ -136,6 +136,16 @@ try {
     ok(!/at \s|\.js:\d+/.test(body), 'and it leaks no stack trace');
   }
 
+  console.log('\n== a round cannot be parked forever ==');
+  {
+    const r = await (await fetch(B + '/admin/start', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-token': TOKEN },
+      body: JSON.stringify({ durationMs: 1e15 }),
+    })).json();
+    ok(r.durationMs <= 10 * 60 * 1000, `an absurd durationMs is clamped (${r.durationMs}ms)`);
+    await fetch(B + '/admin/reset', { method: 'POST', headers: { 'x-admin-token': TOKEN } });
+  }
+
   console.log('\n== admin token is no longer public ==');
   const cfg = await (await fetch(B + '/config')).json();
   ok(!('adminToken' in cfg), '/config does not return adminToken');

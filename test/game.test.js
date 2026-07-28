@@ -234,6 +234,19 @@ test('playerView carries seq, so a phone that reloads keeps its number', () => {
   assert.equal(v.label, 'Alfa #1');
 });
 
+test('round length is clamped to something a round could plausibly be', () => {
+  const g = freshGame();
+  // Not anti-cheat — only the host can reach this — but a fat-fingered or
+  // replayed durationMs must not park the game in RUNNING until the year 33715,
+  // which no reset-less client can recover from.
+  const s = g.start({ durationMs: 1e15, now: 0 });
+  assert.equal(s.durationMs, Game.MAX_DURATION_MS);
+  assert.equal(s.endsAt, s.startsAt + Game.MAX_DURATION_MS);
+
+  const tiny = g.start({ durationMs: 1, now: 0 });
+  assert.equal(tiny.durationMs, Game.MIN_DURATION_MS);
+});
+
 test('start zeroes counts for a new round and increments roundId', () => {
   const g = freshGame();
   g.join('a');
