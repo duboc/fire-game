@@ -462,10 +462,20 @@
 
   // flush on background/close so final taps count (the climax!)
   function flushBeacon(){
-    if (pending>0 && me.id){
-      const body = JSON.stringify({ id: me.id, n: pending }); pending=0;
-      if (navigator.sendBeacon) navigator.sendBeacon('/tap', new Blob([body],{type:'application/json'}));
-    }
+    if (pending<=0 || !me.id) return;
+    const body = JSON.stringify({ id: me.id, n: pending });
+    // Bank the batch only if the browser actually took it. sendBeacon returns
+    // false when its queue is full and is missing outright on some in-app
+    // webviews — clearing `pending` first threw the last batch of the round
+    // away silently, on exactly the phones already having a bad time. If it is
+    // refused the taps stay pending: a backgrounded tab that comes back still
+    // flushes them, which is strictly better than losing them here.
+    let sent = false;
+    try{
+      sent = !!navigator.sendBeacon
+        && navigator.sendBeacon('/tap', new Blob([body],{type:'application/json'}));
+    }catch(_){}
+    if (sent) pending = 0;
   }
   document.addEventListener('visibilitychange', ()=>{ if (document.hidden) flushBeacon(); });
   window.addEventListener('pagehide', flushBeacon);

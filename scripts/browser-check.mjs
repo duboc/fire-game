@@ -208,6 +208,37 @@ try {
   ok(finalShown === serverTaps, `phone (${finalShown}) agrees with server (${serverTaps})`);
   ok((await screen.textContent('#champlabel')).includes('Champion'), 'screen revealed the champion');
 
+  console.log('\n== a refused beacon does not eat the last batch ==');
+  {
+    // sendBeacon returns false when the UA queue is full, and is missing
+    // entirely on some in-app webviews. The taps are still ours either way.
+    await fetch(B + '/admin/reset', { method: 'POST', headers: { 'x-admin-token': TOKEN } });
+    const bp = await ctx.newPage();
+    await bp.goto(B + '/', { waitUntil: 'networkidle' });
+    await bp.waitForFunction(() => document.getElementById('name')?.textContent !== 'Connecting…', null, { timeout: 5000 });
+    const bId = await bp.evaluate(() => localStorage.getItem('tapId'));
+    await bp.evaluate(() => { navigator.sendBeacon = () => false; });
+
+    const r1 = await (await fetch(B + '/admin/start', {
+      method: 'POST', headers: admin, body: JSON.stringify({ durationMs: 4000 }),
+    })).json();
+    const skew1 = Date.now() - r1.serverNow;
+    await sleep(Math.max(0, r1.startsAt + skew1 - Date.now() + 250));
+
+    // One synchronous burst: tap, then hide the page before the flush timer can
+    // run, so the batch is genuinely still pending when the beacon is refused.
+    await bp.evaluate(() => {
+      const btn = document.getElementById('btn');
+      for (let i = 0; i < 10; i++) btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }));
+      window.dispatchEvent(new Event('pagehide'));
+    });
+
+    await sleep(Math.max(0, r1.settlesAt + skew1 - Date.now() + 1200));
+    const after = await (await fetch(B + '/state?id=' + bId)).json();
+    ok(after.yourCount === 10, `all 10 taps survived the refused beacon (server has ${after.yourCount})`);
+    await bp.close();
+  }
+
   console.log('\n== no console errors ==');
   const real = errors.filter((e) => !/favicon/i.test(e));
   ok(real.length === 0, real.length ? 'console errors: ' + real.join(' | ') : 'zero console errors');
