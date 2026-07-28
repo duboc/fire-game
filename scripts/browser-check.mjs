@@ -3,7 +3,19 @@ import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 import { ROSTER } from '../src/locales/animals.js';
 import esLocale from '../src/locales/es.js';
-import { UI } from '../src/locales/ui.js';
+import itLocale from '../src/locales/it.js';
+
+// Every name a locale can possibly mint, so an assertion can say "this is
+// Italian" without hard-coding one of 42 × N outcomes.
+const legalNames = (loc) => {
+  const out = new Set();
+  for (const { key } of ROSTER) {
+    const [word, g = 'm'] = loc.animals[key];
+    for (const adj of loc.adjectives) out.add(loc.compose({ name: word, g }, adj));
+  }
+  return out;
+};
+const bare = (s) => s.trim().replace(/\s*#\d+\s*$/, '');
 
 const ROOT = new URL('..', import.meta.url).pathname;
 
@@ -46,9 +58,8 @@ const B = 'http://127.0.0.1:8139';
 const browser = await chromium.launch();
 
 try {
-  // Pinned rather than inherited: every Portuguese assertion below is now a
-  // statement about *this* locale, and the run means the same thing on a laptop
-  // configured in German.
+  // Pinned so the run means the same thing on any laptop. The interface is
+  // English regardless — only the generated names follow the browser.
   const ctx = await browser.newContext({ locale: 'pt-BR' });
   const errors = [];
   ctx.on('weberror', (e) => errors.push(String(e.error())));
@@ -65,7 +76,7 @@ try {
   await phone.goto(B + '/', { waitUntil: 'networkidle' });
   ok(encodings.length > 0 && encodings.every((e) => e === 'br' || e === 'gzip'),
     `real browser received compressed assets (${encodings.join(', ')})`);
-  await phone.waitForFunction(() => document.getElementById('name')?.textContent !== '—', null, { timeout: 5000 });
+  await phone.waitForFunction(() => document.getElementById('name')?.textContent !== 'Connecting…', null, { timeout: 5000 });
   ok(true, 'phone got an identity');
 
   const screen = await ctx.newPage();
@@ -78,56 +89,25 @@ try {
     const esCtx = await browser.newContext({ locale: 'es-AR' });
     const esPhone = await esCtx.newPage();
     await esPhone.goto(B + '/', { waitUntil: 'networkidle' });
-    await esPhone.waitForFunction(() => document.getElementById('name')?.textContent !== '—', null, { timeout: 5000 });
+    await esPhone.waitForFunction(() => document.getElementById('name')?.textContent !== 'Connecting…', null, { timeout: 5000 });
     const shown = (await esPhone.textContent('#name')).trim();
-    const legal = new Set();
-    for (const { key } of ROSTER) {
-      const [word, g = 'm'] = esLocale.animals[key];
-      for (const adj of esLocale.adjectives) legal.add(esLocale.compose({ name: word, g }, adj));
-    }
-    ok(legal.has(shown.replace(/\s*#\d+\s*$/, '')), `Chromium set to es-AR was named "${shown}"`);
-    // The name and the chrome around it are resolved by two different pieces of
-    // code — normalizeLocale on the server, pick() on the phone. This is the
-    // assertion that they agree: a Spanish name inside an English page was the
-    // whole reason for this work.
-    ok(await esPhone.evaluate(() => document.documentElement.lang) === 'es', 'and the page around the name is Spanish too');
-    ok((await esPhone.textContent('.who')).trim() === UI.phone.es.whoLabel, `es-AR sees "${UI.phone.es.whoLabel}"`);
+    ok(legalNames(esLocale).has(bare(shown)), `Chromium set to es-AR was named "${shown}"`);
+    // Named in Spanish, framed in English — that split is the whole design, so
+    // a Spanish browser is exactly where a regression would show up first.
+    ok(await esPhone.evaluate(() => document.documentElement.lang) === 'en', 'the page still declares itself English');
+    ok((await esPhone.textContent('.who')).trim() === 'You are', 'and the interface around the name stays English');
     await esCtx.close();
   }
 
-  console.log('\n== the chrome follows the browser, and ?lang= overrules it ==');
+  console.log('\n== ?lang= pins the name language on a shared link ==');
   {
     const deCtx = await browser.newContext({ locale: 'de-DE' });
-    const dePhone = await deCtx.newPage();
-    await dePhone.goto(B + '/', { waitUntil: 'networkidle' });
-    ok(await dePhone.evaluate(() => document.documentElement.lang) === 'de', 'a German browser gets a German page');
-    ok((await dePhone.textContent('.who')).trim() === UI.phone.de.whoLabel, `de-DE sees "${UI.phone.de.whoLabel}"`);
-    ok((await dePhone.textContent('#btnlabel')).trim() === UI.phone.de.btnWait, `the button says "${UI.phone.de.btnWait}"`);
-
-    // A shared link with a language on it: the projector at a venue whose wifi
-    // router is in the wrong country, or a host handing out /screen?lang=fr.
     const forced = await deCtx.newPage();
     await forced.goto(B + '/?lang=it', { waitUntil: 'networkidle' });
-    ok(await forced.evaluate(() => document.documentElement.lang) === 'it', '?lang=it beats a de-DE browser');
-    ok((await forced.textContent('#btnlabel')).trim() === UI.phone.it.btnWait, `the button says "${UI.phone.it.btnWait}"`);
-
-    // domcontentloaded, not networkidle: the projector holds an SSE stream open
-    // for the whole event, so the network is never idle.
-    const deScreen = await deCtx.newPage();
-    await deScreen.goto(B + '/screen', { waitUntil: 'domcontentloaded' });
-    ok((await deScreen.title()) === UI.screen.de.title, 'the projector titles its own tab in German');
-    // The counted phrase is the one string whose *word order* moves with the
-    // language, and the number inside it carries the green mono styling. Assert
-    // both: right plural form, and the number still wrapped in its <b>.
-    const ready = await deScreen.evaluate(() => {
-      const el = document.getElementById('lobbyReady');
-      return { text: el.textContent.trim(), bold: (el.querySelector('b') || {}).textContent || '' };
-    });
-    const count = Number(ready.bold.replace(/\D/g, ''));
-    const want = UI.screen.de.playersReady[new Intl.PluralRules('de').select(count)]
-      .replace('{n}', new Intl.NumberFormat('de').format(count));
-    ok(ready.text === want, `the counted phrase reads "${ready.text}"`);
-    ok(ready.bold !== '', 'the number is still wrapped for styling after translation');
+    await forced.waitForFunction(() => document.getElementById('name')?.textContent !== 'Connecting…', null, { timeout: 5000 });
+    const shownIt = (await forced.textContent('#name')).trim();
+    ok(legalNames(itLocale).has(bare(shownIt)), `?lang=it beat the de-DE browser (named "${shownIt}")`);
+    ok((await forced.textContent('#btnlabel')).trim() === 'WAIT', 'and the interface is still English');
     await deCtx.close();
   }
 
@@ -147,19 +127,19 @@ try {
 
   await host.click('#start');
   await sleep(250);
-  ok((await host.textContent('#msg')).includes(UI.host.pt.msgNeedPw), 'start with no password is refused client-side');
+  ok((await host.textContent('#msg')).includes('Enter the admin password'), 'start with no password is refused client-side');
 
   await host.fill('#token', 'wrong');
   await host.click('#start');
   await sleep(600);
-  ok((await host.textContent('#msg')).includes(UI.host.pt.msgBadPw), 'a wrong password is refused server-side');
+  ok((await host.textContent('#msg')).includes('Wrong admin password'), 'a wrong password is refused server-side');
 
   await host.fill('#token', TOKEN);
   await host.click('#start');
   await host.waitForSelector('#authok:not([hidden])', { timeout: 5000 });
   ok(await host.isHidden('#authbox'), 'a good password swaps the prompt for a session badge');
   ok(await host.inputValue('#token') === '', 'the field is wiped the moment it is accepted');
-  ok((await host.textContent('#msg')).includes(UI.host.pt.msgStarted), 'the same click also started the round');
+  ok((await host.textContent('#msg')).includes('Round started'), 'the same click also started the round');
 
   const stored = await host.evaluate(() => JSON.stringify(localStorage) + JSON.stringify(sessionStorage));
   ok(!stored.includes(TOKEN), 'the password is in neither localStorage nor sessionStorage');
@@ -174,14 +154,14 @@ try {
   await host.selectOption('#dur', '15000');
   await host.click('#start');
   await sleep(400);
-  ok((await host.textContent('#msg')).includes(UI.host.pt.msgStarted), 'the cookie alone drives a second round');
+  ok((await host.textContent('#msg')).includes('Round started'), 'the cookie alone drives a second round');
 
   await host.click('#logout');
   await host.waitForSelector('#authbox:not([hidden])', { timeout: 5000 });
   ok(await host.isHidden('#authok'), 'logout returns the page to the password prompt');
   await host.click('#start');
   await sleep(250);
-  ok((await host.textContent('#msg')).includes(UI.host.pt.msgNeedPw), 'after logout the buttons ask again');
+  ok((await host.textContent('#msg')).includes('Enter the admin password'), 'after logout the buttons ask again');
   await fetch(B + '/admin/reset', { method: 'POST', headers: { 'x-admin-token': TOKEN } });
 
   console.log('\n== a full round still runs ==');
@@ -215,35 +195,7 @@ try {
   ok(serverTaps >= 20, `server credited the taps despite the in-flight guard (${serverTaps})`);
   const finalShown = Number((await phone.textContent('#count')).replace(/\D/g, ''));
   ok(finalShown === serverTaps, `phone (${finalShown}) agrees with server (${serverTaps})`);
-  ok((await screen.textContent('#champlabel')).includes(UI.screen.pt.champLabel), 'screen revealed the champion');
-
-  // Switching language is a re-render, never a reload. A player who fixes the
-  // language mid-event must not lose the taps they already banked.
-  console.log('\n== the picker switches chrome without costing identity ==');
-  {
-    const nameBefore = (await phone.textContent('#name')).trim();
-    const idBefore = await phone.evaluate(() => localStorage.getItem('tapId'));
-    ok((await phone.textContent('#btnlabel')).trim() === UI.phone.pt.btnOver, `pt-BR phone says "${UI.phone.pt.btnOver}"`);
-
-    await phone.selectOption('#lang', 'de');
-    await phone.waitForFunction(
-      (want) => document.getElementById('btnlabel').textContent.trim() === want,
-      UI.phone.de.btnOver, { timeout: 3000 },
-    );
-    ok(true, `the picker switched the button to "${UI.phone.de.btnOver}"`);
-    ok((await phone.textContent('.who')).trim() === UI.phone.de.whoLabel, 'the static chrome switched with it');
-    ok(await phone.evaluate(() => document.documentElement.lang) === 'de', '<html lang> followed the picker');
-    ok((await phone.textContent('#name')).trim() === nameBefore,
-      `the name minted in Portuguese is left alone ("${nameBefore}")`);
-    ok(Number((await phone.textContent('#count')).replace(/\D/g, '')) === serverTaps,
-      `the ${serverTaps} banked taps survived the switch`);
-    ok(await phone.evaluate(() => localStorage.getItem('tapId')) === idBefore, 'the player id is untouched');
-
-    // Remembered, so the next round does not start in the wrong language again.
-    await phone.reload({ waitUntil: 'networkidle' });
-    ok(await phone.evaluate(() => localStorage.getItem('tapLang')) === 'de', 'the choice is remembered');
-    ok((await phone.textContent('.who')).trim() === UI.phone.de.whoLabel, 'and it survives a reload');
-  }
+  ok((await screen.textContent('#champlabel')).includes('Champion'), 'screen revealed the champion');
 
   console.log('\n== no console errors ==');
   const real = errors.filter((e) => !/favicon/i.test(e));

@@ -1,14 +1,12 @@
 <!doctype html>
-<!-- lang and <title> are rewritten by the i18n runtime; see src/i18n-inject.js. -->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#000000" />
-<title>Tap Race</title>
+<title>Tap Race — Host</title>
 <!-- Roboto is self-hosted in theme.css; no external font request. -->
 <link rel="stylesheet" href="/theme.css" />
-<!--I18N-->
 <style>
   body{min-height:100vh; display:flex; justify-content:center; padding:24px;
     background:radial-gradient(120% 60% at 50% -10%, rgba(66,133,244,.16), transparent 60%), var(--bg);}
@@ -67,22 +65,22 @@
 </head>
 <body class="noise-bg">
   <div class="card">
-    <div class="h1"><span class="cloud">☁️</span> <span class="shimmer">Tap Race</span> <span class="tag" data-i18n="tag"></span>
+    <div class="h1"><span class="cloud">☁️</span> <span class="shimmer">Tap Race</span> <span class="tag">· Host</span>
       <span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span>
     </div>
 
     <div class="panel">
       <div class="row">
-        <div id="authbox"><label data-i18n="pwLabel"></label>
+        <div id="authbox"><label>Admin password</label>
           <div class="pwwrap">
-            <input id="token" type="password" data-i18n-placeholder="pwPlaceholder" autocomplete="current-password" />
-            <button type="button" id="peek" class="peek" data-i18n-title="peekTitle">👁</button>
+            <input id="token" type="password" placeholder="admin password" autocomplete="current-password" />
+            <button type="button" id="peek" class="peek" title="Show/hide">👁</button>
           </div>
         </div>
-        <div id="authok" hidden><label data-i18n="sessionLabel"></label>
-          <div class="authed"><span data-i18n="authed"></span> <button type="button" id="logout" class="linkish" data-i18n="logout"></button></div>
+        <div id="authok" hidden><label>Session</label>
+          <div class="authed"><span>🔓 signed in</span> <button type="button" id="logout" class="linkish">sign out</button></div>
         </div>
-        <div><label data-i18n="durLabel"></label>
+        <div><label>Duration</label>
           <select id="dur">
             <option value="15000">15 s</option>
             <option value="30000" selected>30 s</option>
@@ -92,39 +90,36 @@
         </div>
       </div>
       <div class="row" style="margin-top:16px;">
-        <button class="start" id="start" data-i18n="btnStart"></button>
-        <button class="reset" id="reset" data-i18n="btnReset"></button>
+        <button class="start" id="start">▶ Start (3 · 2 · 1 · GO)</button>
+        <button class="reset" id="reset">↺ Reset to lobby</button>
       </div>
       <div class="msg" id="msg"></div>
-      <!-- The hint used to wrap an <a> around /screen. It is plain text now so
-           every catalogue value can be assigned with textContent; the same link
-           is one panel down under "Screen". -->
-      <div class="hint" data-i18n="hint"></div>
+      <div class="hint">Tip: leave <a href="/screen" target="_blank">/screen</a> up on the projector. Starting zeroes the counters and fires the countdown.</div>
     </div>
 
     <div class="panel">
       <div class="row" style="justify-content:space-between;">
-        <div><span data-i18n="stateLabel"></span> <span class="phase lobby" id="phase" data-i18n="phaseLobby"></span></div>
+        <div><span>State:</span> <span class="phase lobby" id="phase">LOBBY</span></div>
       </div>
       <div class="stat" style="margin-top:14px;">
-        <div class="b"><div class="k" data-i18n="statPlayers"></div><div class="v" id="players">0</div></div>
-        <div class="b"><div class="k" data-i18n="statTaps"></div><div class="v" id="taps">0</div></div>
-        <div class="b"><div class="k" data-i18n="statTime"></div><div class="v" id="time">—</div></div>
+        <div class="b"><div class="k">Players</div><div class="v" id="players">0</div></div>
+        <div class="b"><div class="k">Taps</div><div class="v" id="taps">0</div></div>
+        <div class="b"><div class="k">Time</div><div class="v" id="time">—</div></div>
       </div>
     </div>
 
     <div class="panel">
-      <h2 data-i18n="rankHeading"></h2>
-      <ol class="rank" id="rank"><li class="empty" data-i18n="rankEmpty"></li></ol>
+      <h2>🏆 Live ranking</h2>
+      <ol class="rank" id="rank"><li class="empty">No players yet…</li></ol>
     </div>
 
     <div class="panel">
       <div class="links">
         <div class="qr" id="qr"></div>
         <div>
-          <label data-i18n="linkPlayer"></label>
+          <label>Player link</label>
           <a id="phoneurl" href="/" target="_blank">/</a>
-          <div style="margin-top:14px;"><label data-i18n="linkScreen"></label><a href="/screen" target="_blank">/screen</a></div>
+          <div style="margin-top:14px;"><label>Screen</label><a href="/screen" target="_blank">/screen</a></div>
         </div>
       </div>
     </div>
@@ -133,7 +128,8 @@
 <script>
 (()=>{
   const $=(id)=>document.getElementById(id);
-  const t=(k,v)=>I18N.t(k,v);
+  const NUM=new Intl.NumberFormat('en');
+  const fmt=(v)=>NUM.format(Number(v)||0);
   const origin=location.origin;
   $('phoneurl').textContent=origin.replace(/^https?:\/\//,'');
   $('phoneurl').href=origin;
@@ -158,18 +154,18 @@
 
   async function login(){
     const pw=$('token').value;
-    if(!pw){ msg(t('msgNeedPw'),false); $('token').focus(); return false; }
+    if(!pw){ msg('Enter the admin password.',false); $('token').focus(); return false; }
     try{
       const r=await fetch('/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({token:pw})});
-      if(!r.ok){ msg(t('msgBadPw'),false); $('token').select(); return false; }
-      setAuthed(true); msg(t('msgAuthed'),true); return true;
-    }catch(e){ msg(t('msgNetFail'),false); return false; }
+      if(!r.ok){ msg('Wrong admin password.',false); $('token').select(); return false; }
+      setAuthed(true); msg('Signed in.',true); return true;
+    }catch(e){ msg('Network error.',false); return false; }
   }
 
   $('logout').onclick=async()=>{
     try{ await fetch('/admin/logout',{method:'POST'}); }catch(e){}
-    setAuthed(false); msg(t('msgLoggedOut'),true);
+    setAuthed(false); msg('Session ended.',true);
   };
 
   async function post(path){
@@ -179,9 +175,9 @@
     try{
       const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({durationMs:Number($('dur').value)})});
-      if(r.status===401){ setAuthed(false); msg(t('msgExpired'),false); return; }
-      await r.json(); msg(t(path==='/admin/start'?'msgStarted':'msgReset'),true);
-    }catch(e){ msg(t('msgNetFail'),false); }
+      if(r.status===401){ setAuthed(false); msg('Session expired — enter the password again.',false); return; }
+      await r.json(); msg(path==='/admin/start'?'Round started! 🚀':'Reset to lobby.',true);
+    }catch(e){ msg('Network error.',false); }
   }
   $('start').onclick=()=>post('/admin/start');
   $('reset').onclick=()=>post('/admin/reset');
@@ -195,21 +191,18 @@
   function render(s){
     if(typeof s.serverNow==='number') clockOffset=s.serverNow-Date.now();
     st=s;
-    // 'lobby' -> phaseLobby. Unknown phases fall back to the raw name rather
-    // than rendering an empty chip.
-    const pk='phase'+s.phase.charAt(0).toUpperCase()+s.phase.slice(1);
-    $('phase').textContent=t(pk)===pk ? s.phase.toUpperCase() : t(pk);
+    $('phase').textContent=s.phase.toUpperCase();
     $('phase').className='phase '+s.phase;
-    $('players').textContent=I18N.n(s.total);
-    $('taps').textContent=I18N.n(s.totalTaps||0);
+    $('players').textContent=fmt(s.total);
+    $('taps').textContent=fmt(s.totalTaps||0);
     renderRank(s.top||[]);
   }
   function renderRank(top){
     const ol=$('rank');
-    if(!top.length){ ol.innerHTML='<li class="empty">'+esc(t('rankEmpty'))+'</li>'; return; }
+    if(!top.length){ ol.innerHTML='<li class="empty">'+'No players yet…'+'</li>'; return; }
     ol.innerHTML=top.map(p=>{
       const cls=p.rank===1?' r1':p.rank===2?' r2':p.rank===3?' r3':'';
-      return `<li class="${cls.trim()}"><span class="rk">${p.rank}</span><span class="em">${p.emoji||''}</span><span class="nm">${esc(p.name)} <span class="seq">#${p.seq}</span></span><span class="ct">${I18N.n(p.count||0)}</span></li>`;
+      return `<li class="${cls.trim()}"><span class="rk">${p.rank}</span><span class="em">${p.emoji||''}</span><span class="nm">${esc(p.name)} <span class="seq">#${p.seq}</span></span><span class="ct">${fmt(p.count||0)}</span></li>`;
     }).join('');
   }
   function tick(){

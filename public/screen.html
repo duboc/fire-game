@@ -1,14 +1,12 @@
 <!doctype html>
-<!-- lang and <title> are rewritten by the i18n runtime; see src/i18n-inject.js. -->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#000000" />
-<title>Tap Race</title>
+<title>Tap Race — Screen</title>
 <!-- Roboto is self-hosted in theme.css; no external font request. -->
 <link rel="stylesheet" href="/theme.css" />
-<!--I18N-->
 <style>
   html,body{height:100%;}
   body{overflow:hidden; background:radial-gradient(circle at 50% -8%, rgba(66,133,244,.16), transparent 55%), var(--bg);}
@@ -102,11 +100,11 @@
   <div class="stage show" id="lobby">
     <div class="big"><span class="cloud">☁️</span> <span class="shimmer">Tap Race</span></div>
     <div class="brandwm"><span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span></div>
-    <div class="sub" data-i18n="tagline"></div>
+    <div class="sub">Grab your phone. Point the camera. Tap non-stop.</div>
     <div class="join">
       <div class="qr" id="qr"></div>
       <div>
-        <div class="sub" style="margin-bottom:8px" data-i18n="joinAt"></div>
+        <div class="sub" style="margin-bottom:8px">Join at</div>
         <div class="urlbox" id="url">…</div>
       </div>
     </div>
@@ -127,9 +125,9 @@
         <span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span>
       </div>
       <div class="pill">
-        <div class="chip"><div class="k" data-i18n="chipPlayers"></div><div class="v" id="rTotal">0</div></div>
-        <div class="chip"><div class="k" data-i18n="chipTaps"></div><div class="v" id="rTaps">0</div></div>
-        <div class="chip timer" id="rTimerChip"><div class="k" data-i18n="chipTime"></div><div class="v" id="rTimer">0</div></div>
+        <div class="chip"><div class="k">Players</div><div class="v" id="rTotal">0</div></div>
+        <div class="chip"><div class="k">Taps</div><div class="v" id="rTaps">0</div></div>
+        <div class="chip timer" id="rTimerChip"><div class="k">Time</div><div class="v" id="rTimer">0</div></div>
       </div>
     </div>
     <div class="board" id="board"></div>
@@ -137,17 +135,16 @@
 
   <!-- ENDED -->
   <div class="stage" id="ended">
-    <div class="champlabel" id="champlabel" data-i18n="champLabel"></div>
+    <div class="champlabel" id="champlabel">🏆 Champion 🏆</div>
     <div class="champ" id="champ"></div>
     <div class="podium" id="podium"></div>
-    <div class="again" data-i18n="waitingHost"></div>
+    <div class="again">Waiting for the host… (a new round can start any time)</div>
   </div>
 
 <script>
 (() => {
   'use strict';
   const $ = (id)=>document.getElementById(id);
-  const t = (k,v)=>I18N.t(k,v);
   const PHASE={LOBBY:'lobby',COUNTDOWN:'countdown',RUNNING:'running',ENDED:'ended'};
   const stages={lobby:$('lobby'),countdown:$('countdown'),run:$('run'),ended:$('ended')};
   function showStage(name){ for(const k in stages) stages[k].classList.toggle('show', k===name); }
@@ -212,19 +209,14 @@
     else if(phase===PHASE.ENDED){ renderEnded(s); }
   }
 
-  // Grouping is locale-specific ("5.000" / "5,000" / "5 000") and this runs
-  // ~600 times a second from tweenCounts, so the formatter is built once per
-  // language by the runtime rather than per call.
-  function fmt(n){ return I18N.n(n||0); }
+  // Built once: tweenCounts calls this ~600 times a second across 10 rows.
+  const NUM=new Intl.NumberFormat('en');
+  function fmt(n){ return NUM.format(Number(n)||0); }
 
-  // "{n} jogadores prontos" as one translated phrase, with the number still
-  // picked out in green mono (.ready b). Both halves are escaped; only the <b>
-  // is ours.
+  // The number keeps its own <b> so .ready b can style it green mono.
   function renderReady(total){
-    const num=fmt(total), txt=t('playersReady',{n:total||0}), i=txt.indexOf(num);
-    $('lobbyReady').innerHTML = i<0
-      ? escapeHtml(txt)
-      : escapeHtml(txt.slice(0,i))+'<b>'+escapeHtml(num)+'</b>'+escapeHtml(txt.slice(i+num.length));
+    const n=total||0;
+    $('lobbyReady').innerHTML='<b>'+escapeHtml(fmt(n))+'</b> '+(n===1?'player ready':'players ready');
   }
 
   // ---- countdown ----
@@ -232,7 +224,7 @@
     if(cur===PHASE.COUNTDOWN && state.startsAt){
       const ms=state.startsAt-estServerNow();
       const num=Math.ceil(ms/1000);
-      const txt= num>0? String(num):t('go');
+      const txt= num>0? String(num):'GO!';
       if(txt!==lastCd){
         lastCd=txt; const el=$('cdnum');
         el.textContent=txt;
@@ -327,24 +319,24 @@
     if(!s.settled){
       if(settleShownRound!==s.roundId){
         settleShownRound=s.roundId;
-        $('champlabel').textContent=t('settling');
+        $('champlabel').textContent='⏳ Counting…';
         const champ=$('champ');
         champ.classList.add('settling');
-        champ.innerHTML='<div class="em">⏳</div><div class="info"><div class="nm">'+escapeHtml(t('countingLast'))+'</div></div>';
+        champ.innerHTML='<div class="em">⏳</div><div class="info"><div class="nm">'+'Counting the last taps'+'</div></div>';
         $('podium').innerHTML='';
       }
       return;
     }
     if(endedShownRound===s.roundId) return; // already revealed
     endedShownRound=s.roundId;
-    $('champlabel').textContent=t('champLabel');
+    $('champlabel').textContent='🏆 Champion 🏆';
     const w=s.winner; const top=s.top||[];
     const champ=$('champ');
     champ.classList.remove('settling');
     if(w){
-      champ.innerHTML=`<div class="em">${w.emoji}</div><div class="info"><div class="nm">${escapeHtml(w.name)} <span class="seq">#${w.seq}</span></div><div class="ct">${escapeHtml(t('tapsCount',{n:w.count}))}</div></div>`;
+      champ.innerHTML=`<div class="em">${w.emoji}</div><div class="info"><div class="nm">${escapeHtml(w.name)} <span class="seq">#${w.seq}</span></div><div class="ct">${fmt(w.count)} ${w.count===1?'tap':'taps'}</div></div>`;
     } else {
-      champ.innerHTML=`<div class="info"><div class="nm">${escapeHtml(t('nobody'))}</div></div>`;
+      champ.innerHTML=`<div class="info"><div class="nm">Nobody tapped 😴</div></div>`;
     }
     const pod=$('podium'); pod.innerHTML='';
     top.slice(0,5).forEach(p=>{
@@ -394,7 +386,7 @@
   }
 
   // boot
-  renderReady(0);   // the counted phrase has no static markup to fall back on
+  renderReady(0);
   connect();
   // A short burst first (min-RTT needs a few samples to find a clean one), then
   // a slow heartbeat to ride out drift over a long event.

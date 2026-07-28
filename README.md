@@ -21,8 +21,8 @@ npm start
 ```
 
 Open `/screen` on a projector, `/host` on your laptop, and `/` on phones.
-On the host panel type the admin password, pick a duration and hit **INICIAR** —
-the screen runs 3·2·1·VAI and the round begins.
+On the host panel type the admin password, pick a duration and hit **Start** —
+the screen runs 3·2·1·GO and the round begins.
 
 ```bash
 npm test              # unit tests for the game engine (no network needed)
@@ -78,7 +78,7 @@ so the service is pinned `min=max=1`. Firestore can't drive the real-time loop
 |---|---|
 | Teams vs individual | **Individual** ranking, top-10 live leaderboard |
 | Names | **Auto-generated** (adjective + animal + `#seq`), no typing, no moderation |
-| Phone shows rank? | **Yes** — `#47 de 300` updates from each `/tap` response |
+| Phone shows rank? | **Yes** — `#47` updates from each `/tap` response |
 | Anti-cheat | **None.** Only an anti-*accident* clamp (`n ≤ 100` per batch) |
 | Countdown source of truth | **Server** timestamps; phones/screen render from them |
 | Climax | Confetti + winner **only on the big screen** |
@@ -109,39 +109,25 @@ such a rule would happily rewrite. To add a language: copy a locale file,
 translate all 42 animals from `src/locales/animals.js`, and register it in
 `src/names.js` — a missing animal fails at boot, not on the big screen.
 
+### Overriding the name language
+
+`?lang=` on the phone pins it, whatever the browser asks for: a link handed out
+as `/?lang=de` mints German names. The page forwards it to `POST /join`.
+Unsupported or malformed values fall back to English rather than erroring.
+
 ## Interface language
 
-All three surfaces — phone, projector, host panel — render in the same six
-languages as the names, with the same English fallback. The phone carries a
-picker in the top bar; everything else follows the browser.
+**The interface itself is English only** — the names are the localised part.
 
-Resolution order, applied on the client and mirrored on the server so the chrome
-and the generated name always agree: **`?lang=`** → **`localStorage.tapLang`**
-(what the picker writes) → **`navigator.languages`** → English. First tag we
-actually speak wins, so a Chinese browser that also asks for French gets French
-rather than the fallback. `?lang=` is useful for a projector on venue wifi in the
-wrong country: `…/screen?lang=fr`.
+Six languages of chrome shipped briefly and were removed: all six had to be in
+every page for the client to pick from (the alternative, `Vary: Accept-Language`,
+fragments the cache and kills the shared 304), and that measured **+2,8 KB
+brotli** on `/`. Across 5.000 phones on a cold lobby load that is ~13 MiB added
+to the heaviest moment of the event — a ~24% tax on the one minute that decides
+whether the room gets in. Not worth it for chrome that is mostly `TAP!` and a
+countdown.
 
-Switching with the picker is a re-render, not a reload — player id, rank and
-banked taps all survive. The player's *name* stays in the language it was minted
-in; a new name in the new language arrives on their next join.
-
-Strings live in **`src/locales/ui.js`**, one object per surface. The server
-splices each page's subset into its `<head>` at boot (`src/i18n-inject.js`,
-called from `precompress`), before the ETag is computed and before gzip/brotli
-run, so a translation edit busts the cache correctly.
-
-All six languages ship in every page and the client picks. That costs about
-**2,8 KB brotli** on `/` — ~13 MiB across 5.000 phones on a cold lobby load, on
-top of the ~56 MiB the room already pulls — and buys no `Vary: Accept-Language`,
-no cache fragmentation, and one shared 304 entry per URL. Warm reloads cost
-nothing.
-
-To add or change a string: edit `src/locales/ui.js` and bind it in the markup
-with `data-i18n="key"` (or `data-i18n-placeholder`, `-title`, `-aria-label`,
-`-content` for attributes). A key missing from any language, a lost `{placeholder}`
-or a plural that lost a form throws **at boot** — `validateUi()` runs on import,
-so it fails on deploy rather than on the projector.
+The work is in commit `31aeb82` if the trade ever changes.
 
 ## Admin access
 
@@ -155,7 +141,7 @@ The host types the password once. The server exchanges it for an **HttpOnly,
 SameSite=Strict** session cookie, so from then on the secret exists nowhere the
 page can read it — not in `localStorage`, not in `document.cookie`, not in the
 field (it is wiped on success). A laptop mirrored to the projector shows
-`🔓 autenticado`, never the password. The session lasts 12h; **sair** ends it.
+`🔓 signed in`, never the password. The session lasts 12h; **sign out** ends it.
 
 Failed logins are throttled — the delay grows per consecutive failure, capped at
 2s and capped again at 16 delayed responses in flight, so guessing gets slow

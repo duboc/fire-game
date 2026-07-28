@@ -2,10 +2,8 @@
 import { spawn } from 'node:child_process';
 import { randomBytes, scryptSync } from 'node:crypto';
 import zlib from 'node:zlib';
-import fs from 'node:fs';
 import { Game } from '../src/game.js';
 import { ROSTER } from '../src/locales/animals.js';
-import { UI, UI_LOCALES } from '../src/locales/ui.js';
 import de from '../src/locales/de.js';
 import en from '../src/locales/en.js';
 import es from '../src/locales/es.js';
@@ -100,39 +98,18 @@ try {
   ok(f.status === 200, 'font 200s');
   ok((f.headers.get('cache-control') || '').includes('immutable'), 'font is immutable-cached');
 
-  console.log('\n== the UI chrome ships in six languages ==');
+  console.log('\n== the pages are self-contained ==');
   {
-    const SURFACES = [['/', 'phone'], ['/screen', 'screen'], ['/host', 'host']];
-    const served = new Map();
-    for (const [url, surface] of SURFACES) served.set(surface, await (await fetch(B + url)).text());
-
-    for (const [url, surface] of SURFACES) {
-      const body = served.get(surface);
-      const onDisk = fs.readFileSync(`${ROOT}public/${url === '/' ? 'index' : surface}.html`, 'utf8');
-
-      ok(body.includes('window.I18N') && !onDisk.includes('window.I18N'),
-        `${url} is served with a runtime the file on disk does not have`);
-      ok(!body.includes('<!--I18N-->'), `${url} has no leftover marker`);
+    for (const url of ['/', '/screen', '/host']) {
+      const body = await (await fetch(B + url)).text();
+      // Event wifi is the one thing we cannot fix: a render-blocking request to
+      // a third-party font host is a blank phone. Roboto is self-hosted.
       ok(!/fonts\.(googleapis|gstatic)\.com/.test(body), `${url} asks no third-party font host`);
-
-      // Parse what was actually served rather than grepping it: the assertion
-      // is that this page's catalogue *is* its surface — every language, every
-      // key, and nobody else's. 5.000 phones must not carry the host panel's
-      // password strings or the projector's copy.
-      const blob = body.split('window.__I18N_STRINGS=')[1]?.split(';\n')[0];
-      let shipped = null;
-      try { shipped = JSON.parse(blob.replace(/\\u003c/g, '<')); } catch { /* reported below */ }
-      ok(shipped !== null, `${url} ships a parseable catalogue`);
-      ok(shipped && UI_LOCALES.every((c) => shipped[c]), `${url} carries all six languages`);
-      ok(shipped && JSON.stringify(shipped) === JSON.stringify(UI[surface]),
-        `${url} ships exactly the ${surface} catalogue and nothing else`);
+      ok(!/<script[^>]+src=/.test(body), `${url} pulls in no external script`);
     }
-
-    // The ETag is computed over the injected buffer, so a translation edit busts
-    // the cache. Distinct catalogues must therefore produce distinct ETags.
-    const tags = await Promise.all(SURFACES.map(async ([u]) => (await fetch(B + u)).headers.get('etag')));
-    ok(new Set(tags).size === 3, 'each surface has its own content-addressed ETag');
-    ok(!(await (await fetch(B + '/theme.css')).text()).includes('window.I18N'), 'the stylesheet was left alone');
+    const tags = await Promise.all(['/', '/screen', '/host']
+      .map(async (u) => (await fetch(B + u)).headers.get('etag')));
+    ok(new Set(tags).size === 3, 'each page has its own content-addressed ETag');
   }
 
   console.log('\n== admin token is no longer public ==');
