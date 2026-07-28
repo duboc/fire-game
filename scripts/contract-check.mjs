@@ -88,6 +88,15 @@ try {
     ok(revalidate.status === 304, `${p} revalidates to 304`);
     const weak = await fetch(B + p, { headers: { 'if-none-match': 'W/' + etag } });
     ok(weak.status === 304, `${p} accepts a weak ETag`);
+    // RFC 9110 lets a client send a list, and intermediaries do. Matching the
+    // header as one opaque string turned every such revalidation into a full
+    // re-download — the exact cost this whole block exists to avoid.
+    const list = await fetch(B + p, { headers: { 'if-none-match': `"stale-abc", ${etag}` } });
+    ok(list.status === 304, `${p} matches an ETag inside a list`);
+    const star = await fetch(B + p, { headers: { 'if-none-match': '*' } });
+    ok(star.status === 304, `${p} honours If-None-Match: *`);
+    const miss = await fetch(B + p, { headers: { 'if-none-match': '"stale-abc"' } });
+    ok(miss.status === 200, `${p} still sends a body when nothing matches`);
   }
   console.log(`  phone payload ${totalRaw}B raw / ${totalGz}B gzip / ${totalBr}B brotli`);
   console.log(`  5.000 phones: ${(totalRaw * 5000 / 1048576).toFixed(1)} MiB raw` +

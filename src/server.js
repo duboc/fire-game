@@ -234,8 +234,24 @@ function precompress(file, type, urls) {
   return entry;
 }
 
-// Each page carries all six languages and picks client-side, so there is no
-// Vary: Accept-Language and the 304 path below stays a single shared entry.
+/**
+ * RFC 9110 §13.1.2: If-None-Match is a *list* of entity-tags, or `*`. Comparing
+ * the raw header to a single tag is right for the common browser case and wrong
+ * for every intermediary that adds one — and getting it wrong turns a 200-byte
+ * revalidation back into a full page, which at 5.000 phones is the difference
+ * this whole precompress block exists to buy.
+ */
+function etagMatches(header, etag) {
+  if (!header) return false;
+  if (header.trim() === '*') return true;
+  for (const candidate of header.split(',')) {
+    if (candidate.trim().replace(/^W\//, '') === etag) return true;
+  }
+  return false;
+}
+
+// One shared entry per URL: the pages are language-independent, so there is no
+// Vary: Accept-Language and every phone revalidates against the same ETag.
 const HTML = 'text/html; charset=utf-8';
 precompress('index.html', HTML, ['/', '/index.html']);
 precompress('screen.html', HTML, ['/screen', '/screen.html']);
@@ -256,8 +272,7 @@ app.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('ETag', asset.etag);
 
-  const inm = req.headers['if-none-match'];
-  if (inm && inm.replace(/^W\//, '') === asset.etag) return res.status(304).end();
+  if (etagMatches(req.headers['if-none-match'], asset.etag)) return res.status(304).end();
 
   const accept = req.headers['accept-encoding'] || '';
   let body = asset.raw;
