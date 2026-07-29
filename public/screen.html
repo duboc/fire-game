@@ -34,7 +34,6 @@
   .join{display:flex; align-items:center; gap:4vw; margin-top:1vh; flex-wrap:wrap; justify-content:center;}
   .qr{background:#fff; padding:18px; border-radius:var(--r-lg); width:min(34vh,320px); height:min(34vh,320px); box-shadow:0 0 50px rgba(66,133,244,.25); border:1px solid rgba(66,133,244,.3);}
   .qr svg{width:100%; height:100%; display:block;}
-  .urlbox{font-family:var(--font-mono); font-size:clamp(26px,4.2vw,60px); font-weight:500; color:var(--g-blue-700); letter-spacing:-.01em;}
   .ready{font-size:clamp(22px,2.8vw,42px); font-weight:500; color:var(--ink);}
   .ready b{font-family:var(--font-mono); color:var(--g-green-700); font-weight:500; font-variant-numeric:tabular-nums;}
   .dotpulse{display:inline-block; width:14px; height:14px; border-radius:50%; background:var(--g-green); margin-left:10px; animation:dp 1s infinite; box-shadow:0 0 12px rgba(52,168,83,.6);}
@@ -106,10 +105,6 @@
     <div class="sub">Grab your phone. Point the camera. Tap non-stop.</div>
     <div class="join">
       <div class="qr" id="qr"></div>
-      <div>
-        <div class="sub" style="margin-bottom:8px">Join at</div>
-        <div class="urlbox" id="url">…</div>
-      </div>
     </div>
     <!-- One counted phrase, not "<b>N</b> + literal": word order and the plural
          form both move with the language ("2 Spieler bereit", "0 joueur prêt"). -->
@@ -175,8 +170,9 @@
   }
 
   // ---- lobby setup ----
+  // The QR is the only way in — the URL used to be spelled out beside it and
+  // is deliberately gone, so nothing on the projector invites typing.
   const origin=location.origin;
-  $('url').textContent = origin.replace(/^https?:\/\//,'');
   fetch('/qr.svg?data='+encodeURIComponent(origin)).then(r=>r.text()).then(svg=>{$('qr').innerHTML=svg;}).catch(()=>{});
 
   // ---- SSE ----
