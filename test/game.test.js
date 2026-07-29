@@ -359,6 +359,81 @@ test('playerView is a pure read — it neither advances nor re-ranks', () => {
   assert.equal(g.playerView('b', 3700).yourRank, 1);
 });
 
+test('leaderboard(n) goes deeper than top without sorting a second time', () => {
+  const g = freshGame();
+  for (let i = 0; i < 30; i++) g.join('p' + i);
+  g.start({ now: 0 });
+  for (let i = 0; i < 30; i++) g.tap('p' + i, i + 1, 3500); // p29 leads, p0 last
+
+  // Instrument the sort itself: the dashboard's deeper slice must be free,
+  // reading the snapshot the 100ms tick already left behind in _sortBuf.
+  const realSort = Array.prototype.sort;
+  let sorts = 0;
+  g.tick(3600);
+  Array.prototype.sort = function (...a) { sorts += 1; return realSort.apply(this, a); };
+  let board;
+  try {
+    board = g.leaderboard(25);
+  } finally {
+    Array.prototype.sort = realSort;
+  }
+  assert.equal(sorts, 0, 'leaderboard must not re-sort the roster');
+
+  assert.equal(board.length, 25);
+  assert.equal(g.top.length, 10, 'the SSE frame the big screen gets must not grow');
+  assert.deepEqual(board.slice(0, 10).map((r) => r.seq), g.top.map((r) => r.seq));
+  assert.equal(board[0].seq, 30); // p29 joined 30th
+  assert.equal(board[0].count, 30);
+
+  // No player id: /metrics is public and an id is the only credential /tap
+  // has. seq identifies a row without handing anyone a way to tap as them.
+  assert.ok(!('id' in board[0]), 'leaderboard rows must not carry a player id');
+  assert.ok('id' in g.top[0], '…but the SSE frame still needs one to key its FLIP animation');
+  assert.equal(board[24].rank, 25);
+  assert.ok(board[0].count > board[24].count);
+
+  // Asking for more than there are players yields the roster, not holes.
+  assert.equal(g.leaderboard(500).length, 30);
+  assert.equal(g.leaderboard(0).length, 0);
+});
+
+test('leaderboard reads the same snapshot as top — stale between ticks, by design', () => {
+  const g = freshGame();
+  g.join('a'); g.join('b');
+  g.start({ now: 0 });
+  g.tap('a', 5, 3500);
+  g.tick(3500);
+  g.tap('b', 99, 3600); // b leads now, but nothing has re-ranked
+
+  assert.equal(g.leaderboard(2)[0].seq, 1, 'must not recompute on read'); // a
+  g.tick(3700);
+  assert.equal(g.leaderboard(2)[0].seq, 2); // b
+});
+
+test('stats splits the roster into tapping vs idle and tallies languages', () => {
+  const g = new Game({ countdownMs: 3000, durationMs: 10000 }); // real names -> real locales
+  g.join('a', 'pt-BR');
+  g.join('b', 'pt');
+  g.join('c', 'de-AT');
+  g.join('d', 'zh-CN'); // unsupported -> counted as the English fallback
+  g.start({ now: 0 });
+
+  let s = g.stats();
+  assert.equal(s.tapping, 0);
+  assert.equal(s.idle, 4, 'a lobby full of nobody tapping is the interesting case');
+  assert.deepEqual(s.locales, [{ code: 'pt', n: 2 }, { code: 'de', n: 1 }, { code: 'en', n: 1 }]);
+
+  g.tap('a', 3, 3500);
+  g.tap('c', 1, 3500);
+  s = g.stats();
+  assert.equal(s.tapping, 2);
+  assert.equal(s.idle, 2);
+
+  // A new round zeroes the counts, so everyone is idle again until they tap.
+  g.start({ now: 100000 });
+  assert.equal(g.stats().tapping, 0);
+});
+
 test('countdown -> running transition is driven purely by now', () => {
   const g = freshGame();
   g.join('a');

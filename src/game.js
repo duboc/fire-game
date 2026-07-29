@@ -1,4 +1,4 @@
-import { makeNameFactory } from './names.js';
+import { makeNameFactory, DEFAULT_LOCALE } from './names.js';
 
 /** Game phases. */
 export const PHASE = Object.freeze({
@@ -361,6 +361,54 @@ export class Game {
       winner: this.winner, // stays null until settled
       roundId: this.roundId,
     };
+  }
+
+  /**
+   * A deeper slice of the ranking than the big screen needs, for /dashboard.
+   *
+   * Free at any n: _recount() already leaves the whole roster sorted in
+   * _sortBuf, and `top` is only the first `topN` of it copied out for the SSE
+   * frame. So this reads that same snapshot — including its staleness between
+   * ticks, which is the property that keeps ranking off every request path.
+   *
+   * Unlike `top` these rows carry no `id`. The big screen needs one to key its
+   * FLIP animation; the dashboard renders by rank and does not — and a player
+   * id is the only credential /tap has, so publishing 25 of them on an
+   * unauthenticated URL would hand anyone the ability to pad someone's score.
+   * `seq` is the stable public handle, and it is already on the projector.
+   * @param {number} n
+   */
+  leaderboard(n) {
+    const end = Math.min(Math.max(0, Math.floor(n) || 0), this._sortBuf.length);
+    const out = [];
+    for (let i = 0; i < end; i++) {
+      const p = this._sortBuf[i];
+      out.push({ rank: i + 1, name: p.name, emoji: p.emoji, seq: p.seq, count: p.count });
+    }
+    return out;
+  }
+
+  /**
+   * Roster-wide aggregates the rank snapshot cannot answer: how much of the
+   * room is actually playing, and what languages it is playing in.
+   *
+   * O(n) over every player, so it belongs on a sampler and never on a request
+   * handler (docs/SCALE.md, finding 1) — the /metrics sampler calls it once a
+   * second, and only while a dashboard is open.
+   * @returns {{tapping:number, idle:number, locales:Array<{code:string,n:number}>}}
+   */
+  stats() {
+    let tapping = 0;
+    const byLocale = new Map();
+    for (const p of this.players.values()) {
+      if (p.count > 0) tapping += 1;
+      const code = p.locale || DEFAULT_LOCALE;
+      byLocale.set(code, (byLocale.get(code) ?? 0) + 1);
+    }
+    const locales = [...byLocale]
+      .map(([code, n]) => ({ code, n }))
+      .sort((a, b) => b.n - a.n || (a.code < b.code ? -1 : 1)); // stable order for a stable UI
+    return { tapping, idle: this.players.size - tapping, locales };
   }
 
   /** Final results, used for persistence at round end. */
