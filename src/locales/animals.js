@@ -1,9 +1,16 @@
 // The canonical animal roster: a stable key and the emoji that goes with it.
 //
-// Defined once, here, so every language describes the *same* 42 animals with
+// Defined once, here, so every language describes the *same* 38 animals with
 // the same emoji. Each locale file supplies only the words. A locale that
 // forgets one is a boot-time error (src/names.js), never an `undefined` that
 // reaches the projector.
+//
+// Deliberately absent, and not to be re-added to "round out the list": monkey
+// and gorilla (racist slurs when they land on a person — and here they always
+// land on a person), whale and elephant (the same joke about their body). The
+// roster is assigned at random to real people whose names go up on a projector
+// in front of the whole room, so an animal only earns a slot if it reads as a
+// compliment. test/names.test.js enforces this list.
 
 export const ROSTER = [
   { key: 'penguin', emoji: '🐧' },
@@ -22,7 +29,6 @@ export const ROSTER = [
   { key: 'seal', emoji: '🦭' },
   { key: 'octopus', emoji: '🐙' },
   { key: 'dragon', emoji: '🐉' },
-  { key: 'monkey', emoji: '🐵' },
   { key: 'rhino', emoji: '🦏' },
   { key: 'bull', emoji: '🐂' },
   { key: 'rabbit', emoji: '🐰' },
@@ -31,11 +37,9 @@ export const ROSTER = [
   { key: 'bee', emoji: '🐝' },
   { key: 'dolphin', emoji: '🐬' },
   { key: 'horse', emoji: '🐴' },
-  { key: 'elephant', emoji: '🐘' },
   { key: 'camel', emoji: '🐫' },
   { key: 'zebra', emoji: '🦓' },
   { key: 'giraffe', emoji: '🦒' },
-  { key: 'gorilla', emoji: '🦍' },
   { key: 'kangaroo', emoji: '🦘' },
   { key: 'goat', emoji: '🐐' },
   { key: 'rooster', emoji: '🐓' },
@@ -46,7 +50,6 @@ export const ROSTER = [
   { key: 'lizard', emoji: '🦎' },
   { key: 'snake', emoji: '🐍' },
   { key: 'turtle', emoji: '🐢' },
-  { key: 'whale', emoji: '🐳' },
   { key: 'unicorn', emoji: '🦄' },
 ];
 

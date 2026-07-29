@@ -116,8 +116,14 @@ and German's three-way `Wütender Wolf` / `Wütende Eule` / `Wütendes Pferd`).
 Both forms are written out in `src/locales/*.js` rather than derived by a
 suffix rule, because `Turbo`, `Laser`, `Ninja` and `Relâmpago` end in the letters
 such a rule would happily rewrite. To add a language: copy a locale file,
-translate all 42 animals from `src/locales/animals.js`, and register it in
+translate all 38 animals from `src/locales/animals.js`, and register it in
 `src/names.js` — a missing animal fails at boot, not on the big screen.
+
+The roster deliberately excludes monkey, gorilla, whale and elephant. Every
+name is assigned at random to a real person and then projected in front of the
+room, so an animal that doubles as a slur or a body joke in *any* of the six
+languages doesn't belong in it — see the note in `src/locales/animals.js`.
+Weigh a new animal that way before adding it.
 
 ### Overriding the name language
 

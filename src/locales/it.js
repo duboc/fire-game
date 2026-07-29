@@ -1,6 +1,6 @@
 // Italian. Adjective follows the noun and agrees with its gender.
-// Note `tigre`, `volpe` and `scimmia` are feminine — a false friend for anyone
-// reading across from the Portuguese list.
+// Note `tigre` and `volpe` are feminine — a false friend for anyone reading
+// across from the Portuguese list.
 import { GENDER_INDEX } from './animals.js';
 
 export default {
@@ -12,15 +12,14 @@ export default {
     owl: ['Gufo', 'm'], jaguar: ['Giaguaro', 'm'], wolf: ['Lupo', 'm'],
     fox: ['Volpe', 'f'], bear: ['Orso', 'm'], lion: ['Leone', 'm'],
     panda: ['Panda', 'm'], seal: ['Foca', 'f'], octopus: ['Polpo', 'm'],
-    dragon: ['Drago', 'm'], monkey: ['Scimmia', 'f'], rhino: ['Rinoceronte', 'm'],
-    bull: ['Toro', 'm'], rabbit: ['Coniglio', 'm'], cat: ['Gatto', 'm'],
-    frog: ['Rana', 'f'], bee: ['Ape', 'f'], dolphin: ['Delfino', 'm'],
-    horse: ['Cavallo', 'm'], elephant: ['Elefante', 'm'], camel: ['Cammello', 'm'],
-    zebra: ['Zebra', 'f'], giraffe: ['Giraffa', 'f'], gorilla: ['Gorilla', 'm'],
+    dragon: ['Drago', 'm'], rhino: ['Rinoceronte', 'm'], bull: ['Toro', 'm'],
+    rabbit: ['Coniglio', 'm'], cat: ['Gatto', 'm'], frog: ['Rana', 'f'],
+    bee: ['Ape', 'f'], dolphin: ['Delfino', 'm'], horse: ['Cavallo', 'm'],
+    camel: ['Cammello', 'm'], zebra: ['Zebra', 'f'], giraffe: ['Giraffa', 'f'],
     kangaroo: ['Canguro', 'm'], goat: ['Capra', 'f'], rooster: ['Gallo', 'm'],
     peacock: ['Pavone', 'm'], swan: ['Cigno', 'm'], bat: ['Pipistrello', 'm'],
     boar: ['Cinghiale', 'm'], lizard: ['Lucertola', 'f'], snake: ['Serpente', 'm'],
-    turtle: ['Tartaruga', 'f'], whale: ['Balena', 'f'], unicorn: ['Unicorno', 'm'],
+    turtle: ['Tartaruga', 'f'], unicorn: ['Unicorno', 'm'],
   },
 
   adjectives: [
