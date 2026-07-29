@@ -181,9 +181,17 @@ app.disable('x-powered-by');
 // Observability. Node's event loop is the resource that actually runs out here
 // (it cannot use a second core — docs/SCALE.md, finding 3), and loop lag is the
 // earliest, clearest signal that it is losing. Sampling costs one timer.
+//
+// Everything here feeds a single 1 Hz sampler (below, next to the game loop).
+// It drains these counters into a two-minute ring and — only when a dashboard
+// is actually watching — builds and gzips the whole /metrics payload once. That
+// is what makes a *public* /metrics safe: the handler writes a buffer and does
+// no work of its own, however many people open it.
 // ---------------------------------------------------------------------------
 const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS) || 10000;
 const LAG_SAMPLE_MS = 500;
+const SAMPLE_MS = 1000;
+const HISTORY_SAMPLES = 120; // two minutes at 1 Hz — the sparkline window
 let reqCount = 0;
 let lagMaxMs = 0;
 let lagLast = Date.now();
@@ -256,6 +264,7 @@ const HTML = 'text/html; charset=utf-8';
 precompress('index.html', HTML, ['/', '/index.html']);
 precompress('screen.html', HTML, ['/screen', '/screen.html']);
 precompress('host.html', HTML, ['/host', '/host.html']);
+precompress('dashboard.html', HTML, ['/dashboard', '/dashboard.html']);
 precompress('theme.css', 'text/css; charset=utf-8', ['/theme.css']);
 
 app.use((req, res, next) => {
@@ -391,24 +400,222 @@ const lagTimer = setInterval(() => {
 }, LAG_SAMPLE_MS);
 lagTimer.unref();
 
-const beatTimer = setInterval(() => {
-  const rps = Math.round((reqCount / HEARTBEAT_MS) * 1000);
-  const rssMb = Math.round(process.memoryUsage.rss() / 1048576);
-  const lag = Math.max(0, lagMaxMs);
+// ---------------------------------------------------------------------------
+// Dashboard sampler  (feeds /metrics and the heartbeat)
+// ---------------------------------------------------------------------------
+
+/** Parallel int arrays, not one object per sample: ~5x smaller on the wire. */
+const history = { tapsPerSec: [], rps: [], lagMs: [], players: [], conns: [] };
+
+let lastTotalTaps = 0;
+let lastPlayers = 0;
+let lastConns = -1; // getConnections is async; sampled once a second and cached
+let lastCpu = process.cpuUsage();
+let cpuPct = 0;
+let joinsPerSec = 0;
+let peakTapsPerSec = 0;
+let peakRoundId = -1;
+
+// The one boolean the whole design rests on. game.stats() is O(n) over the
+// roster, so an event with no dashboard open must not pay for it — the sampler
+// skips the entire build unless someone asked for /metrics since it last ran.
+let metricsWanted = false;
+let snapshotRaw = null; // Buffer, pre-serialised
+let snapshotGzip = null; // Buffer, pre-compressed
+let snapshotAt = 0;
+
+function pushSample(arr, v) {
+  if (arr.length >= HISTORY_SAMPLES) arr.shift();
+  arr.push(v);
+}
+
+/**
+ * The entire dashboard payload. Runs inside the sampler, at most once a second.
+ *
+ * Deliberately absent, because this URL is public and unauthenticated: env
+ * vars, filesystem paths, the Node version, the admin session count, anything
+ * about how auth is configured. rss / lag / conns are in precisely because they
+ * are the demo — one pinned instance absorbing the room.
+ */
+function buildSnapshot(now) {
+  const mem = process.memoryUsage();
+  const s = game.stats();
+  const players = game.players.size;
+  const n = history.rps.length;
+  return {
+    sampleAt: now,
+    uptimeMs: Math.round(process.uptime() * 1000),
+    refreshMs: SAMPLE_MS, // how soon it is worth the page coming back
+
+    phase: game.phase,
+    roundId: game.roundId,
+    settled: game.settled,
+    startsAt: game.startsAt,
+    endsAt: game.endsAt,
+    settlesAt: game.settlesAt,
+    durationMs: game.durationMs,
+    countdownMs: game.countdownMs,
+    graceMs: game.graceMs,
+
+    players,
+    taps: game.totalTaps,
+    tapsPerSec: history.tapsPerSec[n - 1] ?? 0,
+    peakTapsPerSec,
+    joinsPerSec, // the lobby filling up, which is its own kind of tense
+    avgTapsPerPlayer: players ? Math.round((game.totalTaps / players) * 10) / 10 : 0,
+    tapping: s.tapping,
+    idle: s.idle,
+    locales: s.locales,
+
+    top: game.leaderboard(25),
+
+    // What the server is currently telling phones to do. Watching this back off
+    // as the room fills is the point of the adaptive cadence.
+    cadence: {
+      tapIntervalMs: game.tapIntervalMs(),
+      pollIntervalMs: game.pollIntervalMs(),
+      requestBudgetRps: game.requestBudgetRps,
+      maxTapsPerBatch: game.maxTapsPerBatch,
+    },
+
+    server: {
+      rps: history.rps[n - 1] ?? 0,
+      lagMs: history.lagMs[n - 1] ?? 0,
+      rssMb: Math.round(mem.rss / 1048576),
+      heapMb: Math.round(mem.heapUsed / 1048576),
+      conns: lastConns,
+      sse: sseClients.size,
+      cpuPct,
+    },
+
+    // t0 is derived rather than stored: the sampler is a 1 Hz interval, so the
+    // oldest retained sample is (len-1) steps back. Good enough for a sparkline
+    // and it keeps a whole array of timestamps off the wire.
+    history: {
+      stepMs: SAMPLE_MS,
+      t0: now - Math.max(0, n - 1) * SAMPLE_MS,
+      ...history,
+    },
+  };
+}
+
+function refreshSnapshot(now) {
+  const json = Buffer.from(JSON.stringify(buildSnapshot(now)));
+  snapshotRaw = json;
+  // gzip only, at the default level: this is recompressed every second, unlike
+  // the static pages, so brotli q11 would be paying seconds of CPU for a
+  // payload that is already ~1 KB.
+  snapshotGzip = zlib.gzipSync(json);
+  snapshotAt = now;
+}
+
+const sampleTimer = setInterval(() => {
+  const now = Date.now();
+
+  const reqs = reqCount;
   reqCount = 0;
+  const lag = Math.max(0, lagMaxMs);
   lagMaxMs = 0;
-  // Open sockets, not requests. Keep-alive is on, so this is roughly the fan-in
-  // the instance is holding — the number that walks toward Cloud Run's hard
-  // 1.000-concurrency cap when a herd arrives.
-  server.getConnections((_err, conns) => {
-    console.log(
-      `beat phase=${game.phase} players=${game.players.size} taps=${game.totalTaps} ` +
-        `rps=${rps} conns=${conns ?? -1} lag_max=${lag}ms ` +
-        `rss=${rssMb}MB sse=${sseClients.size}`,
-    );
-  });
+
+  const totalTaps = game.totalTaps;
+  const players = game.players.size;
+  // A new round zeroes totalTaps, so this delta goes negative exactly once per
+  // round. Clamp rather than special-case: a "-260928 taps/s" spike on the
+  // sparkline is worse than losing one sample of a round that just started.
+  const tapsPerSec = Math.max(0, totalTaps - lastTotalTaps);
+  joinsPerSec = Math.max(0, players - lastPlayers);
+  lastTotalTaps = totalTaps;
+  lastPlayers = players;
+
+  const cpu = process.cpuUsage();
+  const cpuMs = (cpu.user - lastCpu.user + cpu.system - lastCpu.system) / 1000;
+  lastCpu = cpu;
+  cpuPct = Math.round((cpuMs / SAMPLE_MS) * 100); // >100 is possible: --cpu 2
+
+  if (game.roundId !== peakRoundId) {
+    peakRoundId = game.roundId;
+    peakTapsPerSec = 0;
+  }
+  if (tapsPerSec > peakTapsPerSec) peakTapsPerSec = tapsPerSec;
+
+  pushSample(history.tapsPerSec, tapsPerSec);
+  pushSample(history.rps, Math.round((reqs / SAMPLE_MS) * 1000));
+  pushSample(history.lagMs, lag);
+  pushSample(history.players, players);
+  pushSample(history.conns, lastConns);
+
+  // Cached for both the heartbeat and the snapshot, so neither has to make this
+  // call itself. Open sockets, not requests: keep-alive is on, so this is
+  // roughly the fan-in the instance is holding — the number that walks toward
+  // Cloud Run's hard 1.000-concurrency cap when a herd arrives.
+  server.getConnections((err, conns) => { lastConns = err ? -1 : conns; });
+
+  if (metricsWanted) {
+    metricsWanted = false;
+    refreshSnapshot(now);
+  }
+}, SAMPLE_MS);
+sampleTimer.unref();
+
+const beatTimer = setInterval(() => {
+  // Aggregated from the ring rather than from counters of its own, so the
+  // heartbeat and the dashboard can never disagree about the same second.
+  const want = Math.round(HEARTBEAT_MS / SAMPLE_MS);
+  const from = Math.max(0, history.rps.length - want);
+  let sum = 0;
+  let lag = 0;
+  for (let i = from; i < history.rps.length; i++) {
+    sum += history.rps[i];
+    if (history.lagMs[i] > lag) lag = history.lagMs[i];
+  }
+  const n = history.rps.length - from;
+  const rps = n ? Math.round(sum / n) : 0;
+  const rssMb = Math.round(process.memoryUsage.rss() / 1048576);
+  console.log(
+    `beat phase=${game.phase} players=${game.players.size} taps=${game.totalTaps} ` +
+      `rps=${rps} conns=${lastConns} lag_max=${lag}ms ` +
+      `rss=${rssMb}MB sse=${sseClients.size}`,
+  );
 }, HEARTBEAT_MS);
 beatTimer.unref();
+
+// ---------------------------------------------------------------------------
+// Dashboard API  (public, read-only)
+//
+// Public and unauthenticated, which is the constraint that shaped everything
+// above: fifty attendees can open this URL, so the handler must be O(1). It
+// writes a buffer the sampler already built and compressed. Deliberately JSON
+// and not the Prometheus text format, despite the name — the only consumer is
+// /dashboard, and it wants a leaderboard and a phase machine, not counters.
+// ---------------------------------------------------------------------------
+const SNAPSHOT_STALE_MS = 2 * SAMPLE_MS;
+
+app.get('/metrics', (req, res) => {
+  metricsWanted = true; // tells the sampler to keep building while anyone watches
+  const now = Date.now();
+  // The escape hatch for a cold cache: the first visitor after an idle period
+  // would otherwise see a snapshot minutes old. It cannot stampede — handlers
+  // are synchronous, so the first caller refreshes and every other caller in
+  // the same second finds it fresh.
+  if (snapshotRaw === null || now - snapshotAt > SNAPSHOT_STALE_MS) refreshSnapshot(now);
+
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Vary', 'Accept-Encoding');
+  // The clock, in a header rather than in the body — the body is up to a second
+  // stale by construction, and a second of skew is the difference between "3…"
+  // and "2…" on the countdown. This is the one number that must be read now, and
+  // reading it costs a setHeader on a `now` the handler already has.
+  res.setHeader('X-Server-Now', String(now));
+  let body = snapshotRaw;
+  if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+    res.setHeader('Content-Encoding', 'gzip');
+    body = snapshotGzip;
+  }
+  res.setHeader('Content-Length', body.length);
+  if (req.method === 'HEAD') return res.end();
+  res.end(body);
+});
 
 // ---------------------------------------------------------------------------
 // Host / admin API

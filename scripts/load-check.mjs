@@ -108,6 +108,30 @@ srv.stdout.on('data', (d) => String(d).split('\n').forEach((l) => { if (l.starts
 await new Promise((r) => setTimeout(r, 900));
 
 const B = `http://127.0.0.1:${PORT}`;
+
+// A dashboard, open for the whole run. The claim being tested is that a public
+// /metrics is free: the sampler builds one payload a second and the handler
+// writes it, so this must neither slow the round down nor slow down itself while
+// 5.000 phones are hammering the same event loop.
+const dash = { polls: 0, errors: 0, maxWireB: 0, maxRawB: 0, lat: [], peakTaps: 0, peakPlayers: 0, maxLag: 0 };
+const dashTimer = setInterval(async () => {
+  const t = Date.now();
+  try {
+    const r = await fetch(B + '/metrics');
+    const wire = Number(r.headers.get('content-length')) || 0;
+    const m = await r.json();
+    dash.lat.push(Date.now() - t);
+    dash.polls++;
+    if (wire > dash.maxWireB) dash.maxWireB = wire;
+    const raw = JSON.stringify(m).length;
+    if (raw > dash.maxRawB) dash.maxRawB = raw;
+    if (m.tapsPerSec > dash.peakTaps) dash.peakTaps = m.tapsPerSec;
+    if (m.players > dash.peakPlayers) dash.peakPlayers = m.players;
+    if (m.server.lagMs > dash.maxLag) dash.maxLag = m.server.lagMs;
+  } catch { dash.errors++; }
+}, 1000);
+dashTimer.unref();
+
 const kids = [];
 const joinT0 = Date.now();
 await Promise.all(Array.from({ length: WORKERS }, (_, w) => new Promise((resolve) => {
@@ -146,6 +170,13 @@ console.log(`  refused (too late)  ${sum('tooLate')}`);
 console.log(`  generator gave up   ${sum('lost')}`);
 
 await new Promise((r) => setTimeout(r, 6500)); // let one more beat cover the herd
+clearInterval(dashTimer);
+const dl = dash.lat.sort((a, b) => a - b);
+console.log(`\n/dashboard polling /metrics throughout (${dash.polls} polls, ${dash.errors} errors):`);
+console.log(`  payload             ${dash.maxRawB}B raw -> ${dash.maxWireB}B gzip at ${dash.peakPlayers} players`);
+console.log(`  poll latency        p50 ${dl[Math.floor(dl.length * 0.5)]}ms   p99 ${dl[Math.floor(dl.length * 0.99)]}ms   max ${dl[dl.length - 1]}ms`);
+console.log(`  peak it observed    ${dash.peakTaps} taps/s, ${dash.maxLag}ms loop lag`);
+
 console.log('\nserver heartbeats (the last one covers the buzzer herd):');
 beats.forEach((b) => console.log('  ' + b));
 

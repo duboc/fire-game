@@ -239,6 +239,93 @@ try {
     await bp.close();
   }
 
+  console.log('\n== dashboard: a public page that watches the round ==');
+  {
+    await fetch(B + '/admin/reset', { method: 'POST', headers: { 'x-admin-token': TOKEN } });
+    // No auth, no cookie — a fresh context proves the page needs neither.
+    const anonCtx = await browser.newContext();
+    const dashErrors = [];
+    anonCtx.on('weberror', (e) => dashErrors.push(String(e.error())));
+    const dash = await anonCtx.newPage();
+    dash.on('console', (m) => { if (m.type() === 'error') dashErrors.push(m.text()); });
+    // domcontentloaded, not networkidle: the page polls forever, so the network
+    // is never idle and networkidle would simply time out.
+    await dash.goto(B + '/dashboard', { waitUntil: 'domcontentloaded' });
+    await dash.waitForFunction(() => Number(document.getElementById('players').textContent.replace(/\D/g, '')) > 0,
+      null, { timeout: 6000 });
+    const players0 = (await dash.textContent('#players')).trim();
+    ok(true, `dashboard loaded with no credentials and shows ${players0} players`);
+    ok((await dash.textContent('#phase')).trim() === 'LOBBY', 'phase pill reads the lobby');
+
+    const bots = [];
+    for (let i = 0; i < 6; i++) bots.push((await (await fetch(B + '/join', { method: 'POST' })).json()).id);
+    const r2 = await (await fetch(B + '/admin/start', {
+      method: 'POST', headers: admin, body: JSON.stringify({ durationMs: 9000 }),
+    })).json();
+    const skew2 = Date.now() - r2.serverNow;
+    await sleep(Math.max(0, r2.startsAt + skew2 - Date.now() + 200));
+    await dash.waitForFunction(() => document.getElementById('phase').textContent.trim() === 'RUNNING',
+      null, { timeout: 6000 });
+    ok(true, 'phase pill followed the round into RUNNING');
+
+    for (let i = 0; i < 6; i++) {
+      await Promise.all(bots.map((id) => fetch(B + '/tap', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, n: 20 }),
+      })));
+      await sleep(450);
+    }
+    // Tweened, so this asserts the animation is running as much as the poll.
+    await dash.waitForFunction(() => Number(document.getElementById('taps').textContent.replace(/\D/g, '')) > 0,
+      null, { timeout: 6000 });
+    const tapsShown = Number((await dash.textContent('#taps')).replace(/\D/g, ''));
+    ok(tapsShown > 0, `taps counter moved during the round (${tapsShown})`);
+    // Tweened like the rest, so wait for it to arrive rather than reading mid-ease.
+    await dash.waitForFunction(() => Number(document.getElementById('tapping').textContent.replace(/\D/g, '')) >= 6,
+      null, { timeout: 6000 });
+    ok(true, `the room split shows the bots as tapping, not idle (${(await dash.textContent('#tapping')).trim()})`);
+    // Mid-tween the counter holds a fraction, and a single read almost never
+    // lands on one. Arm a frame recorder that starts on the next change, then
+    // push taps at it — `en` only ever puts a "." in a number as a decimal point.
+    const recording = dash.evaluate(() => new Promise((res) => {
+      const el = document.getElementById('taps');
+      const start = el.textContent; const seen = []; let armed = false; let budget = 400;
+      (function step() {
+        if (armed || el.textContent !== start) { armed = true; seen.push(el.textContent); }
+        // Always resolves: a hung recorder would stall the check, not fail it.
+        if (seen.length < 30 && budget-- > 0) requestAnimationFrame(step); else res(seen);
+      })();
+    }));
+    for (let i = 0; i < 3; i++) {
+      await Promise.all(bots.map((id) => fetch(B + '/tap', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, n: 40 }),
+      })));
+      await sleep(500);
+    }
+    const frames = await recording;
+    ok(frames.length === 30 && !frames.some((s) => s.includes('.')),
+      `${frames.length} frames of a live tween, not one fractional value`);
+    ok((await dash.locator('#rank li').count()) >= 6, 'the leaderboard filled in');
+    ok(!(await dash.locator('#rank li').first().getAttribute('class') || '').includes('empty'),
+      '…with real rows, not the placeholder');
+
+    const pts = await dash.getAttribute('#spTaps polyline', 'points');
+    ok(pts && pts.split(' ').length > 2, `the taps sparkline drew a series (${pts.split(' ').length} points)`);
+    ok((await dash.getAttribute('#spPlayers polyline', 'points') || '').length > 0, 'so did the players sparkline');
+
+    const lagClass = await dash.getAttribute('#lag >> xpath=..', 'class');
+    ok(/\b(good|warn|bad)\b/.test(lagClass || ''), `loop lag is colour-coded (${lagClass})`);
+    ok((await dash.textContent('#tapIv')).trim() !== '—', 'the server-dictated cadence is shown');
+
+    await until(r2.settlesAt, 1400);
+    await dash.waitForFunction(() => document.getElementById('clock').textContent.includes('final'),
+      null, { timeout: 8000 });
+    ok(true, 'the clock reached "final" once the grace window closed');
+
+    ok(dashErrors.length === 0, dashErrors.length ? 'dashboard console errors: ' + dashErrors.join(' | ') : 'zero console errors on the dashboard');
+    await anonCtx.close();
+    await fetch(B + '/admin/reset', { method: 'POST', headers: { 'x-admin-token': TOKEN } });
+  }
+
   console.log('\n== no console errors ==');
   const real = errors.filter((e) => !/favicon/i.test(e));
   ok(real.length === 0, real.length ? 'console errors: ' + real.join(' | ') : 'zero console errors');

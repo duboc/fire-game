@@ -9,15 +9,18 @@ screen until confetti rains on the winner.
 - **Individual ranking** (no teams). Each phone shows *your* live position.
 - **One Cloud Run instance, in-memory counter.** No database in the hot path.
 - **Self-hosted everything** (QR, confetti, fonts) — survives flaky event wifi.
+- **A live `/dashboard`** — taps/sec, who's actually playing, and the event-loop
+  lag of the one instance absorbing the room.
 
 ## Run locally
 
 ```bash
 npm install
 npm start
-# Players → http://localhost:8080/
+# Players   → http://localhost:8080/
 # Big screen → http://localhost:8080/screen
 # Host panel → http://localhost:8080/host
+# Dashboard  → http://localhost:8080/dashboard
 ```
 
 Open `/screen` on a projector, `/host` on your laptop, and `/` on phones.
@@ -27,8 +30,8 @@ the screen runs 3·2·1·GO and the round begins.
 ```bash
 npm test              # unit tests for the game engine (no network needed)
 npm run check:contract  # HTTP contract against a live server: compression, ETags,
-                        # 304s, admin auth, a full round, the heartbeat
-npm run check:browser   # real Chromium: host login flow, a full round, crash guards
+                        # 304s, admin auth, a full round, /metrics, the heartbeat
+npm run check:browser   # real Chromium: host login, a full round, the dashboard
 npm run check:load      # 5.000-player load run (spawns its own server; ~40s)
 ```
 
@@ -39,8 +42,14 @@ room. `check:browser` needs Chromium: `npx playwright install chromium`.
 ## Deploy to Cloud Run (single instance)
 
 ```bash
-PROJECT=my-gcp-project REGION=us-central1 ./deploy.sh
+./deploy.sh                                    # riojucu / us-central1
+PROJECT=other-project REGION=europe-west1 ./deploy.sh
 ```
+
+`PROJECT` defaults to **`riojucu`**, where the live service runs — deliberately a
+constant rather than `gcloud config get-value project`, so whatever the laptop
+happens to be pointed at cannot deploy a second copy of the game somewhere nobody
+is looking. The env var still wins.
 
 The script pins the service to **exactly one instance** and keeps CPU always-on.
 Those flags are correctness, not tuning — see comments in `deploy.sh`.
@@ -58,6 +67,7 @@ Phone   POST /tap {id,n}          -> {yourRank, yourCount, total, phase, timing}
 Server  Map<id,{name,count}> in memory; rank snapshot recomputed every 100ms
 Screen  GET  /events (SSE)        -> {phase, top10, total, totalTaps, winner, timing}   (every 100ms)
 Host    POST /admin/start|reset   -> drives the authoritative countdown
+Dash    GET  /metrics             -> whole-room telemetry, pre-built once a second (poll 1s)
 End     onEnded -> optional Firestore dump (history only, never in the hot path)
 ```
 
@@ -215,3 +225,36 @@ beat phase=running players=5001 taps=260928 rps=1674 conns=45 lag_max=1ms rss=95
 `lag_max` is event-loop lag, and it is the number to watch — it is the earliest
 signal that Node's single thread is losing, and the only one that catches a
 buzzer herd. Single digits are healthy; sustained triple digits are not.
+
+### `/dashboard` — the same numbers, on a second monitor
+
+`/dashboard` is a **public, read-only** page showing everything the process knows
+in real time: players and taps as live counters, taps/sec and its peak, how much
+of the room is actually tapping versus idle, the language mix, a top-25
+leaderboard, the cadence the server is currently dictating to phones, and an ops
+strip with rps, event-loop lag, RSS, open sockets and CPU. Everything carries a
+two-minute sparkline. It cannot start or reset a round — `/host` remains the only
+surface that can.
+
+It is backed by `GET /metrics` (JSON, despite the name — the only consumer is the
+page). Public means it must cost nothing, so:
+
+- A **1 Hz sampler** builds the entire payload, serialises it and gzips it once.
+  The request handler writes that buffer and does no work of its own, so fifty
+  people opening the page costs the same as one.
+- The O(n) roster scan is **skipped entirely unless someone asked for `/metrics`
+  since the last sample**. An event with no dashboard open pays nothing.
+- The page **polls** at the cadence the payload names (`refreshMs`) instead of
+  holding an SSE stream — a held socket counts against Cloud Run's hard
+  1.000-concurrency cap, which is the wrong shape for a page anyone can open.
+  Liveliness comes from tweening between samples client-side.
+
+Measured at 5.000 players: one sample costs **0,86 ms** (0,09 % of a core) and the
+payload is **1.223 B gzipped**. A full `check:load` run with a dashboard polling
+throughout is indistinguishable from one without — 5001/5000 credited, 0 errors,
+`lag_max` still 1–2 ms.
+
+Because it is public it deliberately publishes nothing about the deployment: no
+env vars, no paths, no runtime version, no admin or session detail. Player **ids
+are excluded** from the leaderboard — an id is the only credential `/tap` has, so
+the rows carry the public `#seq` instead.

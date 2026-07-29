@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#000000" />
+<meta name="robots" content="noindex" />
+<title>Tap Race — Dashboard</title>
+<!-- Roboto is self-hosted in theme.css; no external font request. -->
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  body{min-height:100vh; padding:20px 24px 32px;
+    background:radial-gradient(120% 55% at 50% -12%, rgba(66,133,244,.16), transparent 60%), var(--bg);}
+  .wrap{width:min(1440px,100%); margin:0 auto; display:flex; flex-direction:column; gap:16px;}
+
+  /* ---- header ---- */
+  .top{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .h1{display:flex; align-items:center; gap:10px; font-family:var(--font-display); font-size:24px; font-weight:700; letter-spacing:-.01em;}
+  .h1 .tag{color:var(--ink-2); font-weight:500;}
+  .phase{font-weight:700; text-transform:uppercase; letter-spacing:.08em; font-size:13px;
+    padding:7px 14px; border-radius:var(--r-full); background:var(--surface-2); border:1px solid var(--line);}
+  .phase.lobby{color:var(--ink-2);} .phase.countdown{color:var(--g-yellow-700); border-color:rgba(251,188,4,.4);}
+  .phase.running{color:var(--g-green-700); border-color:rgba(52,168,83,.45);} .phase.ended{color:var(--g-blue-700);}
+  .clock{font-family:var(--font-mono); font-size:24px; font-weight:500; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .clock .u{font-size:14px; color:var(--ink-2);}
+  .live{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-2); font-weight:500; margin-left:auto;}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--g-green); box-shadow:0 0 10px rgba(52,168,83,.8);}
+  .live.stale .dot{background:var(--g-red); box-shadow:0 0 10px rgba(234,67,53,.8);}
+  .live.stale{color:var(--g-red-700);}
+  .gwm{font-size:15px;}
+
+  /* ---- panels ---- */
+  .panel{background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+    border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1); padding:18px 20px;}
+  .panel h2{margin:0 0 14px; font-family:var(--font-display); font-size:14px; font-weight:700;
+    display:flex; align-items:center; gap:7px; color:var(--ink);}
+  .panel h2 .n{margin-left:auto; font-family:var(--font-mono); font-weight:400; font-size:12px; color:var(--ink-3);}
+
+  /* ---- hero ---- */
+  .hero{display:grid; grid-template-columns:repeat(4,1fr); gap:16px;}
+  .hero .k{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-2); font-weight:500;}
+  .hero .v{font-family:var(--font-mono); font-size:clamp(30px,4.2vw,52px); font-weight:500;
+    font-variant-numeric:tabular-nums; line-height:1.08; margin-top:4px; color:var(--ink);}
+  .hero .s{font-family:var(--font-mono); font-size:12px; color:var(--ink-3); margin-top:2px; min-height:16px;}
+  .hero .b1 .v{color:var(--g-blue-700);} .hero .b2 .v{color:var(--g-yellow-700);}
+  .hero .b3 .v{color:var(--g-green-700);} .hero .b4 .v{color:var(--ink);}
+
+  /* ---- sparkline ---- */
+  .spark{display:block; width:100%; height:38px; margin-top:8px; overflow:visible;}
+  .spark polyline{fill:none; stroke-width:1.6; vector-effect:non-scaling-stroke; stroke-linejoin:round;}
+  .spark polygon{stroke:none;}
+  .s-blue polyline{stroke:var(--g-blue);} .s-blue polygon{fill:rgba(66,133,244,.16);}
+  .s-yellow polyline{stroke:var(--g-yellow);} .s-yellow polygon{fill:rgba(251,188,4,.14);}
+  .s-green polyline{stroke:var(--g-green);} .s-green polygon{fill:rgba(52,168,83,.14);}
+  .s-grey polyline{stroke:var(--ink-3);} .s-grey polygon{fill:rgba(154,160,166,.10);}
+
+  /* ---- meter (tapping vs idle, language mix) ---- */
+  .meter{height:10px; border-radius:var(--r-full); background:var(--surface-2); overflow:hidden; margin-top:12px;}
+  .meter i{display:block; height:100%; width:0%; border-radius:var(--r-full);
+    background:linear-gradient(90deg,#34A853,#4285F4); transition:width .5s cubic-bezier(.22,1,.36,1);}
+
+  /* ---- band: leaderboard + side ---- */
+  .band{display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:16px; align-items:start;}
+  .side{display:flex; flex-direction:column; gap:16px;}
+
+  .rank{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;}
+  .rank li{display:grid; grid-template-columns:2.1em 1.3em minmax(0,1fr) auto; align-items:center; gap:10px;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); padding:7px 12px;}
+  .rank li.r1{border-color:rgba(66,133,244,.5); box-shadow:0 0 16px rgba(66,133,244,.14);}
+  .rank li .rk{justify-self:center; min-width:1.6em; height:1.6em; display:flex; align-items:center; justify-content:center;
+    border-radius:50%; font-family:var(--font-mono); font-weight:500; color:#fff; background:var(--ink-3);
+    font-size:12px; font-variant-numeric:tabular-nums;}
+  .rank li.r1 .rk{background:var(--g-yellow); color:#241a00;} .rank li.r2 .rk{background:var(--g-blue);} .rank li.r3 .rk{background:var(--g-green);}
+  .rank li .em{font-size:17px;}
+  .rank li .nm{font-family:var(--font-display); font-weight:500; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .rank li .nm .seq{font-family:var(--font-mono); color:var(--ink-3); font-weight:400; font-size:.8em;}
+  .rank li .ct{font-family:var(--font-mono); font-weight:500; font-size:14px; font-variant-numeric:tabular-nums;}
+  .rank li.empty{grid-column:1/-1; display:block; color:var(--ink-2); font-weight:500; text-align:center; background:var(--surface-2); padding:16px;}
+
+  .split{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .split .b{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); padding:12px; text-align:center;}
+  .split .b .k{font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-2); font-weight:500;}
+  .split .b .v{font-family:var(--font-mono); font-size:26px; font-weight:500; font-variant-numeric:tabular-nums; margin-top:2px;}
+  .split .b.on .v{color:var(--g-green-700);} .split .b.off .v{color:var(--ink-3);}
+
+  .langs{display:flex; flex-direction:column; gap:8px; margin:0; padding:0; list-style:none;}
+  .langs li{display:grid; grid-template-columns:6.4em minmax(0,1fr) 3.2em; align-items:center; gap:10px; font-size:13px;}
+  .langs .lb{color:var(--ink-2); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .langs .tr{height:8px; border-radius:var(--r-full); background:var(--surface-2); overflow:hidden;}
+  .langs .tr i{display:block; height:100%; border-radius:var(--r-full); transition:width .5s cubic-bezier(.22,1,.36,1);}
+  .langs .nv{font-family:var(--font-mono); font-variant-numeric:tabular-nums; text-align:right; color:var(--ink);}
+  .langs li.none{display:block; color:var(--ink-3);}
+
+  /* ---- ops strip ---- */
+  .ops{display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:12px;}
+  .ops .b{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); padding:12px 14px;}
+  .ops .k{font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-2); font-weight:500;}
+  .ops .v{font-family:var(--font-mono); font-size:23px; font-weight:500; font-variant-numeric:tabular-nums; margin-top:2px; color:var(--ink);}
+  .ops .v .u{font-size:12px; color:var(--ink-3);}
+  .ops .v.good{color:var(--g-green-700);} .ops .v.warn{color:var(--g-yellow-700);} .ops .v.bad{color:var(--g-red-700);}
+  .ops .spark{height:26px; margin-top:6px;}
+
+  .foot{color:var(--ink-3); font-size:12px; text-align:center;}
+  .foot a{color:var(--ink-2); text-decoration:none;} .foot a:hover{color:var(--g-blue-700); text-decoration:underline;}
+
+  @media (max-width:1180px){
+    .hero{grid-template-columns:repeat(2,1fr);}
+    .band{grid-template-columns:1fr;}
+  }
+  @media (max-width:720px){
+    body{padding:14px;}
+    .hero{grid-template-columns:1fr;}
+    .rank{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body class="noise-bg">
+<div class="wrap">
+
+  <div class="top">
+    <div class="h1"><span>☁️</span> <span class="shimmer">Tap Race</span> <span class="tag">· Dashboard</span></div>
+    <span class="phase lobby" id="phase">LOBBY</span>
+    <span class="clock mono" id="clock">—</span>
+    <span class="live" id="live"><span class="dot"></span><span id="liveTxt">live</span></span>
+    <span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span>
+  </div>
+
+  <div class="hero">
+    <div class="panel b1">
+      <div class="k">Players</div><div class="v" id="players">0</div><div class="s" id="playersSub">&nbsp;</div>
+      <svg class="spark s-blue" id="spPlayers" viewBox="0 0 120 38" preserveAspectRatio="none" aria-hidden="true"><polygon points=""></polygon><polyline points=""></polyline></svg>
+    </div>
+    <div class="panel b2">
+      <div class="k">Taps</div><div class="v" id="taps">0</div><div class="s" id="tapsSub">&nbsp;</div>
+      <svg class="spark s-yellow" id="spTaps" viewBox="0 0 120 38" preserveAspectRatio="none" aria-hidden="true"><polygon points=""></polygon><polyline points=""></polyline></svg>
+    </div>
+    <div class="panel b3">
+      <div class="k">Participation</div><div class="v" id="part">0%</div><div class="s" id="partSub">&nbsp;</div>
+      <div class="meter" style="margin-top:20px;"><i id="partBar"></i></div>
+    </div>
+    <div class="panel b4">
+      <div class="k">Requests / sec</div><div class="v" id="rps">0</div><div class="s" id="rpsSub">&nbsp;</div>
+      <svg class="spark s-grey" id="spRps" viewBox="0 0 120 38" preserveAspectRatio="none" aria-hidden="true"><polygon points=""></polygon><polyline points=""></polyline></svg>
+    </div>
+  </div>
+
+  <div class="band">
+    <div class="panel">
+      <h2>🏆 Live ranking <span class="n" id="boardN"></span></h2>
+      <ol class="rank" id="rank"><li class="empty">No players yet…</li></ol>
+    </div>
+
+    <div class="side">
+      <div class="panel">
+        <h2>👥 The room</h2>
+        <div class="split">
+          <div class="b on"><div class="k">Tapping</div><div class="v" id="tapping">0</div></div>
+          <div class="b off"><div class="k">Idle</div><div class="v" id="idle">0</div></div>
+        </div>
+        <div class="k" style="font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-2); font-weight:500; margin:16px 0 10px;">Name language</div>
+        <ul class="langs" id="langs"><li class="none">—</li></ul>
+      </div>
+
+      <div class="panel">
+        <h2>🎚 Cadence <span class="n">server-dictated</span></h2>
+        <div class="ops">
+          <div class="b"><div class="k">Tap every</div><div class="v"><span id="tapIv">—</span><span class="u">ms</span></div></div>
+          <div class="b"><div class="k">Poll every</div><div class="v"><span id="pollIv">—</span><span class="u">ms</span></div></div>
+          <div class="b"><div class="k">Grace</div><div class="v"><span id="grace">—</span><span class="u">ms</span></div></div>
+          <div class="b"><div class="k">Budget</div><div class="v"><span id="budget">—</span><span class="u">rps</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>⚙️ Instance <span class="n" id="uptime"></span></h2>
+    <div class="ops">
+      <div class="b"><div class="k">Loop lag (max)</div><div class="v good"><span id="lag">0</span><span class="u">ms</span></div>
+        <svg class="spark s-grey" id="spLag" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true"><polygon points=""></polygon><polyline points=""></polyline></svg>
+      </div>
+      <div class="b"><div class="k">Open sockets</div><div class="v"><span id="conns">0</span></div>
+        <svg class="spark s-grey" id="spConns" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true"><polygon points=""></polygon><polyline points=""></polyline></svg>
+      </div>
+      <div class="b"><div class="k">Taps / sec</div><div class="v"><span id="tps">0</span></div>
+        <svg class="spark s-green" id="spTps" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true"><polygon points=""></polygon><polyline points=""></polyline></svg>
+      </div>
+      <div class="b"><div class="k">Memory (rss)</div><div class="v"><span id="rss">0</span><span class="u">MB</span></div></div>
+      <div class="b"><div class="k">Heap used</div><div class="v"><span id="heap">0</span><span class="u">MB</span></div></div>
+      <div class="b"><div class="k">CPU</div><div class="v"><span id="cpu">0</span><span class="u">%</span></div></div>
+      <div class="b"><div class="k">SSE streams</div><div class="v"><span id="sse">0</span></div></div>
+      <div class="b"><div class="k">Round</div><div class="v"><span id="round">0</span></div></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Read-only. Start and reset live on <a href="/host">/host</a> · big screen is <a href="/screen">/screen</a> ·
+    raw numbers at <a href="/metrics">/metrics</a>
+  </div>
+</div>
+
+<script>
+(()=>{
+  'use strict';
+  const $=(id)=>document.getElementById(id);
+  // Built once: the tween loop reformats every visible number ~60x a second.
+  const NUM=new Intl.NumberFormat('en');
+  const fmt=(n)=>NUM.format(Math.round(Number(n)||0));
+  const esc=(s)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const LANG={pt:'Português', es:'Español', en:'English', fr:'Français', it:'Italiano', de:'Deutsch'};
+  const LANG_COLOR=['#4285F4','#EA4335','#FBBC04','#34A853','#8ab4f8','#f28b82'];
+
+  let state=null, clockOffset=0, lastSampleAt=0, misses=0;
+
+  // ---- tweened numbers -------------------------------------------------
+  // /metrics is a 1 Hz poll, which on its own reads as a number that lurches
+  // once a second. Easing toward the target between samples is the same trick
+  // the big screen plays on its leaderboard, and it is the whole difference
+  // between "a dashboard" and "watching it happen".
+  const tweens=new Map(); // el -> {target, display, suffix}
+  function setNum(el, target){
+    let t=tweens.get(el);
+    if(!t){ t={target, display:target}; tweens.set(el,t); el.textContent=fmt(target); return; }
+    t.target=target;
+  }
+  function tweenLoop(){
+    for(const [el,t] of tweens){
+      if(t.display!==t.target){
+        const d=t.target-t.display;
+        t.display += Math.abs(d)<1 ? d : d*0.25;
+        if(Math.abs(t.target-t.display)<0.5) t.display=t.target;
+        el.textContent=fmt(Math.round(t.display)); // display is fractional mid-tween
+      }
+    }
+    requestAnimationFrame(tweenLoop);
+  }
+
+  // ---- sparklines ------------------------------------------------------
+  // Inline SVG, no library: two setAttribute calls per series per second.
+  // preserveAspectRatio="none" lets the viewBox stretch to whatever width the
+  // grid gives the card, so nothing has to be measured.
+  function spark(svg, arr){
+    const line=svg.lastElementChild, area=svg.firstElementChild;
+    const n=arr?arr.length:0;
+    if(n<2){ line.setAttribute('points',''); area.setAttribute('points',''); return; }
+    const box=svg.getAttribute('viewBox').split(' ');
+    const W=Number(box[2]), H=Number(box[3]);
+    let max=1;
+    for(let i=0;i<n;i++) if(arr[i]>max) max=arr[i];
+    let pts='';
+    for(let i=0;i<n;i++){
+      const x=(i/(n-1))*W;
+      const y=H-1-(arr[i]/max)*(H-2);
+      pts+=(i?' ':'')+x.toFixed(1)+','+y.toFixed(1);
+    }
+    line.setAttribute('points',pts);
+    area.setAttribute('points','0,'+H+' '+pts+' '+W+','+H);
+  }
+
+  // ---- leaderboard -----------------------------------------------------
+  // Rebuilt wholesale rather than FLIP-animated: 25 rows of static markup is
+  // cheap, and unlike /screen this page is nobody's climax — legibility beats
+  // choreography here.
+  function renderRank(top){
+    const ol=$('rank');
+    if(!top || !top.length){ ol.innerHTML='<li class="empty">No players yet…</li>'; $('boardN').textContent=''; return; }
+    $('boardN').textContent='top '+top.length;
+    ol.innerHTML=top.map(p=>{
+      const cls=p.rank<=3?' r'+p.rank:'';
+      return '<li class="'+cls.trim()+'"><span class="rk">'+p.rank+'</span><span class="em">'+esc(p.emoji||'')+'</span>'+
+        '<span class="nm">'+esc(p.name)+' <span class="seq">#'+p.seq+'</span></span>'+
+        '<span class="ct">'+fmt(p.count||0)+'</span></li>';
+    }).join('');
+  }
+
+  function renderLangs(locales, players){
+    const ul=$('langs');
+    if(!locales || !locales.length){ ul.innerHTML='<li class="none">—</li>'; return; }
+    const max=Math.max(1, locales[0].n);
+    ul.innerHTML=locales.map((l,i)=>{
+      const pct=((l.n/max)*100).toFixed(1);
+      const share=players?Math.round((l.n/players)*100):0;
+      return '<li><span class="lb" title="'+esc(l.code)+'">'+esc(LANG[l.code]||l.code)+'</span>'+
+        '<span class="tr"><i style="width:'+pct+'%; background:'+LANG_COLOR[i%LANG_COLOR.length]+'"></i></span>'+
+        '<span class="nv" title="'+share+'% of the room">'+fmt(l.n)+'</span></li>';
+    }).join('');
+  }
+
+  // ---- render ----------------------------------------------------------
+  function render(m, serverNow){
+    state=m;
+    // From the response header, not the body: the body is a cached sample and is
+    // already up to a second old, which a countdown would show.
+    clockOffset=(serverNow||m.sampleAt)-Date.now();
+
+    $('phase').textContent=String(m.phase||'').toUpperCase();
+    $('phase').className='phase '+(m.phase||'lobby');
+
+    setNum($('players'), m.players);
+    $('playersSub').textContent = m.joinsPerSec ? '+'+fmt(m.joinsPerSec)+'/s joining' : (m.players===1?'1 phone connected':fmt(m.players)+' phones connected');
+
+    setNum($('taps'), m.taps);
+    $('tapsSub').textContent=fmt(m.tapsPerSec)+'/s · peak '+fmt(m.peakTapsPerSec)+'/s · avg '+(m.avgTapsPerPlayer||0)+' each';
+
+    const pct=m.players?Math.round((m.tapping/m.players)*100):0;
+    $('part').textContent=pct+'%';
+    $('partSub').textContent=fmt(m.tapping)+' tapping · '+fmt(m.idle)+' idle';
+    $('partBar').style.width=pct+'%';
+
+    const srv=m.server||{};
+    setNum($('rps'), srv.rps);
+    $('rpsSub').textContent='budget '+fmt((m.cadence||{}).requestBudgetRps)+' rps';
+
+    renderRank(m.top);
+    setNum($('tapping'), m.tapping);
+    setNum($('idle'), m.idle);
+    renderLangs(m.locales, m.players);
+
+    const c=m.cadence||{};
+    $('tapIv').textContent=fmt(c.tapIntervalMs);
+    $('pollIv').textContent=fmt(c.pollIntervalMs);
+    $('grace').textContent=fmt(m.graceMs);
+    $('budget').textContent=fmt(c.requestBudgetRps);
+
+    // Loop lag is the number to watch: it is the earliest signal that Node's
+    // single thread is losing, and the only one that catches a buzzer herd.
+    const lag=srv.lagMs||0;
+    const lagEl=$('lag').parentElement;
+    lagEl.className='v '+(lag<50?'good':lag<100?'warn':'bad');
+    $('lag').textContent=fmt(lag);
+    $('conns').textContent=fmt(srv.conns<0?0:srv.conns);
+    $('tps').textContent=fmt(m.tapsPerSec);
+    $('rss').textContent=fmt(srv.rssMb);
+    $('heap').textContent=fmt(srv.heapMb);
+    $('cpu').textContent=fmt(srv.cpuPct);
+    $('sse').textContent=fmt(srv.sse);
+    $('round').textContent=fmt(m.roundId);
+    $('uptime').textContent='up '+dur(m.uptimeMs);
+
+    const h=m.history||{};
+    spark($('spPlayers'), h.players);
+    spark($('spTaps'), h.tapsPerSec);
+    spark($('spRps'), h.rps);
+    spark($('spLag'), h.lagMs);
+    spark($('spConns'), h.conns);
+    spark($('spTps'), h.tapsPerSec);
+  }
+
+  function dur(ms){
+    const s=Math.floor((Number(ms)||0)/1000);
+    if(s<60) return s+'s';
+    if(s<3600) return Math.floor(s/60)+'m '+(s%60)+'s';
+    return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';
+  }
+
+  // ---- round clock (rAF, off the poll) ---------------------------------
+  function clockLoop(){
+    const el=$('clock');
+    const m=state;
+    if(m){
+      const now=Date.now()+clockOffset;
+      if(m.phase==='countdown' && m.startsAt){
+        el.innerHTML=Math.max(0,Math.ceil((m.startsAt-now)/1000))+'<span class="u">s to go</span>';
+      }else if(m.phase==='running' && m.endsAt){
+        el.innerHTML=Math.max(0,Math.ceil((m.endsAt-now)/1000))+'<span class="u">s left</span>';
+      }else if(m.phase==='ended'){
+        // The buzzer ends the round but not the counting — batches tapped before
+        // it are still landing for the length of the grace window.
+        el.innerHTML=m.settled?'<span class="u">final</span>':'<span class="u">settling…</span>';
+      }else{
+        el.innerHTML='<span class="u">waiting for the host</span>';
+      }
+    }
+    requestAnimationFrame(clockLoop);
+  }
+
+  // ---- poll ------------------------------------------------------------
+  // Polling, not SSE. A held socket against Cloud Run's hard 1.000-concurrency
+  // cap is exactly the wrong shape for a page anyone at the event can open;
+  // the tween loop above is what buys the liveliness back. The cadence comes
+  // from the server (refreshMs), same as the phones take theirs.
+  let timer=null;
+  async function poll(){
+    let wait=1000;
+    try{
+      const r=await fetch('/metrics',{cache:'no-store'});
+      if(!r.ok) throw new Error('http '+r.status);
+      const m=await r.json();
+      wait=Math.max(250, Number(m.refreshMs)||1000);
+      // Same sample twice means the sampler has not run yet — harmless, but
+      // don't let it reset the staleness indicator.
+      if(m.sampleAt!==lastSampleAt){ lastSampleAt=m.sampleAt; misses=0; }
+      else misses++;
+      render(m, Number(r.headers.get('x-server-now'))||0);
+      setLive(misses<4);
+    }catch(e){
+      misses++;
+      setLive(false);
+      wait=2000;
+    }
+    timer=setTimeout(poll, wait);
+  }
+  function setLive(ok){
+    const el=$('live');
+    el.classList.toggle('stale', !ok);
+    $('liveTxt').textContent = ok ? 'live' : 'reconnecting…';
+  }
+
+  // A backgrounded tab gets throttled to ~1/min by the browser anyway; stop
+  // asking, and catch up immediately when it comes back.
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){ clearTimeout(timer); }
+    else { clearTimeout(timer); poll(); }
+  });
+
+  poll();
+  requestAnimationFrame(tweenLoop);
+  requestAnimationFrame(clockLoop);
+})();
+</script>
+</body>
+</html>
