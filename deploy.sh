@@ -17,7 +17,8 @@
 #        lived response; don't let the default 300s cut it mid-session.
 #
 # Usage:
-#   PROJECT=my-gcp-project REGION=us-central1 ./deploy.sh
+#   ./deploy.sh                                   # riojucu / us-central1
+#   PROJECT=other-project REGION=europe-west1 ./deploy.sh
 #
 # The host password is NOT deployed. Only a scrypt hash of it is compiled into
 # src/server.js, so there is no secret to plumb through here. Note that
@@ -26,7 +27,11 @@
 # we want — an ADMIN_TOKEN on the service silently disables the password.
 set -euo pipefail
 
-PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
+# The live service lives in `riojucu`. Defaulting to `gcloud config get-value
+# project` instead was a foot-gun: whatever project the laptop happens to be
+# pointed at is almost never this one, and a wrong default deploys a second
+# copy of the game somewhere nobody is looking. An explicit PROJECT= still wins.
+PROJECT="${PROJECT:-riojucu}"
 REGION="${REGION:-us-central1}"
 SERVICE="${SERVICE:-tap-race}"
 
