@@ -70,3 +70,4 @@ URL="$(gcloud run services describe "${SERVICE}" --project "${PROJECT}" --region
 echo "  Players : ${URL}/"
 echo "  Screen  : ${URL}/screen"
 echo "  Host    : ${URL}/host   (asks for the password once)"
+echo "  Dash    : ${URL}/dashboard   (public, read-only)"
