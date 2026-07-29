@@ -1,6 +1,6 @@
 // English, and the fallback for every language this app does not speak.
-// No agreement to worry about, so adjectives are plain strings; they simply
-// precede the noun.
+// No agreement to worry about, so adjectives are plain strings. Both modifiers
+// precede the animal — "Furious Ninja Capybara", gamer-tag word order.
 
 export default {
   code: 'en',
@@ -12,24 +12,31 @@ export default {
     fox: ['Fox'], bear: ['Bear'], lion: ['Lion'],
     panda: ['Panda'], seal: ['Seal'], octopus: ['Octopus'],
     dragon: ['Dragon'], rhino: ['Rhino'], bull: ['Bull'],
-    rabbit: ['Rabbit'], cat: ['Cat'], frog: ['Frog'],
-    bee: ['Bee'], dolphin: ['Dolphin'], horse: ['Horse'],
-    camel: ['Camel'], zebra: ['Zebra'], giraffe: ['Giraffe'],
-    kangaroo: ['Kangaroo'], goat: ['Goat'], rooster: ['Rooster'],
-    peacock: ['Peacock'], swan: ['Swan'], bat: ['Bat'],
-    boar: ['Boar'], lizard: ['Lizard'], snake: ['Snake'],
-    turtle: ['Turtle'], unicorn: ['Unicorn'],
+    rabbit: ['Rabbit'], cat: ['Cat'], bee: ['Bee'],
+    dolphin: ['Dolphin'], zebra: ['Zebra'], giraffe: ['Giraffe'],
+    kangaroo: ['Kangaroo'], rooster: ['Rooster'], swan: ['Swan'],
+    bat: ['Bat'], lizard: ['Lizard'], unicorn: ['Unicorn'],
+    otter: ['Otter'], hedgehog: ['Hedgehog'], flamingo: ['Flamingo'],
+    bison: ['Bison'], koala: ['Koala'], squirrel: ['Squirrel'],
+    scorpion: ['Scorpion'], crocodile: ['Crocodile'], lobster: ['Lobster'],
+    trex: ['T-Rex'], hamster: ['Hamster'], brontosaurus: ['Brontosaurus'],
+    cricket: ['Cricket'], beetle: ['Beetle'], spider: ['Spider'],
   },
 
   adjectives: [
-    'Furious', 'Swift', 'Turbo', 'Legendary', 'Ferocious', 'Electric',
-    'Relentless', 'Sonic', 'Lightning', 'Unstoppable', 'Wild', 'Cosmic',
-    'Atomic', 'Explosive', 'Radical', 'Supreme', 'Volcanic', 'Frenetic',
-    'Galactic', 'Invincible', 'Brutal', 'Hypersonic', 'Colossal', 'Crazy',
-    'Ninja', 'Mystic', 'Flaming', 'Hurricane', 'Thunder', 'Laser',
+    'Furious', 'Swift', 'Legendary', 'Ferocious', 'Electric', 'Relentless',
+    'Sonic', 'Unstoppable', 'Wild', 'Cosmic', 'Atomic', 'Explosive',
+    'Radical', 'Supreme', 'Volcanic', 'Frenetic', 'Galactic', 'Invincible',
+    'Brutal', 'Hypersonic', 'Colossal', 'Bold', 'Mystic', 'Flaming',
     'Quantum', 'Diabolical', 'Epic', 'Immortal', 'Armored', 'Magnetic',
-    'Nuclear', 'Sinister', 'Glorious', 'Untamable',
+    'Nuclear', 'Sinister', 'Glorious', 'Untamable', 'Fearless', 'Mighty',
+    'Rapid', 'Titanic', 'Golden', 'Iron',
   ],
 
-  compose: (animal, adj) => `${adj} ${animal.name}`,
+  nouns: [
+    'Ninja', 'Laser', 'Turbo', 'Thunder', 'Lightning', 'Hurricane', 'Rocket', 'Volcano',
+    'Cyclone', 'Tsunami', 'Nitro', 'Plasma', 'Neon', 'Titan', 'Phoenix', 'Vortex',
+  ],
+
+  compose: (animal, adj, noun) => `${adj} ${noun} ${animal.name}`,
 };

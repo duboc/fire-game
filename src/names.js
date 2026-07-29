@@ -1,7 +1,15 @@
-// Auto-generated player identities — animal + adjective + `#seq`, in the
-// player's own language. No user input, no moderation, no keyboard on mobile.
-// Uniqueness is guaranteed by the monotonically increasing sequence number
-// (not by the random pair, which may repeat by design).
+// Auto-generated player identities — adjective + animal + epithet + `#seq`, in
+// the player's own language. No user input, no moderation, no keyboard on
+// mobile.
+//
+// Two different guarantees, deliberately kept apart:
+//   - the `#seq` suffix makes the *label* unique, always, forever;
+//   - the words themselves are dealt from a shuffled permutation of the whole
+//     grid, so the first COMBINATIONS players also get a unique *name*. At
+//     45 animals x 40 adjectives x 16 epithets that is 28.800 — an event would
+//     have to fill six times over before anyone sees a repeat.
+// Drawing at random would not do that: with 5.000 players out of 28.800 slots,
+// the birthday bound puts a collision at essentially certainty.
 //
 // Six languages, chosen because the self-hosted Roboto renders all of them.
 // Anything else falls back to English — a readable name beats tofu boxes on
@@ -34,6 +42,23 @@ for (const [code, locale] of LOCALES) {
   }));
 }
 
+// One slot index has to mean "the same combination" in every language, because
+// a player's locale is only known after the slot has been handed out. So the
+// lists must be the same length everywhere; a short list is a boot error.
+export const ADJECTIVE_COUNT = en.adjectives.length;
+export const NOUN_COUNT = en.nouns.length;
+for (const [code, locale] of LOCALES) {
+  if (locale.adjectives.length !== ADJECTIVE_COUNT) {
+    throw new Error(`locale "${code}" has ${locale.adjectives.length} adjectives, expected ${ADJECTIVE_COUNT}`);
+  }
+  if (locale.nouns.length !== NOUN_COUNT) {
+    throw new Error(`locale "${code}" has ${locale.nouns.length} epithets, expected ${NOUN_COUNT}`);
+  }
+}
+
+/** How many distinct names exist. Every event must fit inside this. */
+export const COMBINATIONS = ROSTER.length * ADJECTIVE_COUNT * NOUN_COUNT;
+
 /**
  * Maps anything a client might send to a supported locale tag.
  *
@@ -58,28 +83,59 @@ export function normalizeLocale(input) {
 }
 
 /**
+ * Renders one slot of the grid in one language. Pure — same inputs, same name.
+ *
+ * @param {string} code - a supported locale tag
+ * @param {number} slot - 0 <= slot < COMBINATIONS
+ * @returns {{name: string, emoji: string}}
+ */
+export function renderSlot(code, slot) {
+  const animals = ANIMALS_BY_LOCALE.get(code);
+  const { adjectives, nouns, compose } = LOCALES.get(code);
+
+  // Animal varies fastest, so consecutive slots look maximally different.
+  const ai = slot % animals.length;
+  const rest = (slot - ai) / animals.length;
+  const ji = rest % ADJECTIVE_COUNT;
+  const ni = (rest - ji) / ADJECTIVE_COUNT;
+
+  const animal = animals[ai];
+  return { name: compose(animal, adjectives[ji], nouns[ni]), emoji: animal.emoji };
+}
+
+/** Fisher-Yates over [0, COMBINATIONS). ~115 kB and a millisecond, once per round. */
+function shuffledSlots(rng) {
+  const order = new Uint32Array(COMBINATIONS);
+  for (let i = 0; i < COMBINATIONS; i++) order[i] = i;
+  for (let i = COMBINATIONS - 1; i > 0; i--) {
+    // Clamped: a test rng that returns exactly 1 must not index off the end.
+    const j = Math.min(i, Math.floor(rng() * (i + 1)));
+    const tmp = order[i];
+    order[i] = order[j];
+    order[j] = tmp;
+  }
+  return order;
+}
+
+/**
  * Creates a stateful name factory. Each call to the returned function yields a
  * unique identity in the requested language.
+ *
+ * The factory owns one shuffle, so a fresh factory (see Game#reset) means a
+ * fresh deal — the same room playing twice does not see the same names.
  *
  * @param {() => number} [rng] - random source in [0,1), injectable for tests.
  * @returns {(locale?: unknown) => {name: string, emoji: string, seq: number, label: string, locale: string}}
  */
 export function makeNameFactory(rng = Math.random) {
+  const order = shuffledSlots(rng);
   let seq = 0;
   return function next(locale) {
-    seq += 1;
     const code = normalizeLocale(locale);
-    const { adjectives, compose } = LOCALES.get(code);
-    const animals = ANIMALS_BY_LOCALE.get(code);
-    const animal = animals[Math.floor(rng() * animals.length)];
-    const adjective = adjectives[Math.floor(rng() * adjectives.length)];
-    const name = compose(animal, adjective);
-    return {
-      name,
-      emoji: animal.emoji,
-      seq,
-      label: `${name} #${seq}`,
-      locale: code,
-    };
+    // Past COMBINATIONS the deal starts over; `#seq` keeps the label unique.
+    const slot = order[seq % COMBINATIONS];
+    seq += 1;
+    const { name, emoji } = renderSlot(code, slot);
+    return { name, emoji, seq, label: `${name} #${seq}`, locale: code };
   };
 }

@@ -5,7 +5,8 @@ giant button as fast as they can, and a live leaderboard reorders on the big
 screen until confetti rains on the winner.
 
 - **Self-service**: scan → playing in ~3 s. No login, no name typing.
-- **Auto-generated identities**: `🐧 Pinguim Furioso #142` — unique, fun, zero moderation.
+- **Auto-generated identities**: `🐧 Pinguim Furioso Relâmpago #142` — 28.800 of
+  them, dealt without repeats, zero moderation.
 - **Individual ranking** (no teams). Each phone shows *your* live position.
 - **One Cloud Run instance, in-memory counter.** No database in the hot path.
 - **Self-hosted everything** (QR, confetti, fonts) — survives flaky event wifi.
@@ -87,7 +88,7 @@ so the service is pinned `min=max=1`. Firestore can't drive the real-time loop
 | Decision | Choice |
 |---|---|
 | Teams vs individual | **Individual** ranking, top-10 live leaderboard |
-| Names | **Auto-generated** (adjective + animal + `#seq`), no typing, no moderation |
+| Names | **Auto-generated** (adjective + animal + epithet + `#seq`), no typing, no moderation |
 | Phone shows rank? | **Yes** — `#47` updates from each `/tap` response |
 | Anti-cheat | **None.** Only an anti-*accident* clamp (`n ≤ 400` per batch) |
 | Countdown source of truth | **Server** timestamps; phones/screen render from them |
@@ -103,27 +104,40 @@ so the service is pinned `min=max=1`. Firestore can't drive the real-time loop
 
 ## Player names
 
-Names are auto-generated as animal + adjective + `#seq` (`Capivara Furiosa #47`)
-in the **player's own language** — Portuguese, Spanish, English, French, Italian
-or German, taken from the browser's `Accept-Language`. Anything else falls back
-to English: those six are what the self-hosted Roboto renders, and a readable
-name beats tofu boxes on the projector. The leaderboard therefore mixes
-languages at an international event, which is the point; the emoji and `#seq`
-keep every row unambiguous.
+Names are auto-generated as adjective + animal + epithet + `#seq`
+(`Capivara Furiosa Relâmpago #47`, `Furious Thunder Capybara #47`) in the
+**player's own language** — Portuguese, Spanish, English, French, Italian or
+German, taken from the browser's `Accept-Language`. Anything else falls back to
+English: those six are what the self-hosted Roboto renders, and a readable name
+beats tofu boxes on the projector. The leaderboard therefore mixes languages at
+an international event, which is the point; the emoji and `#seq` keep every row
+unambiguous.
+
+**45 animals × 40 adjectives × 16 epithets = 28.800 distinct names**, and they
+are dealt from a shuffled permutation of that grid rather than drawn at random —
+so the first 28.800 players each get a name nobody else has, not merely a name
+that is *probably* unique. (Random draw would be a coin flip at ~200 players and
+a certainty by 5.000.) Past 28.800 the deal restarts and `#seq`, which never
+repeats, keeps the label unique. Each `reset` re-shuffles, so the same room
+playing twice does not see the same names.
 
 Adjectives agree with the animal's gender (`Lobo Furioso` / `Capivara Furiosa`,
-and German's three-way `Wütender Wolf` / `Wütende Eule` / `Wütendes Pferd`).
-Both forms are written out in `src/locales/*.js` rather than derived by a
-suffix rule, because `Turbo`, `Laser`, `Ninja` and `Relâmpago` end in the letters
-such a rule would happily rewrite. To add a language: copy a locale file,
-translate all 38 animals from `src/locales/animals.js`, and register it in
-`src/names.js` — a missing animal fails at boot, not on the big screen.
+and German's three-way `Wütender Wolf` / `Wütende Eule` / `Wütendes Känguru`).
+Both forms are written out in `src/locales/*.js` rather than derived by a suffix
+rule, because `Turbo` and `Laser` end in the letters such a rule would happily
+rewrite. The epithet is a noun in apposition and never inflects, which is why
+`Turbo`, `Laser`, `Ninja` and `Relâmpago` live in `nouns` and not in
+`adjectives`. To add a language: copy a locale file, translate all 45 animals
+from `src/locales/animals.js`, supply the same 40 adjectives and 16 epithets,
+and register it in `src/names.js` — a missing animal or a short list fails at
+boot, not on the big screen.
 
-The roster deliberately excludes monkey, gorilla, whale and elephant. Every
-name is assigned at random to a real person and then projected in front of the
-room, so an animal that doubles as a slur or a body joke in *any* of the six
-languages doesn't belong in it — see the note in `src/locales/animals.js`.
-Weigh a new animal that way before adding it.
+The roster deliberately excludes monkey, gorilla, whale, elephant, frog, camel,
+goat, snake, boar, turtle, peacock and horse, among others. Every name is
+assigned at random to a real person and then projected in front of the room, so
+an animal that doubles as a slur, an insult or a body joke in *any* of the six
+languages doesn't belong in it — see the note in `src/locales/animals.js`, which
+`test/names.test.js` enforces. Weigh a new animal that way before adding it.
 
 ### Overriding the name language
 

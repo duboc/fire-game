@@ -74,11 +74,14 @@
   /* ===== ENDED ===== */
   #ended{align-items:center; justify-content:center; gap:2vh; text-align:center;}
   .champlabel{font-size:clamp(22px,2.8vw,42px); font-weight:700; letter-spacing:.12em; color:var(--g-blue-700); text-transform:uppercase;}
-  .champ{display:flex; align-items:center; gap:2vw; background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+  .champ{display:flex; align-items:center; gap:2vw; max-width:92vw; background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
     border:1px solid rgba(66,133,244,.3); box-shadow:var(--e3), var(--glow-strong); border-radius:var(--r-xl); padding:3vh 4vw; animation:cdpop .8s cubic-bezier(.2,1.3,.4,1);}
-  .champ .em{font-size:min(24vh,20vw);}
-  .champ .info{text-align:left;}
-  .champ .nm{font-family:var(--font-display); font-size:clamp(40px,6.2vw,108px); font-weight:700; line-height:1; color:var(--ink);}
+  .champ .em{font-size:min(24vh,20vw); flex:none;}
+  /* min-width:0 or the name refuses to wrap and pushes the card past the screen
+     edge — three-word names run to ~35 characters. */
+  .champ .info{text-align:left; min-width:0;}
+  .champ .nm{font-family:var(--font-display); font-size:clamp(32px,4.6vw,84px); font-weight:700; line-height:1.06; color:var(--ink);
+    text-wrap:balance; overflow-wrap:break-word;}
   .champ .nm .seq{font-family:var(--font-mono); color:var(--ink-2);}
   .champ .ct{font-family:var(--font-mono); font-size:clamp(26px,3.2vw,52px); font-weight:500; color:var(--g-green-700);}
   .podium{display:flex; gap:1.5vw; margin-top:1vh; flex-wrap:wrap; justify-content:center;}

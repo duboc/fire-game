@@ -11,7 +11,9 @@ const legalNames = (loc) => {
   const out = new Set();
   for (const { key } of ROSTER) {
     const [word, g = 'm'] = loc.animals[key];
-    for (const adj of loc.adjectives) out.add(loc.compose({ name: word, g }, adj));
+    for (const adj of loc.adjectives) {
+      for (const noun of loc.nouns) out.add(loc.compose({ name: word, g }, adj, noun));
+    }
   }
   return out;
 };

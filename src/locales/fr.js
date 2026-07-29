@@ -1,7 +1,9 @@
-// French. Adjective follows the noun and agrees with its gender.
+// French. Adjective follows the noun and agrees with its gender; the epithet
+// trails as a noun in apposition and never inflects.
 //
-// Feminine forms are irregular often enough (fou -> folle, explosif -> explosive,
-// immortel -> immortelle) that deriving them would be guesswork. Written out.
+// Feminine forms are irregular often enough (explosif -> explosive, immortel ->
+// immortelle, furieux -> furieuse) that deriving them would be guesswork.
+// Written out.
 import { GENDER_INDEX } from './animals.js';
 
 export default {
@@ -14,30 +16,38 @@ export default {
     fox: ['Renard', 'm'], bear: ['Ours', 'm'], lion: ['Lion', 'm'],
     panda: ['Panda', 'm'], seal: ['Phoque', 'm'], octopus: ['Poulpe', 'm'],
     dragon: ['Dragon', 'm'], rhino: ['Rhinocéros', 'm'], bull: ['Taureau', 'm'],
-    rabbit: ['Lapin', 'm'], cat: ['Chat', 'm'], frog: ['Grenouille', 'f'],
-    bee: ['Abeille', 'f'], dolphin: ['Dauphin', 'm'], horse: ['Cheval', 'm'],
-    camel: ['Chameau', 'm'], zebra: ['Zèbre', 'm'], giraffe: ['Girafe', 'f'],
-    kangaroo: ['Kangourou', 'm'], goat: ['Chèvre', 'f'], rooster: ['Coq', 'm'],
-    peacock: ['Paon', 'm'], swan: ['Cygne', 'm'], bat: ['Chauve-souris', 'f'],
-    boar: ['Sanglier', 'm'], lizard: ['Lézard', 'm'], snake: ['Serpent', 'm'],
-    turtle: ['Tortue', 'f'], unicorn: ['Licorne', 'f'],
+    rabbit: ['Lapin', 'm'], cat: ['Chat', 'm'], bee: ['Abeille', 'f'],
+    dolphin: ['Dauphin', 'm'], zebra: ['Zèbre', 'm'], giraffe: ['Girafe', 'f'],
+    kangaroo: ['Kangourou', 'm'], rooster: ['Coq', 'm'], swan: ['Cygne', 'm'],
+    bat: ['Chauve-souris', 'f'], lizard: ['Lézard', 'm'], unicorn: ['Licorne', 'f'],
+    otter: ['Loutre', 'f'], hedgehog: ['Hérisson', 'm'], flamingo: ['Flamant', 'm'],
+    bison: ['Bison', 'm'], koala: ['Koala', 'm'], squirrel: ['Écureuil', 'm'],
+    scorpion: ['Scorpion', 'm'], crocodile: ['Crocodile', 'm'], lobster: ['Homard', 'm'],
+    trex: ['Tyrannosaure', 'm'], hamster: ['Hamster', 'm'], brontosaurus: ['Brontosaure', 'm'],
+    cricket: ['Grillon', 'm'], beetle: ['Scarabée', 'm'], spider: ['Araignée', 'f'],
   },
 
   adjectives: [
-    ['Furieux', 'Furieuse'], ['Rapide', 'Rapide'], ['Turbo', 'Turbo'],
-    ['Légendaire', 'Légendaire'], ['Féroce', 'Féroce'], ['Électrique', 'Électrique'],
-    ['Implacable', 'Implacable'], ['Sonique', 'Sonique'], ['Éclair', 'Éclair'],
-    ['Imparable', 'Imparable'], ['Sauvage', 'Sauvage'], ['Cosmique', 'Cosmique'],
-    ['Atomique', 'Atomique'], ['Explosif', 'Explosive'], ['Radical', 'Radicale'],
-    ['Suprême', 'Suprême'], ['Volcanique', 'Volcanique'], ['Frénétique', 'Frénétique'],
-    ['Galactique', 'Galactique'], ['Invincible', 'Invincible'], ['Brutal', 'Brutale'],
-    ['Colossal', 'Colossale'], ['Fou', 'Folle'], ['Ninja', 'Ninja'],
-    ['Mystique', 'Mystique'], ['Flamboyant', 'Flamboyante'], ['Ouragan', 'Ouragan'],
-    ['Tonnerre', 'Tonnerre'], ['Laser', 'Laser'], ['Quantique', 'Quantique'],
-    ['Diabolique', 'Diabolique'], ['Épique', 'Épique'], ['Immortel', 'Immortelle'],
-    ['Blindé', 'Blindée'], ['Magnétique', 'Magnétique'], ['Nucléaire', 'Nucléaire'],
-    ['Sinistre', 'Sinistre'], ['Glorieux', 'Glorieuse'], ['Indomptable', 'Indomptable'],
+    ['Furieux', 'Furieuse'], ['Rapide', 'Rapide'], ['Légendaire', 'Légendaire'],
+    ['Féroce', 'Féroce'], ['Électrique', 'Électrique'], ['Implacable', 'Implacable'],
+    ['Sonique', 'Sonique'], ['Imparable', 'Imparable'], ['Sauvage', 'Sauvage'],
+    ['Cosmique', 'Cosmique'], ['Atomique', 'Atomique'], ['Explosif', 'Explosive'],
+    ['Radical', 'Radicale'], ['Suprême', 'Suprême'], ['Volcanique', 'Volcanique'],
+    ['Frénétique', 'Frénétique'], ['Galactique', 'Galactique'], ['Invincible', 'Invincible'],
+    ['Brutal', 'Brutale'], ['Hypersonique', 'Hypersonique'], ['Colossal', 'Colossale'],
+    ['Audacieux', 'Audacieuse'], ['Mystique', 'Mystique'], ['Flamboyant', 'Flamboyante'],
+    ['Quantique', 'Quantique'], ['Diabolique', 'Diabolique'], ['Épique', 'Épique'],
+    ['Immortel', 'Immortelle'], ['Blindé', 'Blindée'], ['Magnétique', 'Magnétique'],
+    ['Nucléaire', 'Nucléaire'], ['Sinistre', 'Sinistre'], ['Glorieux', 'Glorieuse'],
+    ['Indomptable', 'Indomptable'], ['Intrépide', 'Intrépide'], ['Puissant', 'Puissante'],
+    ['Véloce', 'Véloce'], ['Titanesque', 'Titanesque'], ['Doré', 'Dorée'],
+    ['Inflexible', 'Inflexible'],
   ],
 
-  compose: (animal, adj) => `${animal.name} ${adj[GENDER_INDEX[animal.g]]}`,
+  nouns: [
+    'Ninja', 'Laser', 'Turbo', 'Tonnerre', 'Éclair', 'Ouragan', 'Fusée', 'Volcan',
+    'Cyclone', 'Tsunami', 'Nitro', 'Plasma', 'Néon', 'Titan', 'Phénix', 'Vortex',
+  ],
+
+  compose: (animal, adj, noun) => `${animal.name} ${adj[GENDER_INDEX[animal.g]]} ${noun}`,
 };
