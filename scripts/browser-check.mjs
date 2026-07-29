@@ -57,6 +57,21 @@ await sleep(900);
 const B = 'http://127.0.0.1:8139';
 const browser = await chromium.launch();
 
+/**
+ * The id in localStorage once the server agrees it exists — a page that boots
+ * with a forgotten id (server restart, or the host clearing the room) polls
+ * /state, sees `known:false` and re-registers. Returns null if it never does.
+ */
+const recoveredId = async (page, timeoutMs = 6000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const id = await page.evaluate(() => localStorage.getItem('tapId'));
+    if (id && (await (await fetch(B + '/state?id=' + id)).json()).known) return id;
+    await sleep(200);
+  }
+  return null;
+};
+
 try {
   // Pinned so the run means the same thing on any laptop. The interface is
   // English regardless — only the generated names follow the browser.
@@ -208,15 +223,37 @@ try {
   ok(finalShown === serverTaps, `phone (${finalShown}) agrees with server (${serverTaps})`);
   ok((await screen.textContent('#champlabel')).includes('Champion'), 'screen revealed the champion');
 
+  console.log('\n== reset clears the room and the phone finds its way back ==');
+  {
+    // Reset empties the roster, so every phone in the room is holding an id the
+    // server has just forgotten. Nobody is told to reload: the page polls
+    // /state, reads `known:false` and re-registers itself.
+    const before = await phone.evaluate(() => localStorage.getItem('tapId'));
+    await fetch(B + '/admin/reset', { method: 'POST', headers: { 'x-admin-token': TOKEN } });
+    ok((await (await fetch(B + '/state?id=' + before)).json()).known === false,
+      'the reset really did drop the player, ghosts and all');
+    const back = await recoveredId(phone);
+    ok(back !== null && back !== before, 'the phone noticed and re-registered under a new id');
+    const name = (await phone.textContent('#name')).trim();
+    ok(name.length > 0 && name !== 'Connecting…', `and it is showing a fresh name ("${name}")`);
+    ok(Number((await phone.textContent('#count')).replace(/\D/g, '')) === 0, 'starting from zero taps');
+  }
+
   console.log('\n== a refused beacon does not eat the last batch ==');
   {
     // sendBeacon returns false when the UA queue is full, and is missing
     // entirely on some in-app webviews. The taps are still ours either way.
+    //
+    // Its own context: two pages in one browser share localStorage and would
+    // race each other re-registering after the reset above, each ending up
+    // tapping as a different player than the key says.
     await fetch(B + '/admin/reset', { method: 'POST', headers: { 'x-admin-token': TOKEN } });
-    const bp = await ctx.newPage();
+    const bctx = await browser.newContext({ locale: 'pt-BR' });
+    const bp = await bctx.newPage();
     await bp.goto(B + '/', { waitUntil: 'networkidle' });
     await bp.waitForFunction(() => document.getElementById('name')?.textContent !== 'Connecting…', null, { timeout: 5000 });
-    const bId = await bp.evaluate(() => localStorage.getItem('tapId'));
+    const bId = await recoveredId(bp);
+    ok(bId !== null, 'the beacon phone is registered');
     await bp.evaluate(() => { navigator.sendBeacon = () => false; });
 
     const r1 = await (await fetch(B + '/admin/start', {
@@ -236,7 +273,7 @@ try {
     await sleep(Math.max(0, r1.settlesAt + skew1 - Date.now() + 1200));
     const after = await (await fetch(B + '/state?id=' + bId)).json();
     ok(after.yourCount === 10, `all 10 taps survived the refused beacon (server has ${after.yourCount})`);
-    await bp.close();
+    await bctx.close();
   }
 
   console.log('\n== dashboard: a public page that watches the round ==');

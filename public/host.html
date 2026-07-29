@@ -91,10 +91,11 @@
       </div>
       <div class="row" style="margin-top:16px;">
         <button class="start" id="start">▶ Start (3 · 2 · 1 · GO)</button>
-        <button class="reset" id="reset">↺ Reset to lobby</button>
+        <button class="reset" id="reset">↺ Clear the room</button>
       </div>
       <div class="msg" id="msg"></div>
-      <div class="hint">Tip: leave <a href="/screen" target="_blank">/screen</a> up on the projector. Starting zeroes the counters and fires the countdown.</div>
+      <div class="hint">Tip: leave <a href="/screen" target="_blank">/screen</a> up on the projector. Starting zeroes the counters and fires the countdown.
+        <b>Clear the room</b> empties the player list as well — phones re-join by themselves within a second, with new names. Use it between sessions, or after a rehearsal.</div>
     </div>
 
     <div class="panel">
@@ -176,7 +177,7 @@
       const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({durationMs:Number($('dur').value)})});
       if(r.status===401){ setAuthed(false); msg('Session expired — enter the password again.',false); return; }
-      await r.json(); msg(path==='/admin/start'?'Round started! 🚀':'Reset to lobby.',true);
+      await r.json(); msg(path==='/admin/start'?'Round started! 🚀':'Room cleared — phones re-join on their own.',true);
     }catch(e){ msg('Network error.',false); }
   }
   $('start').onclick=()=>post('/admin/start');

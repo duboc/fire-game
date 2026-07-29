@@ -283,16 +283,56 @@ test('unknown id tap returns null (server then re-joins)', () => {
   assert.equal(g.tap('ghost', 5, 3500), null);
 });
 
-test('reset returns to lobby keeping players but zeroing counts', () => {
+test('reset returns to an empty lobby', () => {
+  // Reset is the "clear the room" button: a rehearsal or a load test must not
+  // leave ghosts in the player count on the projector.
   const g = freshGame();
   g.join('a');
   g.start({ now: 0 });
   g.tap('a', 12, 3500);
-  g.reset({ now: 4000 });
+  const state = g.reset({ now: 4000 });
   assert.equal(g.phase, PHASE.LOBBY);
+  assert.equal(g.players.size, 0);
+  assert.equal(g.has('a'), false);
+  assert.equal(state.total, 0);
+  assert.equal(g.top.length, 0);
+  assert.equal(g.totalTaps, 0);
+  assert.equal(g.winner, null);
+});
+
+test('a phone that reset dropped is told it is unknown, and can rejoin', () => {
+  // The phone polls /state, sees known:false and re-registers; nothing here may
+  // throw at it in the meantime.
+  const g = freshGame();
+  g.join('a');
+  g.reset({ now: 1000 });
+  assert.equal(g.playerView('a', 1000).known, false);
+  assert.equal(g.tap('a', 5, 1000), null);
+  g.join('a');
   assert.equal(g.players.size, 1);
   assert.equal(g.players.get('a').count, 0);
-  assert.equal(g.winner, null);
+});
+
+test('reset re-deals the names, so a second round is not the first one again', () => {
+  // Real name factory, not the pinned one: the shuffle is what is under test.
+  const g = new Game({ countdownMs: 3000, durationMs: 10000 });
+  const seen = new Set([g.join('a').name]);
+  for (let i = 0; i < 40; i++) {
+    g.reset({ now: 0 });
+    seen.add(g.join('a').name);
+  }
+  // 28.800 slots: 41 deals landing on the same one means no shuffle happened.
+  assert.ok(seen.size > 1, 'reset kept dealing the same name');
+  g.reset({ now: 0 });
+  assert.equal(g.join('a').seq, 1, 'the sequence restarts with the room');
+});
+
+test('an injected name factory survives reset', () => {
+  // Tests pin the factory precisely so it stays predictable across a reset.
+  const g = freshGame();
+  assert.equal(g.join('a').name, 'Alfa');
+  g.reset({ now: 0 });
+  assert.equal(g.join('a').name, 'Bravo');
 });
 
 test('reset during the grace window abandons the round without persisting it', () => {

@@ -88,7 +88,10 @@ export class Game {
     this.maxTapIntervalMs = opts.maxTapIntervalMs ?? DEFAULTS.maxTapIntervalMs;
     this.minPollIntervalMs = opts.minPollIntervalMs ?? DEFAULTS.minPollIntervalMs;
     this.maxPollIntervalMs = opts.maxPollIntervalMs ?? DEFAULTS.maxPollIntervalMs;
-    this._nextName = opts.nameFactory ?? makeNameFactory();
+    // Kept so reset() can tell an injected factory (tests pin one, and pinning
+    // it is the point) from the default one, which it re-deals.
+    this._injectedNameFactory = opts.nameFactory ?? null;
+    this._nextName = this._injectedNameFactory ?? makeNameFactory();
     this._onEnded = opts.onEnded ?? null;
 
     /** @type {Map<string, {id, name, emoji, seq, count, rank}>} */
@@ -189,9 +192,24 @@ export class Game {
     return this.publicState(now);
   }
 
-  /** Resets back to LOBBY, zeroing counts but keeping joined players & names. */
+  /**
+   * Resets back to an empty LOBBY: the roster is cleared and the names are
+   * re-dealt from a fresh shuffle.
+   *
+   * Emptying the room is the whole point — otherwise a load test, a rehearsal
+   * or yesterday's session leaves ghosts in the player count on the projector.
+   * It is safe because no phone is trusted to be known: /tap and /state both
+   * answer an unknown id with `known:false`, and the page re-registers on the
+   * next poll (public/index.html). A player mid-round gets a new name and
+   * starts from zero, which is what a reset means.
+   */
   reset({ now } = {}) {
-    for (const p of this.players.values()) p.count = 0;
+    this.players.clear();
+    this.top = [];
+    // A new deal, so the same room playing twice does not get the same names —
+    // and #seq starts at 1 again. An injected factory is left alone: its whole
+    // purpose is to be predictable.
+    if (!this._injectedNameFactory) this._nextName = makeNameFactory();
     this.totalTaps = 0;
     this.winner = null;
     this._dirty = true;

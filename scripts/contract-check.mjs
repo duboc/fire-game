@@ -353,8 +353,8 @@ try {
     const cleared = await (await fetch(B + '/metrics')).json();
     ok(cleared.phase === 'lobby' && cleared.taps === 0 && cleared.tapping === 0,
       'a reset zeroes the dashboard too');
-    ok(cleared.players === lobby.players && cleared.idle === cleared.players,
-      'but keeps the room: everyone is back in the lobby, nobody has tapped');
+    ok(cleared.players === 0 && cleared.idle === 0,
+      `and empties the room (${lobby.players} players gone, phones re-register on their next poll)`);
   }
 
   console.log('\n== heartbeat ==');
