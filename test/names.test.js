@@ -153,7 +153,7 @@ test('slurs and body jokes stay out of the roster', () => {
 });
 
 test('titles stay pompous, never sacred and never political', () => {
-  // A title is funny when it is puffed up (Estagiária Capivara Furiosa) and
+  // A title is funny when it is puffed up (Arquiduquesa Capivara Furiosa) and
   // ugly when it is someone's faith or someone's dictator. The policy is
   // written in each locale file; this is what keeps it true.
   const BLOCKED = new Set([
@@ -190,7 +190,7 @@ test('every adjective and title supplies a form for each gender the locale uses'
       assert.equal(adj.length, arity, `locale "${code}": "${adj[0]}" has ${adj.length} forms`);
       for (const form of adj) assert.ok(form.length > 0);
     }
-    // Titles inflect too now — Barão/Baronesa, Praktikant/Praktikantin — so a
+    // Titles inflect too now — Barão/Baronesa, Erzherzog/Erzherzogin — so a
     // missing form would render `undefined` next to the animal.
     for (const title of MODULES[code].titles) {
       assert.equal(title.length, arity, `locale "${code}": "${title[0]}" has ${title.length} forms`);
@@ -233,11 +233,11 @@ test('the title agrees with the animal, like the adjective does', () => {
   // baroness, not the person holding the phone.
   assert.equal(renderSlot('pt', slotFor('capybara')).name, 'Baronesa Capivara Furiosa');
   assert.equal(renderSlot('pt', slotFor('wolf')).name, 'Barão Lobo Furioso');
-  // The joke title inflects too.
-  const intern = pt.titles.findIndex(([m]) => m === 'Estagiário');
-  assert.ok(intern >= 0);
-  assert.equal(renderSlot('pt', slotFor('capybara', 0, intern)).name, 'Estagiária Capivara Furiosa');
-  assert.equal(renderSlot('pt', slotFor('wolf', 0, intern)).name, 'Estagiário Lobo Furioso');
+  // Every title inflects, not just the first one.
+  const knight = pt.titles.findIndex(([m]) => m === 'Cavaleiro');
+  assert.ok(knight >= 0);
+  assert.equal(renderSlot('pt', slotFor('capybara', 0, knight)).name, 'Cavaleira Capivara Furiosa');
+  assert.equal(renderSlot('pt', slotFor('wolf', 0, knight)).name, 'Cavaleiro Lobo Furioso');
 });
 
 test('an epicene title keeps one form for both genders', () => {

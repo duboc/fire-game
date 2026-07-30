@@ -41,15 +41,14 @@ export default {
     ['Férreo', 'Férrea'],
   ],
 
-  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
-  // are the joke ("Becaria Cebra Furiosa"). Nothing religious and nothing from
-  // 20th-century politics.
+  // Ten ranks of nobility, four dramatic ones, two adventurous. No office jobs.
+  // Nothing religious and nothing from 20th-century politics.
   titles: [
     ['Barón', 'Baronesa'], ['Duque', 'Duquesa'], ['Conde', 'Condesa'],
     ['Vizconde', 'Vizcondesa'], ['Marqués', 'Marquesa'], ['Emperador', 'Emperatriz'],
-    ['Príncipe', 'Princesa'], ['Almirante', 'Almirante'], ['Mariscal', 'Mariscal'],
-    ['Capitán', 'Capitana'], ['Maestro', 'Maestra'], ['Becario', 'Becaria'],
-    ['Auditor', 'Auditora'], ['CEO', 'CEO'], ['Astronauta', 'Astronauta'],
+    ['Príncipe', 'Princesa'], ['Rey', 'Reina'], ['Archiduque', 'Archiduquesa'],
+    ['Caballero', 'Dama'], ['Almirante', 'Almirante'], ['Mariscal', 'Mariscal'],
+    ['Capitán', 'Capitana'], ['Maestro', 'Maestra'], ['Astronauta', 'Astronauta'],
     ['Detective', 'Detective'],
   ],
 

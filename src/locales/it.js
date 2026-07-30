@@ -43,15 +43,15 @@ export default {
     ['Ferreo', 'Ferrea'],
   ],
 
-  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
-  // are the joke ("Stagista Zebra Mistica"). Nothing religious and nothing from
-  // 20th-century politics: no Duce anywhere near this list.
+  // Ten ranks of nobility, four dramatic ones, two adventurous. No office jobs.
+  // Nothing religious and nothing from 20th-century politics: no Duce anywhere
+  // near this list.
   titles: [
     ['Barone', 'Baronessa'], ['Duca', 'Duchessa'], ['Conte', 'Contessa'],
     ['Visconte', 'Viscontessa'], ['Marchese', 'Marchesa'], ['Imperatore', 'Imperatrice'],
-    ['Principe', 'Principessa'], ['Ammiraglio', 'Ammiraglio'], ['Maresciallo', 'Maresciallo'],
-    ['Capitano', 'Capitana'], ['Maestro', 'Maestra'], ['Stagista', 'Stagista'],
-    ['Revisore', 'Revisore'], ['CEO', 'CEO'], ['Astronauta', 'Astronauta'],
+    ['Principe', 'Principessa'], ['Re', 'Regina'], ['Arciduca', 'Arciduchessa'],
+    ['Cavaliere', 'Cavaliera'], ['Ammiraglio', 'Ammiraglio'], ['Maresciallo', 'Maresciallo'],
+    ['Capitano', 'Capitana'], ['Maestro', 'Maestra'], ['Astronauta', 'Astronauta'],
     ['Detective', 'Detective'],
   ],
 

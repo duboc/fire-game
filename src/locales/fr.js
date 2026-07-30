@@ -45,15 +45,14 @@ export default {
     ['Inflexible', 'Inflexible'],
   ],
 
-  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
-  // are the joke ("Stagiaire Zèbre Mystique"). Nothing religious and nothing
-  // from 20th-century politics.
+  // Ten ranks of nobility, four dramatic ones, two adventurous. No office jobs.
+  // Nothing religious and nothing from 20th-century politics.
   titles: [
     ['Baron', 'Baronne'], ['Duc', 'Duchesse'], ['Comte', 'Comtesse'],
     ['Vicomte', 'Vicomtesse'], ['Marquis', 'Marquise'], ['Empereur', 'Impératrice'],
-    ['Prince', 'Princesse'], ['Amiral', 'Amirale'], ['Maréchal', 'Maréchale'],
-    ['Capitaine', 'Capitaine'], ['Maestro', 'Maestro'], ['Stagiaire', 'Stagiaire'],
-    ['Auditeur', 'Auditrice'], ['PDG', 'PDG'], ['Astronaute', 'Astronaute'],
+    ['Prince', 'Princesse'], ['Roi', 'Reine'], ['Archiduc', 'Archiduchesse'],
+    ['Chevalier', 'Chevalière'], ['Amiral', 'Amirale'], ['Maréchal', 'Maréchale'],
+    ['Capitaine', 'Capitaine'], ['Maestro', 'Maestro'], ['Astronaute', 'Astronaute'],
     ['Détective', 'Détective'],
   ],
 

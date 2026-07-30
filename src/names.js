@@ -1,5 +1,5 @@
 // Auto-generated player identities — title + animal + adjective + `#seq`, in
-// the player's own language ("Baronesa Zebra Mística", "Intern Furious
+// the player's own language ("Baronesa Zebra Mística", "Archduke Furious
 // Capybara"). No user input, no moderation, no keyboard on mobile.
 //
 // Two different guarantees, deliberately kept apart:

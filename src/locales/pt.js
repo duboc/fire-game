@@ -45,16 +45,18 @@ export default {
     ['Férreo', 'Férrea'],
   ],
 
-  // Nobility, then dramatic ranks, then jobs with no glamour at all — the last
-  // five are the joke ("Estagiária Capivara Furiosa"). Nothing religious and
-  // nothing from 20th-century politics: a title is funny when it is pompous,
-  // not when it is somebody's actual flag.
+  // Ten ranks of nobility, four dramatic ones, two adventurous. No office
+  // jobs: "CEO" and "Estagiária" were funny for one round and then read as a
+  // comment on the person holding the phone, which is exactly what this whole
+  // scheme avoids. Nothing religious and nothing from 20th-century politics
+  // either — a title is funny when it is pompous, not when it is somebody's
+  // actual flag.
   titles: [
     ['Barão', 'Baronesa'], ['Duque', 'Duquesa'], ['Conde', 'Condessa'],
     ['Visconde', 'Viscondessa'], ['Marquês', 'Marquesa'], ['Imperador', 'Imperatriz'],
-    ['Príncipe', 'Princesa'], ['Almirante', 'Almirante'], ['Marechal', 'Marechal'],
-    ['Capitão', 'Capitã'], ['Maestro', 'Maestrina'], ['Estagiário', 'Estagiária'],
-    ['Auditor', 'Auditora'], ['CEO', 'CEO'], ['Astronauta', 'Astronauta'],
+    ['Príncipe', 'Princesa'], ['Rei', 'Rainha'], ['Arquiduque', 'Arquiduquesa'],
+    ['Cavaleiro', 'Cavaleira'], ['Almirante', 'Almirante'], ['Marechal', 'Marechal'],
+    ['Capitão', 'Capitã'], ['Maestro', 'Maestrina'], ['Astronauta', 'Astronauta'],
     ['Detetive', 'Detetive'],
   ],
 

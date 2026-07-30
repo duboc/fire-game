@@ -53,18 +53,18 @@ export default {
     ['Goldener', 'Goldene', 'Goldenes'], ['Eiserner', 'Eiserne', 'Eisernes'],
   ],
 
-  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
-  // are the joke ("Praktikant Wütendes Känguru"). Third form is the neuter
-  // slot, which reuses the masculine word. Nothing religious, and nothing from
-  // 20th-century politics: no Führer, no Reichs-anything, ever.
+  // Ten ranks of nobility, four dramatic ones, two adventurous. No office jobs.
+  // Third form is the neuter slot, which reuses the masculine word. Nothing
+  // religious, and nothing from 20th-century politics: no Führer, no
+  // Reichs-anything, ever.
   titles: [
     ['Baron', 'Baronin', 'Baron'], ['Herzog', 'Herzogin', 'Herzog'],
     ['Graf', 'Gräfin', 'Graf'], ['Vizegraf', 'Vizegräfin', 'Vizegraf'],
     ['Markgraf', 'Markgräfin', 'Markgraf'], ['Kaiser', 'Kaiserin', 'Kaiser'],
-    ['Prinz', 'Prinzessin', 'Prinz'], ['Admiral', 'Admiralin', 'Admiral'],
-    ['Marschall', 'Marschallin', 'Marschall'], ['Kapitän', 'Kapitänin', 'Kapitän'],
-    ['Maestro', 'Maestra', 'Maestro'], ['Praktikant', 'Praktikantin', 'Praktikant'],
-    ['Prüfer', 'Prüferin', 'Prüfer'], ['CEO', 'CEO', 'CEO'],
+    ['Prinz', 'Prinzessin', 'Prinz'], ['König', 'Königin', 'König'],
+    ['Erzherzog', 'Erzherzogin', 'Erzherzog'], ['Ritter', 'Ritterin', 'Ritter'],
+    ['Admiral', 'Admiralin', 'Admiral'], ['Marschall', 'Marschallin', 'Marschall'],
+    ['Kapitän', 'Kapitänin', 'Kapitän'], ['Maestro', 'Maestra', 'Maestro'],
     ['Astronaut', 'Astronautin', 'Astronaut'], ['Detektiv', 'Detektivin', 'Detektiv'],
   ],
 

@@ -2,8 +2,14 @@
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 import { ROSTER } from '../src/locales/animals.js';
+import ptLocale from '../src/locales/pt.js';
 import esLocale from '../src/locales/es.js';
+import frLocale from '../src/locales/fr.js';
 import itLocale from '../src/locales/it.js';
+import deLocale from '../src/locales/de.js';
+import enLocale from '../src/locales/en.js';
+
+const ALL_LOCALES = [ptLocale, esLocale, frLocale, itLocale, deLocale, enLocale];
 
 // Every name a locale can possibly mint, so an assertion can say "this is
 // Italian" without hard-coding one of 42 × N outcomes.
@@ -226,11 +232,14 @@ try {
   ok((await screen.textContent('#champlabel')).includes('Champion'), 'screen revealed the champion');
 
   {
-    // Titles made names longer (39 characters at worst, "Praktikant
-    // Unerbittlicher Tyrannosaurus"). The champion card is the one place a
-    // name is rendered at 84px, so it is the one place it can shove itself off
-    // the projector. Measured, not eyeballed — with the worst name there is.
-    const longest = [...legalNames(itLocale)].reduce((a, b) => (b.length > a.length ? b : a), '');
+    // Titles made names longer (40 characters at worst, "Archiduchesse
+    // Chauve-souris Hypersonique"). The champion card is the one place a name
+    // is rendered at 84px, so it is the one place it can shove itself off the
+    // projector. Measured across every locale, not eyeballed on one — with the
+    // worst name any of them can mint.
+    const longest = ALL_LOCALES
+      .flatMap((loc) => [...legalNames(loc)])
+      .reduce((a, b) => (b.length > a.length ? b : a), '');
     const overflow = await screen.evaluate((name) => {
       const card = document.getElementById('champ');
       const nm = card.querySelector('.nm');

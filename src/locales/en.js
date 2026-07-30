@@ -33,12 +33,12 @@ export default {
     'Rapid', 'Titanic', 'Golden', 'Iron',
   ],
 
-  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
-  // are the joke ("Intern Furious Capybara"). Nothing religious and nothing
-  // from 20th-century politics. Plain strings: English titles do not inflect.
+  // Ten ranks of nobility, four dramatic ones, two adventurous. No office jobs.
+  // Nothing religious and nothing from 20th-century politics. Plain strings:
+  // English titles do not inflect.
   titles: [
     'Baron', 'Duke', 'Count', 'Viscount', 'Marquis', 'Emperor', 'Prince',
-    'Admiral', 'Marshal', 'Captain', 'Maestro', 'Intern', 'Auditor', 'CEO',
+    'King', 'Archduke', 'Knight', 'Admiral', 'Marshal', 'Captain', 'Maestro',
     'Astronaut', 'Detective',
   ],
 

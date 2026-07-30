@@ -105,7 +105,7 @@ so the service is pinned `min=max=1`. Firestore can't drive the real-time loop
 ## Player names
 
 Names are auto-generated as title + animal + adjective + `#seq`
-(`Baronesa Capivara Furiosa #47`, `Intern Furious Capybara #47`) in the
+(`Baronesa Capivara Furiosa #47`, `Archduke Furious Capybara #47`) in the
 **player's own language** — Portuguese, Spanish, English, French, Italian or
 German, taken from the browser's `Accept-Language`. Anything else falls back to
 English: those six are what the self-hosted Roboto renders, and a readable name
@@ -121,14 +121,16 @@ a certainty by 5.000.) Past 28.800 the deal restarts and `#seq`, which never
 repeats, keeps the label unique. Each `reset` re-shuffles, so the same room
 playing twice does not see the same names.
 
-The titles are seven ranks of nobility, four dramatic ones and five jobs with no
-glamour whatsoever — `Barão`, `Imperatriz`, `Almirante`, `Maestro`, and then
-`Estagiária`, `Auditor`, `CEO`, `Astronauta`, `Detetive`. That last group is
-where the joke lives: `Estagiária Capivara Furiosa` on a projector is funnier
-than any adjective can be. Nothing religious and nothing from 20th-century
-politics is allowed in the list, and `test/names.test.js` enforces that too — a
-title is funny when it is pompous, not when it is somebody's faith or somebody's
-dictator.
+The titles are ten ranks of nobility (`Barão`, `Imperatriz`, `Rainha`,
+`Arquiduque`, `Cavaleira`…), four dramatic ones (`Almirante`, `Marechal`,
+`Capitã`, `Maestro`) and two adventurous (`Astronauta`, `Detetive`). The
+pomposity is the joke: `Arquiduquesa Capivara Furiosa` on a projector is funnier
+than any adjective can be. Office jobs were tried and cut — `CEO`, `Auditor` and
+`Estagiária` land as a comment on the person holding the phone, which is the one
+thing this naming scheme exists to avoid. Nothing religious and nothing from
+20th-century politics is allowed either, and `test/names.test.js` enforces that
+— a title is funny when it is pompous, not when it is somebody's faith or
+somebody's dictator.
 
 **Title and adjective both agree with the animal's grammatical gender**, so the
 whole phrase lines up: `Barão Lobo Furioso` / `Baronesa Capivara Furiosa`, and
@@ -140,7 +142,7 @@ noun, never from the player. It is the capybara that is a baroness.
 Every form is written out in `src/locales/*.js` rather than derived by a suffix
 rule, because a rule clean enough to write is a rule that turns `Imperador` into
 "Imperadora" instead of `Imperatriz`. Titles with no feminine form in real usage
-(`Almirante`, `Stagista`, `CEO`) simply repeat the one they have. To add a
+(`Almirante`, `Marechal`, `Detective`) simply repeat the one they have. To add a
 language: copy a locale file, translate all 45 animals from
 `src/locales/animals.js`, supply the same 40 adjectives and 16 titles with a
 form per gender, and register it in `src/names.js` — a missing animal or a short
