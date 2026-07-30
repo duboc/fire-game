@@ -190,6 +190,15 @@ try {
   await sleep(400);
   ok((await host.textContent('#msg')).includes('Round started'), 'the cookie alone drives a second round');
 
+  // 5 s is the shortest round the panel offers — a warm-up heat. selectOption
+  // throws if the option is missing, so this covers both "the panel offers it"
+  // and "the server honours it" without asserting on markup.
+  await host.selectOption('#dur', '5000');
+  await host.click('#start');
+  await sleep(400);
+  const short = await (await fetch(B + '/state')).json();
+  ok(short.durationMs === 5000, `the panel's 5 s option starts a 5 s round (${short.durationMs}ms)`);
+
   await host.click('#logout');
   await host.waitForSelector('#authbox:not([hidden])', { timeout: 5000 });
   ok(await host.isHidden('#authok'), 'logout returns the page to the password prompt');
