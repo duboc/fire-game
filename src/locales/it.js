@@ -1,5 +1,6 @@
-// Italian. Adjective follows the noun and agrees with its gender; the epithet
-// trails as a noun in apposition and never inflects.
+// Italian: title + animal + adjective ("Baronessa Zebra Mistica"). Title and
+// adjective both agree with the *animal's* grammatical gender, so the phrase
+// lines up with itself — it is the zebra that is a baroness, never the player.
 // Note `tigre`, `volpe` and `ape` are feminine — a false friend for anyone
 // reading across from the Portuguese list.
 import { GENDER_INDEX } from './animals.js';
@@ -42,10 +43,18 @@ export default {
     ['Ferreo', 'Ferrea'],
   ],
 
-  nouns: [
-    'Ninja', 'Laser', 'Turbo', 'Tuono', 'Fulmine', 'Uragano', 'Razzo', 'Vulcano',
-    'Ciclone', 'Tsunami', 'Nitro', 'Plasma', 'Neon', 'Titano', 'Fenice', 'Vortice',
+  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
+  // are the joke ("Stagista Zebra Mistica"). Nothing religious and nothing from
+  // 20th-century politics: no Duce anywhere near this list.
+  titles: [
+    ['Barone', 'Baronessa'], ['Duca', 'Duchessa'], ['Conte', 'Contessa'],
+    ['Visconte', 'Viscontessa'], ['Marchese', 'Marchesa'], ['Imperatore', 'Imperatrice'],
+    ['Principe', 'Principessa'], ['Ammiraglio', 'Ammiraglio'], ['Maresciallo', 'Maresciallo'],
+    ['Capitano', 'Capitana'], ['Maestro', 'Maestra'], ['Stagista', 'Stagista'],
+    ['Revisore', 'Revisore'], ['CEO', 'CEO'], ['Astronauta', 'Astronauta'],
+    ['Detective', 'Detective'],
   ],
 
-  compose: (animal, adj, noun) => `${animal.name} ${adj[GENDER_INDEX[animal.g]]} ${noun}`,
+  compose: (animal, adj, title) =>
+    `${title[GENDER_INDEX[animal.g]]} ${animal.name} ${adj[GENDER_INDEX[animal.g]]}`,
 };

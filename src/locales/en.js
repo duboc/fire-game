@@ -1,6 +1,6 @@
 // English, and the fallback for every language this app does not speak.
-// No agreement to worry about, so adjectives are plain strings. Both modifiers
-// precede the animal — "Furious Ninja Capybara", gamer-tag word order.
+// No agreement to worry about, so adjectives and titles are plain strings.
+// Title first, then adjective, then animal — "Baron Mystic Zebra".
 
 export default {
   code: 'en',
@@ -33,10 +33,14 @@ export default {
     'Rapid', 'Titanic', 'Golden', 'Iron',
   ],
 
-  nouns: [
-    'Ninja', 'Laser', 'Turbo', 'Thunder', 'Lightning', 'Hurricane', 'Rocket', 'Volcano',
-    'Cyclone', 'Tsunami', 'Nitro', 'Plasma', 'Neon', 'Titan', 'Phoenix', 'Vortex',
+  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
+  // are the joke ("Intern Furious Capybara"). Nothing religious and nothing
+  // from 20th-century politics. Plain strings: English titles do not inflect.
+  titles: [
+    'Baron', 'Duke', 'Count', 'Viscount', 'Marquis', 'Emperor', 'Prince',
+    'Admiral', 'Marshal', 'Captain', 'Maestro', 'Intern', 'Auditor', 'CEO',
+    'Astronaut', 'Detective',
   ],
 
-  compose: (animal, adj, noun) => `${adj} ${noun} ${animal.name}`,
+  compose: (animal, adj, title) => `${title} ${adj} ${animal.name}`,
 };

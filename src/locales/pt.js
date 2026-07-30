@@ -1,9 +1,10 @@
-// Portuguese. Adjective follows the noun and agrees with its gender; the
-// epithet trails as a noun in apposition and never inflects.
+// Portuguese: title + animal + adjective ("Baronesa Zebra Mística"). Title and
+// adjective both agree with the *animal's* grammatical gender, so the phrase
+// lines up with itself — it is the zebra that is a baroness, never the player.
 //
-// Both adjective forms are written out rather than derived. A "-o becomes -a"
-// rule looks clean and then mangles Turbo, Laser and Relâmpago — which is
-// exactly why those moved to `nouns`, where nothing has to agree with anything.
+// Every form is written out rather than derived. A "-o becomes -a" rule looks
+// clean right up until it turns Imperador into "Imperadora" and Capitão into
+// "Capitãoa".
 import { GENDER_INDEX } from './animals.js';
 
 export default {
@@ -44,10 +45,19 @@ export default {
     ['Férreo', 'Férrea'],
   ],
 
-  nouns: [
-    'Ninja', 'Laser', 'Turbo', 'Trovão', 'Relâmpago', 'Furacão', 'Foguete', 'Vulcão',
-    'Ciclone', 'Tsunami', 'Nitro', 'Plasma', 'Neon', 'Titã', 'Fênix', 'Vórtice',
+  // Nobility, then dramatic ranks, then jobs with no glamour at all — the last
+  // five are the joke ("Estagiária Capivara Furiosa"). Nothing religious and
+  // nothing from 20th-century politics: a title is funny when it is pompous,
+  // not when it is somebody's actual flag.
+  titles: [
+    ['Barão', 'Baronesa'], ['Duque', 'Duquesa'], ['Conde', 'Condessa'],
+    ['Visconde', 'Viscondessa'], ['Marquês', 'Marquesa'], ['Imperador', 'Imperatriz'],
+    ['Príncipe', 'Princesa'], ['Almirante', 'Almirante'], ['Marechal', 'Marechal'],
+    ['Capitão', 'Capitã'], ['Maestro', 'Maestrina'], ['Estagiário', 'Estagiária'],
+    ['Auditor', 'Auditora'], ['CEO', 'CEO'], ['Astronauta', 'Astronauta'],
+    ['Detetive', 'Detetive'],
   ],
 
-  compose: (animal, adj, noun) => `${animal.name} ${adj[GENDER_INDEX[animal.g]]} ${noun}`,
+  compose: (animal, adj, title) =>
+    `${title[GENDER_INDEX[animal.g]]} ${animal.name} ${adj[GENDER_INDEX[animal.g]]}`,
 };

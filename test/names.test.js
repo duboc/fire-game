@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   makeNameFactory, normalizeLocale, renderSlot, SUPPORTED, DEFAULT_LOCALE,
-  COMBINATIONS, ADJECTIVE_COUNT, NOUN_COUNT,
+  COMBINATIONS, ADJECTIVE_COUNT, TITLE_COUNT,
 } from '../src/names.js';
 import { ROSTER, GENDER_INDEX } from '../src/locales/animals.js';
 import de from '../src/locales/de.js';
@@ -15,8 +15,8 @@ import pt from '../src/locales/pt.js';
 const MODULES = { de, en, es, fr, it, pt };
 
 /** The slot index of one exact combination — animal varies fastest. */
-const slotFor = (key, adjIdx = 0, nounIdx = 0) =>
-  ROSTER.findIndex((a) => a.key === key) + ROSTER.length * (adjIdx + ADJECTIVE_COUNT * nounIdx);
+const slotFor = (key, adjIdx = 0, titleIdx = 0) =>
+  ROSTER.findIndex((a) => a.key === key) + ROSTER.length * (adjIdx + ADJECTIVE_COUNT * titleIdx);
 
 test('sequence numbers are unique and monotonic', () => {
   const next = makeNameFactory();
@@ -95,14 +95,15 @@ test('every locale translates the whole roster', () => {
   }
 });
 
-test('every locale offers the same number of adjectives and epithets', () => {
+test('every locale offers the same number of adjectives and titles', () => {
   // A short list would make one slot index mean two different names, and the
   // locale is only known after the slot has been dealt.
+  const lead = (t) => (Array.isArray(t) ? t[0] : t);
   for (const [code, mod] of Object.entries(MODULES)) {
     assert.equal(mod.adjectives.length, ADJECTIVE_COUNT, `locale "${code}" adjectives`);
-    assert.equal(mod.nouns.length, NOUN_COUNT, `locale "${code}" epithets`);
-    assert.equal(new Set(mod.nouns).size, NOUN_COUNT, `locale "${code}" repeats an epithet`);
-    for (const noun of mod.nouns) assert.ok(noun.length > 0);
+    assert.equal(mod.titles.length, TITLE_COUNT, `locale "${code}" titles`);
+    assert.equal(new Set(mod.titles.map(lead)).size, TITLE_COUNT, `locale "${code}" repeats a title`);
+    for (const title of mod.titles) assert.ok(lead(title).length > 0);
   }
 });
 
@@ -151,35 +152,64 @@ test('slurs and body jokes stay out of the roster', () => {
   }
 });
 
+test('titles stay pompous, never sacred and never political', () => {
+  // A title is funny when it is puffed up (Estagiária Capivara Furiosa) and
+  // ugly when it is someone's faith or someone's dictator. The policy is
+  // written in each locale file; this is what keeps it true.
+  const BLOCKED = new Set([
+    'führer', 'fuhrer', 'duce', 'caudillo', 'reichsführer',
+    'czar', 'zar', 'tsar', 'zsar',
+    'papa', 'pope', 'cardeal', 'cardenal', 'cardinal', 'kardinal',
+    'bispo', 'obispo', 'évêque', 'vescovo', 'bischof', 'bishop',
+    'imam', 'imã', 'ayatollah', 'rabino', 'rabbi', 'rabbiner',
+    'santo', 'santa', 'saint', 'sainte', 'heiliger',
+    'messias', 'messiah', 'profeta', 'prophet',
+  ]);
+  for (const [code, mod] of Object.entries(MODULES)) {
+    for (const title of mod.titles) {
+      for (const form of Array.isArray(title) ? title : [title]) {
+        assert.ok(!BLOCKED.has(form.toLowerCase()), `locale "${code}" offers the title "${form}"`);
+      }
+    }
+  }
+});
+
 test('the same animal carries the same emoji in every language', () => {
   for (let i = 0; i < ROSTER.length; i++) {
-    // Slots 0..44 are the animals in order, all with adjective 0 and epithet 0.
+    // Slots 0..44 are the animals in order, all with adjective 0 and title 0.
     const seen = new Set(SUPPORTED.map((code) => renderSlot(code, i).emoji));
     assert.equal(seen.size, 1, `animal ${i} disagrees on emoji across locales`);
     assert.equal([...seen][0], ROSTER[i].emoji);
   }
 });
 
-test('every adjective supplies a form for each gender the locale uses', () => {
+test('every adjective and title supplies a form for each gender the locale uses', () => {
   const forms = { pt: 2, es: 2, it: 2, fr: 2, de: 3 };
   for (const [code, arity] of Object.entries(forms)) {
     for (const adj of MODULES[code].adjectives) {
       assert.equal(adj.length, arity, `locale "${code}": "${adj[0]}" has ${adj.length} forms`);
       for (const form of adj) assert.ok(form.length > 0);
     }
+    // Titles inflect too now — Barão/Baronesa, Praktikant/Praktikantin — so a
+    // missing form would render `undefined` next to the animal.
+    for (const title of MODULES[code].titles) {
+      assert.equal(title.length, arity, `locale "${code}": "${title[0]}" has ${title.length} forms`);
+      for (const form of title) assert.ok(form.length > 0);
+    }
   }
   for (const adj of en.adjectives) assert.equal(typeof adj, 'string');
+  for (const title of en.titles) assert.equal(typeof title, 'string');
 });
 
 // ------------------------------------------------------------------- grammar
 test('adjectives agree with the gender of the animal', () => {
   const cases = [
     // [locale, animal key, expected name] — adjective 0 is the "Furioso"
-    // family and epithet 0 is "Ninja" in all four lists.
-    ['pt', 'capybara', 'Capivara Furiosa Ninja'],
-    ['es', 'seal', 'Foca Furiosa Ninja'],
-    ['it', 'tiger', 'Tigre Furiosa Ninja'],
-    ['fr', 'bee', 'Abeille Furieuse Ninja'],
+    // family and title 0 is the "Barão" family in all four lists.
+    ['pt', 'capybara', 'Baronesa Capivara Furiosa'],
+    ['es', 'seal', 'Baronesa Foca Furiosa'],
+    ['it', 'tiger', 'Baronessa Tigre Furiosa'],
+    ['fr', 'bee', 'Baronne Abeille Furieuse'],
   ];
   for (const [code, key, expected] of cases) {
     assert.equal(renderSlot(code, slotFor(key)).name, expected, `${code} failed agreement`);
@@ -187,30 +217,44 @@ test('adjectives agree with the gender of the animal', () => {
 });
 
 test('masculine animals keep the masculine adjective', () => {
-  assert.equal(renderSlot('pt', slotFor('wolf')).name, 'Lobo Furioso Ninja');
+  assert.equal(renderSlot('pt', slotFor('wolf')).name, 'Barão Lobo Furioso');
 });
 
 test('German declines strongly across all three genders', () => {
-  assert.equal(renderSlot('de', slotFor('wolf')).name, 'Wütender Ninja Wolf'); // m
-  assert.equal(renderSlot('de', slotFor('owl')).name, 'Wütende Ninja Eule'); // f
-  assert.equal(renderSlot('de', slotFor('kangaroo')).name, 'Wütendes Ninja Känguru'); // n
+  assert.equal(renderSlot('de', slotFor('wolf')).name, 'Baron Wütender Wolf'); // m
+  assert.equal(renderSlot('de', slotFor('owl')).name, 'Baronin Wütende Eule'); // f
+  // Neuter animal, masculine title: German has no neuter one, and the
+  // adjective still agrees with the animal, which is the head noun.
+  assert.equal(renderSlot('de', slotFor('kangaroo')).name, 'Baron Wütendes Känguru'); // n
 });
 
-test('the epithet never inflects, whatever the animal', () => {
-  // "Relâmpago" stays "Relâmpago" next to a feminine animal — the reason it is
-  // a noun in apposition and not an adjective.
-  const relampago = pt.nouns.indexOf('Relâmpago');
-  assert.ok(relampago >= 0);
-  assert.equal(renderSlot('pt', slotFor('capybara', 0, relampago)).name, 'Capivara Furiosa Relâmpago');
-  assert.equal(renderSlot('pt', slotFor('wolf', 0, relampago)).name, 'Lobo Furioso Relâmpago');
+test('the title agrees with the animal, like the adjective does', () => {
+  // The whole phrase lines up on one gender — it is the capybara that is a
+  // baroness, not the person holding the phone.
+  assert.equal(renderSlot('pt', slotFor('capybara')).name, 'Baronesa Capivara Furiosa');
+  assert.equal(renderSlot('pt', slotFor('wolf')).name, 'Barão Lobo Furioso');
+  // The joke title inflects too.
+  const intern = pt.titles.findIndex(([m]) => m === 'Estagiário');
+  assert.ok(intern >= 0);
+  assert.equal(renderSlot('pt', slotFor('capybara', 0, intern)).name, 'Estagiária Capivara Furiosa');
+  assert.equal(renderSlot('pt', slotFor('wolf', 0, intern)).name, 'Estagiário Lobo Furioso');
+});
+
+test('an epicene title keeps one form for both genders', () => {
+  // "Almirante" has no feminine form to give it, and inventing one would be
+  // worse than reusing it.
+  const admiral = pt.titles.findIndex(([m]) => m === 'Almirante');
+  assert.ok(admiral >= 0);
+  assert.equal(renderSlot('pt', slotFor('capybara', 0, admiral)).name, 'Almirante Capivara Furiosa');
+  assert.equal(renderSlot('pt', slotFor('wolf', 0, admiral)).name, 'Almirante Lobo Furioso');
 });
 
 test('word order follows the language, not the code', () => {
   const first = (code) => renderSlot(code, 0).name;
-  assert.equal(first('pt'), 'Pinguim Furioso Ninja'); // romance: animal first
-  assert.equal(first('en'), 'Furious Ninja Penguin'); // germanic: modifiers first
-  assert.equal(first('de'), 'Wütender Ninja Pinguin');
-  assert.ok(first('fr').startsWith('Manchot'));
+  assert.equal(first('pt'), 'Barão Pinguim Furioso'); // romance: adjective trails
+  assert.equal(first('en'), 'Baron Furious Penguin'); // germanic: modifiers lead
+  assert.equal(first('de'), 'Baron Wütender Pinguin');
+  assert.equal(first('fr'), 'Baron Manchot Furieux');
 });
 
 test('German gender tags only ever use forms that exist', () => {

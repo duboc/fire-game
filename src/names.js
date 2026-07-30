@@ -1,12 +1,12 @@
-// Auto-generated player identities — adjective + animal + epithet + `#seq`, in
-// the player's own language. No user input, no moderation, no keyboard on
-// mobile.
+// Auto-generated player identities — title + animal + adjective + `#seq`, in
+// the player's own language ("Baronesa Zebra Mística", "Intern Furious
+// Capybara"). No user input, no moderation, no keyboard on mobile.
 //
 // Two different guarantees, deliberately kept apart:
 //   - the `#seq` suffix makes the *label* unique, always, forever;
 //   - the words themselves are dealt from a shuffled permutation of the whole
 //     grid, so the first COMBINATIONS players also get a unique *name*. At
-//     45 animals x 40 adjectives x 16 epithets that is 28.800 — an event would
+//     45 animals x 40 adjectives x 16 titles that is 28.800 — an event would
 //     have to fill six times over before anyone sees a repeat.
 // Drawing at random would not do that: with 5.000 players out of 28.800 slots,
 // the birthday bound puts a collision at essentially certainty.
@@ -46,18 +46,18 @@ for (const [code, locale] of LOCALES) {
 // a player's locale is only known after the slot has been handed out. So the
 // lists must be the same length everywhere; a short list is a boot error.
 export const ADJECTIVE_COUNT = en.adjectives.length;
-export const NOUN_COUNT = en.nouns.length;
+export const TITLE_COUNT = en.titles.length;
 for (const [code, locale] of LOCALES) {
   if (locale.adjectives.length !== ADJECTIVE_COUNT) {
     throw new Error(`locale "${code}" has ${locale.adjectives.length} adjectives, expected ${ADJECTIVE_COUNT}`);
   }
-  if (locale.nouns.length !== NOUN_COUNT) {
-    throw new Error(`locale "${code}" has ${locale.nouns.length} epithets, expected ${NOUN_COUNT}`);
+  if (locale.titles.length !== TITLE_COUNT) {
+    throw new Error(`locale "${code}" has ${locale.titles.length} titles, expected ${TITLE_COUNT}`);
   }
 }
 
 /** How many distinct names exist. Every event must fit inside this. */
-export const COMBINATIONS = ROSTER.length * ADJECTIVE_COUNT * NOUN_COUNT;
+export const COMBINATIONS = ROSTER.length * ADJECTIVE_COUNT * TITLE_COUNT;
 
 /**
  * Maps anything a client might send to a supported locale tag.
@@ -91,16 +91,16 @@ export function normalizeLocale(input) {
  */
 export function renderSlot(code, slot) {
   const animals = ANIMALS_BY_LOCALE.get(code);
-  const { adjectives, nouns, compose } = LOCALES.get(code);
+  const { adjectives, titles, compose } = LOCALES.get(code);
 
   // Animal varies fastest, so consecutive slots look maximally different.
   const ai = slot % animals.length;
   const rest = (slot - ai) / animals.length;
   const ji = rest % ADJECTIVE_COUNT;
-  const ni = (rest - ji) / ADJECTIVE_COUNT;
+  const ti = (rest - ji) / ADJECTIVE_COUNT;
 
   const animal = animals[ai];
-  return { name: compose(animal, adjectives[ji], nouns[ni]), emoji: animal.emoji };
+  return { name: compose(animal, adjectives[ji], titles[ti]), emoji: animal.emoji };
 }
 
 /** Fisher-Yates over [0, COMBINATIONS). ~115 kB and a millisecond, once per round. */

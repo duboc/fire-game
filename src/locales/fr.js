@@ -1,5 +1,6 @@
-// French. Adjective follows the noun and agrees with its gender; the epithet
-// trails as a noun in apposition and never inflects.
+// French: title + animal + adjective ("Baronne Zèbre Mystique"). Title and
+// adjective both agree with the *animal's* grammatical gender, so the phrase
+// lines up with itself — it is the zebra that is a baroness, never the player.
 //
 // Feminine forms are irregular often enough (explosif -> explosive, immortel ->
 // immortelle, furieux -> furieuse) that deriving them would be guesswork.
@@ -44,10 +45,18 @@ export default {
     ['Inflexible', 'Inflexible'],
   ],
 
-  nouns: [
-    'Ninja', 'Laser', 'Turbo', 'Tonnerre', 'Éclair', 'Ouragan', 'Fusée', 'Volcan',
-    'Cyclone', 'Tsunami', 'Nitro', 'Plasma', 'Néon', 'Titan', 'Phénix', 'Vortex',
+  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
+  // are the joke ("Stagiaire Zèbre Mystique"). Nothing religious and nothing
+  // from 20th-century politics.
+  titles: [
+    ['Baron', 'Baronne'], ['Duc', 'Duchesse'], ['Comte', 'Comtesse'],
+    ['Vicomte', 'Vicomtesse'], ['Marquis', 'Marquise'], ['Empereur', 'Impératrice'],
+    ['Prince', 'Princesse'], ['Amiral', 'Amirale'], ['Maréchal', 'Maréchale'],
+    ['Capitaine', 'Capitaine'], ['Maestro', 'Maestro'], ['Stagiaire', 'Stagiaire'],
+    ['Auditeur', 'Auditrice'], ['PDG', 'PDG'], ['Astronaute', 'Astronaute'],
+    ['Détective', 'Détective'],
   ],
 
-  compose: (animal, adj, noun) => `${animal.name} ${adj[GENDER_INDEX[animal.g]]} ${noun}`,
+  compose: (animal, adj, title) =>
+    `${title[GENDER_INDEX[animal.g]]} ${animal.name} ${adj[GENDER_INDEX[animal.g]]}`,
 };

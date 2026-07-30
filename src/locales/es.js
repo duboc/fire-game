@@ -1,5 +1,6 @@
-// Spanish. Adjective follows the noun and agrees with its gender; the epithet
-// trails as a noun in apposition and never inflects.
+// Spanish: title + animal + adjective ("Baronesa Cebra Mística"). Title and
+// adjective both agree with the *animal's* grammatical gender, so the phrase
+// lines up with itself — it is the zebra that is a baroness, never the player.
 import { GENDER_INDEX } from './animals.js';
 
 export default {
@@ -40,10 +41,18 @@ export default {
     ['Férreo', 'Férrea'],
   ],
 
-  nouns: [
-    'Ninja', 'Láser', 'Turbo', 'Trueno', 'Relámpago', 'Huracán', 'Cohete', 'Volcán',
-    'Ciclón', 'Tsunami', 'Nitro', 'Plasma', 'Neón', 'Titán', 'Fénix', 'Vórtice',
+  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
+  // are the joke ("Becaria Cebra Furiosa"). Nothing religious and nothing from
+  // 20th-century politics.
+  titles: [
+    ['Barón', 'Baronesa'], ['Duque', 'Duquesa'], ['Conde', 'Condesa'],
+    ['Vizconde', 'Vizcondesa'], ['Marqués', 'Marquesa'], ['Emperador', 'Emperatriz'],
+    ['Príncipe', 'Princesa'], ['Almirante', 'Almirante'], ['Mariscal', 'Mariscal'],
+    ['Capitán', 'Capitana'], ['Maestro', 'Maestra'], ['Becario', 'Becaria'],
+    ['Auditor', 'Auditora'], ['CEO', 'CEO'], ['Astronauta', 'Astronauta'],
+    ['Detective', 'Detective'],
   ],
 
-  compose: (animal, adj, noun) => `${animal.name} ${adj[GENDER_INDEX[animal.g]]} ${noun}`,
+  compose: (animal, adj, title) =>
+    `${title[GENDER_INDEX[animal.g]]} ${animal.name} ${adj[GENDER_INDEX[animal.g]]}`,
 };

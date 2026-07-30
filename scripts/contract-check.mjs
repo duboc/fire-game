@@ -376,7 +376,7 @@ try {
       for (const { key } of ROSTER) {
         const [word, g = 'm'] = mod.animals[key];
         for (const adj of mod.adjectives) {
-          for (const noun of mod.nouns) set.add(mod.compose({ name: word, g }, adj, noun));
+          for (const title of mod.titles) set.add(mod.compose({ name: word, g }, adj, title));
         }
       }
       legal.set(code, set);

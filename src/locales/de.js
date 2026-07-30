@@ -2,10 +2,11 @@
 // takes the *strong* declension: -er masculine, -e feminine, -es neuter.
 // Hence three forms per adjective, and a third gender on the animals.
 //
-// The epithet sits between adjective and animal ("Wütender Ninja Wolf"). Proper
-// German would compound it into "Ninjawolf"; three separate words is the
-// nickname register, and it keeps the animal as the head noun the adjective
-// agrees with.
+// The title leads, and the animal stays the head noun the adjective agrees
+// with: "Baron Wütendes Känguru" — title, then the animal phrase used as a
+// name, the way "Kaiser Wilhelm" works. The title itself also follows the
+// animal's gender, except that neuter animals take the masculine title, since
+// German has no neuter one.
 import { GENDER_INDEX } from './animals.js';
 
 export default {
@@ -52,10 +53,21 @@ export default {
     ['Goldener', 'Goldene', 'Goldenes'], ['Eiserner', 'Eiserne', 'Eisernes'],
   ],
 
-  nouns: [
-    'Ninja', 'Laser', 'Turbo', 'Donner', 'Blitz', 'Orkan', 'Rakete', 'Vulkan',
-    'Zyklon', 'Tsunami', 'Nitro', 'Plasma', 'Neon', 'Titan', 'Phönix', 'Vortex',
+  // Nobility, dramatic ranks, then jobs with no glamour at all — the last five
+  // are the joke ("Praktikant Wütendes Känguru"). Third form is the neuter
+  // slot, which reuses the masculine word. Nothing religious, and nothing from
+  // 20th-century politics: no Führer, no Reichs-anything, ever.
+  titles: [
+    ['Baron', 'Baronin', 'Baron'], ['Herzog', 'Herzogin', 'Herzog'],
+    ['Graf', 'Gräfin', 'Graf'], ['Vizegraf', 'Vizegräfin', 'Vizegraf'],
+    ['Markgraf', 'Markgräfin', 'Markgraf'], ['Kaiser', 'Kaiserin', 'Kaiser'],
+    ['Prinz', 'Prinzessin', 'Prinz'], ['Admiral', 'Admiralin', 'Admiral'],
+    ['Marschall', 'Marschallin', 'Marschall'], ['Kapitän', 'Kapitänin', 'Kapitän'],
+    ['Maestro', 'Maestra', 'Maestro'], ['Praktikant', 'Praktikantin', 'Praktikant'],
+    ['Prüfer', 'Prüferin', 'Prüfer'], ['CEO', 'CEO', 'CEO'],
+    ['Astronaut', 'Astronautin', 'Astronaut'], ['Detektiv', 'Detektivin', 'Detektiv'],
   ],
 
-  compose: (animal, adj, noun) => `${adj[GENDER_INDEX[animal.g]]} ${noun} ${animal.name}`,
+  compose: (animal, adj, title) =>
+    `${title[GENDER_INDEX[animal.g]]} ${adj[GENDER_INDEX[animal.g]]} ${animal.name}`,
 };

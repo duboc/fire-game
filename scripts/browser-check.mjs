@@ -12,7 +12,7 @@ const legalNames = (loc) => {
   for (const { key } of ROSTER) {
     const [word, g = 'm'] = loc.animals[key];
     for (const adj of loc.adjectives) {
-      for (const noun of loc.nouns) out.add(loc.compose({ name: word, g }, adj, noun));
+      for (const title of loc.titles) out.add(loc.compose({ name: word, g }, adj, title));
     }
   }
   return out;
@@ -224,6 +224,23 @@ try {
   const finalShown = Number((await phone.textContent('#count')).replace(/\D/g, ''));
   ok(finalShown === serverTaps, `phone (${finalShown}) agrees with server (${serverTaps})`);
   ok((await screen.textContent('#champlabel')).includes('Champion'), 'screen revealed the champion');
+
+  {
+    // Titles made names longer (39 characters at worst, "Praktikant
+    // Unerbittlicher Tyrannosaurus"). The champion card is the one place a
+    // name is rendered at 84px, so it is the one place it can shove itself off
+    // the projector. Measured, not eyeballed — with the worst name there is.
+    const longest = [...legalNames(itLocale)].reduce((a, b) => (b.length > a.length ? b : a), '');
+    const overflow = await screen.evaluate((name) => {
+      const card = document.getElementById('champ');
+      const nm = card.querySelector('.nm');
+      if (!nm) return { skipped: true };
+      nm.textContent = name;
+      return { skipped: false, cardRight: card.getBoundingClientRect().right, vw: window.innerWidth };
+    }, longest);
+    ok(!overflow.skipped && overflow.cardRight <= overflow.vw,
+      `the longest name (${longest.length} chars) stays on screen: card ends at ${Math.round(overflow.cardRight)} of ${overflow.vw}px`);
+  }
 
   console.log('\n== reset clears the room and the phone finds its way back ==');
   {
