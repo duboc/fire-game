@@ -274,3 +274,107 @@ mistake five more times, so agreement is designed in rather than bolted on:
       Mutation-checked: reverting `compose` to the old always-masculine form
       fails the agreement test, and deleting one animal from a locale fails at
       boot rather than rendering `undefined`.
+
+## Batucada — a Simon Says companion game
+
+Executes `docs/BATUCADA_SPEC.md`. Ships next to Tap Race, in the same process:
+new files only, no changes to Tap Race's routes, `src/game.js`, or existing
+public pages except `public/host.html` (extended with a second panel, not
+replaced). Two things the spec left implicit, resolved here:
+
+- **One process, one password.** Same Express app, same Cloud Run instance —
+  no reason to stand up a second service for one more in-memory game. Reuses
+  the existing session cookie / `checkAdmin`.
+- **No second timer.** The existing 100ms `tickTimer` also drives Batucada's
+  `tick()` + SSE broadcast, rather than a second clock that can drift against
+  the first.
+- Persistence (`onEnded` → Firestore) is **out of scope for v1**.
+
+### Engine (test-first)
+
+- [x] `test/batucada.test.js`: failing tests for `src/batucada.js` covering —
+  phase transitions on injected `now` (`LOBBY -> COUNTDOWN -> MEMORIZE(1) ->
+  RECALL(1) -> REVEAL(1) -> MEMORIZE(2) -> ...`, same time-injected purity as
+  `Game`); an injectable `sequenceFactory` (mirrors `nameFactory`) so rounds are
+  deterministic in tests; grading (full match keeps a player alive and sets
+  `roundsCleared`, partial/no match sets `alive:false` + `eliminatedRound` +
+  `prefixMatched`); ranking/tiebreak — `roundsCleared` desc, `prefixMatched`
+  desc, `elapsedMs` asc, `seq` asc — including several players eliminated in
+  the *same* round; end of game at `aliveCount <= 1` or at `maxRounds` (with
+  survivors still ranked correctly, no special-casing); a join arriving after
+  `COUNTDOWN` is `alive:false`/`roundsCleared:0` immediately — spectator from
+  the start, never injected into a round in progress; a duplicate `/recall`
+  for the same player/round is a no-op; `reset()` matches `Game.reset()`.
+- [x] `src/batucada.js`: `PHASE`, `DEFAULTS`, class `Batucada` (`join`,
+  `recall`, `start`, `reset`, `tick`, `publicState`, `playerView`) until green.
+  9/9 new tests pass on first implementation; full suite 64/64 green, no
+  regressions in Tap Race's tests. Sequence randomness is injectable via an
+  `rng(n)` option (integer in `[0,n)`) rather than a `sequenceFactory` —
+  same determinism goal as `nameFactory`, simpler contract, no float precision
+  edge cases in tests.
+
+### Server integration
+
+- [x] `src/server.js`: construct `const batucada = new Batucada({...})` next to
+  `game`.
+- [x] Routes, additive only: `POST /batucada/join`, `POST /batucada/recall`
+  `{id, sequence}`, `GET /batucada/state?id=` (pure read, no `tick()` on the
+  request path — same reason as `/state` today), `GET /batucada/events` (SSE,
+  its own client `Set`), `POST /batucada/admin/start` (no `durationMs` — round
+  length is derived from the round number) / `POST /batucada/admin/reset`
+  (both reuse `checkAdmin`).
+- [x] Extend the existing `tickTimer` callback to also `batucada.tick(now)` +
+  broadcast to Batucada's SSE set.
+- [x] Add the new static pages to the `precompress()` calls.
+
+### Client pages
+
+- [x] Define the shared instrument list once — `surdo, pandeiro, cuica, agogo,
+  tamborim, reco-reco` — as the single source both the engine (wire format is
+  indices into this array) and the client pages render from; order must match
+  exactly on both ends. Colors: 4 reused Google colors from `theme.css` plus
+  two custom accents (`#A142F4` purple, `#00BCD4` cyan) since only 6 distinct
+  Google-brand colors don't exist; instrument name is always shown as text so
+  identification never depends on color alone.
+- [x] `public/batucada/phone.html`: join, then render by phase — waiting
+  (lobby/countdown), "watch the screen" (memorize, no input), instrument grid
+  that builds and auto-submits a sequence on tap (recall), your result + live
+  `aliveCount` (reveal, and continuously as a spectator after elimination
+  through to ended), final rank (ended). Uses a simple raw clock offset
+  (`serverNow - Date.now()`, no RTT compensation) since it only drives a
+  cosmetic progress bar — grading is gated server-side by the `/recall` POST's
+  own arrival time, never by the phone's local phase guess.
+- [x] `public/batucada/screen.html`: lobby QR + count, countdown, flash the
+  sequence (memorize), countdown + `aliveCount` (recall), who fell this round
+  (reveal), final ranking + winner (ended) — reuse `theme.css` and the
+  confetti/QR patterns already in `screen.html`. Uses full NTP-style clock
+  sync (like Tap Race's screen.html) because the flash animation genuinely
+  needs the precision; a single client, so the extra `/batucada/state` sample
+  is free.
+- [x] Extend `public/host.html` with a second panel (start/reset for
+  Batucada), reusing the existing login/session UI.
+- Added two fields to the engine beyond the original spec, discovered while
+  building the clients: `memorizeStartsAt` + `symbolOnMs`/`symbolGapMs` on
+  `publicState`/`playerView` (the screen needs a start timestamp and the
+  per-symbol timing to animate the flash — a total duration alone isn't
+  enough), and `yourRank` on `playerView` once `ENDED` (so the client never
+  has to reimplement the tiebreak chain itself). Both covered by new engine
+  tests before implementation.
+
+### Verification
+
+- [x] `npm test` green — 65/65 (10 Batucada engine tests).
+- [x] Manual run: Playwright end-to-end through `/batucada/` — host login,
+  start, countdown, the sequence flash read directly off the rendered tiles
+  (not the API, since the screen never exposes it elsewhere), one phone
+  answering correctly and one deliberately wrong, live elimination, the
+  spectator view, the champion screen, and the host panel's live status.
+  Found and fixed one real bug this way: the screen's podium list said "1
+  rodadas" instead of "1 rodada" (the champion card already had the
+  singular/plural check; the podium loop didn't).
+- [x] Extend `npm run check:contract` with the new routes' happy path:
+  `/batucada/join` identity shape, `/batucada/state` known/unknown, admin auth
+  enforced on `/batucada/admin/start`, `/batucada/recall` self-heals an
+  unknown id, `/batucada/events` pushes a valid `publicState` SSE frame on
+  connect, and `/batucada/admin/reset` clears the room. 173/173 assertions
+  green (10 new).

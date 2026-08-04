@@ -1,0 +1,199 @@
+# Batucada — a Simon Says companion to Tap Race
+
+A second game, shipped **alongside** Tap Race (separate routes, separate engine,
+separate client pages), not a replacement. Where Tap Race is a sprint — everyone
+mashes a button for 30–60s and the leaderboard reorders continuously — Batucada is
+paced: the room watches a sequence, then reproduces it from memory. Same live-event
+shape (one Cloud Run instance, one big screen, phones as controllers, a host panel
+driving rounds), different core loop.
+
+Themed as a Brazilian percussion circle: the "colors" of the classic Simon Says
+are six instruments, shown visually only (no audio — see rationale below).
+
+## Why this and not classic cumulative Simon Says
+
+Classic Simon Says replays the *whole* growing sequence every round. For a live
+room of 300+ people, that means round 10 opens with a 10-symbol replay before
+anyone can act, and by then most of the room has usually already been eliminated
+and is just watching. Batucada instead deals a **fresh sequence each round**, whose
+length equals the round number. Difficulty still climbs — memorizing 8 fresh
+symbols cold is hard — but every round's duration is bounded by that round's
+length alone, not by the sum of every round before it.
+
+Visual-only (no per-instrument sound) was chosen over audio cues because: mobile
+autoplay restrictions make synced audio unreliable across hundreds of phones, the
+project's "self-hosted everything" stance means shipping six audio files, and a
+room full of phones playing percussion samples half a beat apart would be noise,
+not music. A highlighted/animated icon carries the same information without any
+of that.
+
+## Phases
+
+Reuses `LOBBY` and `COUNTDOWN` as Tap Race defines them (join, then a server-timed
+3·2·1 before play starts). `RUNNING` is replaced by a loop of three phases that
+repeats once per round; `ENDED` is the final game-over screen, not a single
+window's result.
+
+```js
+export const PHASE = Object.freeze({
+  LOBBY: 'lobby',
+  COUNTDOWN: 'countdown',
+  MEMORIZE: 'memorize',  // the screen lights the round's sequence
+  RECALL: 'recall',      // phones collect taps
+  REVEAL: 'reveal',      // who just got eliminated, how many remain
+  ENDED: 'ended',
+});
+```
+
+```
+LOBBY -> COUNTDOWN -> MEMORIZE(1) -> RECALL(1) -> REVEAL(1)
+                   -> MEMORIZE(2) -> RECALL(2) -> REVEAL(2)
+                   -> ...
+                   -> MEMORIZE(n) -> RECALL(n) -> REVEAL(n) -> ENDED
+```
+
+The sequence is generated **once per round, server-side**, and is the same for
+every player — the whole room is shown (and must reproduce) one shared sequence,
+the same way Tap Race's countdown is one shared, server-timed clock rather than
+something each phone computes on its own.
+
+## Timing constants (parallel to Tap Race's `DEFAULTS`)
+
+| Name | Proposed value | Role |
+|---|---|---|
+| `instruments` | `['surdo', 'pandeiro', 'cuica', 'agogo', 'tamborim', 'reco-reco']` | alphabet; each symbol drawn uniformly at random |
+| `symbolOnMs` | `700` | how long one instrument stays highlighted |
+| `symbolGapMs` | `300` | dark gap between symbols |
+| `recallBaseMs` | `1500` | fixed reaction/setup time added to every recall window |
+| `recallPerSymbolMs` | `1200` | added per symbol in the round |
+| `revealMs` | `2500` | how long REVEAL holds before the next round |
+| `maxRounds` | `10` | defensive cap, see "End of game" below |
+
+```
+memorizeMs(round) = round * (symbolOnMs + symbolGapMs)
+recallMs(round)   = recallBaseMs + round * recallPerSymbolMs
+```
+
+All tunable later the way Tap Race's own constants are (env-var overrides), not
+fixed by this spec.
+
+## Per-player state
+
+Extends the identity Tap Race already assigns on `join()` (`id`, `name`, `emoji`,
+`seq`, `locale` carry over unchanged):
+
+```js
+{
+  alive: true,
+  roundsCleared: 0,
+  eliminatedRound: null,
+  prefixMatched: 0,   // correct symbols in the current (or fatal) round
+  elapsedMs: null,    // recall latency for that round — final tiebreak
+  submitted: false,   // reset at the start of every RECALL
+}
+```
+
+## Grading — the RECALL → REVEAL transition
+
+Runs once, when `now >= recallEndsAt`, for every player still `alive`:
+
+```
+prefixMatched = length of the longest prefix where submitted[i] === sequence[i]
+                (no submission at all ⇒ prefixMatched = 0)
+
+if prefixMatched === sequence.length:
+    roundsCleared = round        // full match: stays alive
+else:
+    alive = false
+    eliminatedRound = round      // partial or no match: eliminated this round
+```
+
+`prefixMatched` and `elapsedMs` are kept from this grading step even for
+eliminated players — they are what makes the final ranking a strict order instead
+of a tie (see below).
+
+## End of game and ranking
+
+This is the part that needed resolving: elimination alone doesn't produce a
+single winner when several players fail in the same round. The fix is to never
+treat survival as binary on the leaderboard — every player gets a composite score
+that produces a strict order almost always, and a fully deterministic one always.
+
+Transition at the end of REVEAL:
+
+```
+aliveCount = number of players with alive === true
+
+if aliveCount <= 1 or round >= maxRounds:
+    phase = ENDED
+    ranking = players sorted by:
+        roundsCleared  desc,   // who got furthest
+        prefixMatched  desc,   // within the same fatal round, who matched more before diverging
+        elapsedMs      asc,    // still tied: who answered faster
+        seq            asc     // final, deterministic tiebreak — same pattern as _recount()'s a.seq - b.seq
+    winner = ranking[0]
+else:
+    round += 1
+    sequence = freshSequence(round)
+    phase = MEMORIZE
+```
+
+If `maxRounds` is reached with more than one player still perfect (very unlikely
+with a real crowd, but not impossible), no special-case code is needed: those
+survivors share the same `roundsCleared` and `prefixMatched`, so they fall
+straight through to the `elapsedMs` tiebreak. The cap exists purely to bound the
+segment's wall-clock length for the event, not to change how ranking works.
+
+## Screen vs. phone split
+
+Follows the precedent already set by Tap Race: the shared screen is the
+spectacle, the phone is the input device.
+
+- **MEMORIZE** — only the shared screen lights the sequence. The phone shows a
+  passive "watch the screen" state, no input.
+- **RECALL** — the phone shows a grid of the six instruments; taps build a local
+  `sequence[]` and auto-submit once its length reaches the round's length.
+- **Eliminated** — the phone becomes a live spectator: it keeps polling
+  `/state` and shows its own result ("out in round 6 — 4/6 correct") plus the
+  live `aliveCount`, through to `ENDED`. It does not get its own end screen or
+  drop out of the loop — everyone rides the same phases to the same finish, the
+  same way Tap Race never removes a player from the room mid-round.
+
+## Network contract
+
+```
+Phone   POST /join {locale}                     -> identity (unchanged from Tap Race)
+        POST /recall {id, sequence:number[]}     -> {accepted, phase, timing}
+        GET  /state?id=                          -> phase + timing + {alive, roundsCleared}
+Screen  GET  /events (SSE)                       -> {phase, round, sequence (MEMORIZE only), aliveCount, top10, timing}
+Host    POST /admin/start|reset                  -> unchanged trigger; start now begins round 1
+Dash    GET  /metrics                            -> + aliveCount, current round
+```
+
+`/recall` replaces `/tap`: it is one POST per round, not a continuous batched
+stream. That means none of Tap Race's adaptive-cadence machinery
+(`tapIntervalMs`, the request-budget derivation) is needed on this path — request
+volume is inherently gated by the round loop rather than continuous mashing.
+
+## Files affected
+
+A separate engine, not an extension of `Game` — the phase machine and state shape
+diverge enough that folding both games into one class would make neither easy to
+read. `names.js` is reused as-is for identity.
+
+- `src/batucada.js` — new: `PHASE`, `DEFAULTS`, the `Batucada` class (grading,
+  round generation, ranking), pure with respect to time like `Game` (every
+  method that depends on "now" takes it as an argument).
+- `src/server.js` — new routes under their own namespace, additive only; no
+  existing Tap Race route changes.
+- `public/batucada/` — new phone and screen pages; `/host` panel can likely be
+  extended rather than rebuilt.
+- `test/batucada.test.js` — unit tests for grading and ranking, contract test
+  extension for the new routes.
+
+## Open assumptions, confirmed
+
+1. Batucada ships **next to** Tap Race — new routes and files, existing game
+   untouched.
+2. An eliminated player becomes a **live spectator** through to `ENDED`, rather
+   than getting a separate end-of-run screen.

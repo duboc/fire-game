@@ -7,6 +7,7 @@ import zlib from 'node:zlib';
 import QRCode from 'qrcode';
 
 import { Game, PHASE } from './game.js';
+import { Batucada } from './batucada.js';
 import { persistResults, persistence } from './persist.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -174,6 +175,12 @@ const game = new Game({
   onEnded: (results) => { persistResults(results); },
 });
 
+// A second, independent game living in the same process — see
+// docs/BATUCADA_SPEC.md. Deliberately not wired into `game`'s persistence
+// (out of scope for v1) or its tuning knobs: it has no continuous hot path
+// like /tap, so none of Tap Race's adaptive-cadence machinery applies.
+const batucada = new Batucada();
+
 const app = express();
 app.disable('x-powered-by');
 
@@ -266,6 +273,8 @@ precompress('screen.html', HTML, ['/screen', '/screen.html']);
 precompress('host.html', HTML, ['/host', '/host.html']);
 precompress('dashboard.html', HTML, ['/dashboard', '/dashboard.html']);
 precompress('theme.css', 'text/css; charset=utf-8', ['/theme.css']);
+precompress('batucada/phone.html', HTML, ['/batucada', '/batucada/', '/batucada/phone.html']);
+precompress('batucada/screen.html', HTML, ['/batucada/screen', '/batucada/screen.html']);
 
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
@@ -358,6 +367,61 @@ app.get('/state', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Batucada  (companion game — see docs/BATUCADA_SPEC.md)
+// ---------------------------------------------------------------------------
+
+app.post('/batucada/join', (req, res) => {
+  const id = randomUUID();
+  const ident = batucada.join(id, req.query.lang || req.get('accept-language'));
+  res.json(ident);
+});
+
+// One POST per round, not a continuous batched stream like /tap — so none of
+// Tap Race's adaptive-cadence machinery is needed on this path.
+app.post('/batucada/recall', (req, res) => {
+  const now = Date.now();
+  let { id, sequence } = req.body || {};
+  if (!id || !batucada.has(id)) {
+    id = randomUUID();
+    const ident = batucada.join(id, req.get('accept-language'));
+    return res.json({ ...batucada.playerView(id, now), ...ident, rejoined: true });
+  }
+  res.json(batucada.recall(id, sequence, now));
+});
+
+// Pure read, same reason as /state above: the tick loop already advances the
+// phase machine, so calling it again per request would just re-pay that cost.
+app.get('/batucada/state', (req, res) => {
+  const now = Date.now();
+  const id = req.query.id;
+  if (id && batucada.has(id)) return res.json(batucada.playerView(id, now));
+  res.json(batucada.playerView(null, now));
+});
+
+const batucadaSseClients = new Set();
+
+app.get('/batucada/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('retry: 2000\n\n');
+  res.write(`data: ${JSON.stringify(batucada.publicState(Date.now()))}\n\n`);
+  batucadaSseClients.add(res);
+  req.on('close', () => batucadaSseClients.delete(res));
+});
+
+function broadcastBatucada() {
+  if (batucadaSseClients.size === 0) return;
+  const payload = `data: ${JSON.stringify(batucada.publicState(Date.now()))}\n\n`;
+  for (const res of batucadaSseClients) {
+    try { res.write(payload); } catch { batucadaSseClients.delete(res); }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Big-screen API  (read-only SSE)
 // ---------------------------------------------------------------------------
 const sseClients = new Set();
@@ -384,9 +448,13 @@ function broadcast() {
 }
 
 // Authoritative loop: advance phase machine + refresh rank snapshot + push.
+// Drives Batucada too — one clock for both games rather than a second timer
+// that can drift against this one.
 const tickTimer = setInterval(() => {
   game.tick(Date.now());
   broadcast();
+  batucada.tick(Date.now());
+  broadcastBatucada();
 }, TICK_MS);
 
 // A timer that should fire every LAG_SAMPLE_MS; whatever it overshoots by is
@@ -674,6 +742,21 @@ app.post('/admin/reset', async (req, res) => {
   res.json(state);
 });
 
+// Same password, same session cookie as Tap Race — one host controls both games.
+app.post('/batucada/admin/start', async (req, res) => {
+  if (!(await checkAdmin(req, res))) return;
+  const state = batucada.start({ now: Date.now() });
+  broadcastBatucada();
+  res.json(state);
+});
+
+app.post('/batucada/admin/reset', async (req, res) => {
+  if (!(await checkAdmin(req, res))) return;
+  const state = batucada.reset({ now: Date.now() });
+  broadcastBatucada();
+  res.json(state);
+});
+
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
@@ -732,6 +815,7 @@ app.use((err, req, res, _next) => {
 // ---------------------------------------------------------------------------
 const server = app.listen(PORT, () => {
   console.log(`🔥 Tap Race on :${PORT}  | phone:/  screen:/screen  host:/host`);
+  console.log(`   batucada   : phone:/batucada  screen:/batucada/screen`);
   console.log(`   admin auth : ${ADMIN_TOKEN === null ? 'built-in password' : 'ADMIN_TOKEN override'}`);
   console.log(`   persistence: ${persistence.isEnabled() ? 'firestore' : 'off (in-memory only)'}`);
 });
@@ -766,10 +850,11 @@ function shutdown(signal) {
   console.log(`\n${signal} received, shutting down…`);
   clearInterval(tickTimer);
   for (const res of sseClients) { try { res.end(); } catch { /* ignore */ } }
+  for (const res of batucadaSseClients) { try { res.end(); } catch { /* ignore */ } }
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 2000).unref();
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-export { app, game, PHASE };
+export { app, game, PHASE, batucada };

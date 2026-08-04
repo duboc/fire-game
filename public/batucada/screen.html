@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#000000" />
+<title>Batucada — Tela</title>
+<!-- Roboto is self-hosted in theme.css; no external font request. -->
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  html,body{height:100%;}
+  body{overflow:hidden; background:radial-gradient(circle at 50% -8%, rgba(161,66,244,.18), transparent 55%), var(--bg);}
+  #confetti{position:fixed; inset:0; pointer-events:none; z-index:60;}
+
+  .stage{position:absolute; inset:0; display:none; flex-direction:column; padding:4vh 5vw; align-items:center; justify-content:center; gap:2.4vh; text-align:center;}
+  .stage.show{display:flex;}
+
+  .brand{display:flex; align-items:center; gap:.6vw; font-family:var(--font-display); font-size:clamp(26px,3.2vw,46px); font-weight:700; color:var(--ink); letter-spacing:-.01em; position:absolute; top:4vh; left:5vw;}
+
+  .chip{background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1); padding:10px 22px; text-align:center;}
+  .chip .k{font-size:clamp(10px,1vw,15px); text-transform:uppercase; letter-spacing:.08em; color:var(--ink-2); font-weight:500;}
+  .chip .v{font-family:var(--font-mono); font-size:clamp(22px,2.6vw,42px); font-weight:500; font-variant-numeric:tabular-nums; line-height:1.1; color:var(--ink);}
+  .chips{display:flex; gap:1.2vw; position:absolute; top:4vh; right:5vw;}
+  .chip.timer .v{color:var(--g-blue-700);} .chip.timer.low .v{color:var(--g-red); animation:blink .6s steps(2) infinite;}
+  @keyframes blink{50%{opacity:.35}}
+
+  /* ===== LOBBY ===== */
+  #lobby .big{display:flex; align-items:center; gap:1.4vw; font-family:var(--font-display); font-size:clamp(40px,6.5vw,104px); font-weight:700; letter-spacing:-.02em;}
+  #lobby .sub{font-size:clamp(18px,2.2vw,32px); color:var(--ink-2); font-weight:500;}
+  .qr{background:#fff; padding:18px; border-radius:var(--r-lg); width:min(34vh,320px); height:min(34vh,320px); box-shadow:0 0 50px rgba(161,66,244,.25); border:1px solid rgba(161,66,244,.3);}
+  .qr svg{width:100%; height:100%; display:block;}
+  .ready{font-size:clamp(22px,2.8vw,42px); font-weight:500; color:var(--ink);}
+  .ready b{font-family:var(--font-mono); color:var(--g-green-700); font-weight:500; font-variant-numeric:tabular-nums;}
+
+  /* ===== COUNTDOWN ===== */
+  #cdnum{font-family:var(--font-mono); font-size:min(58vh,44vw); font-weight:500; line-height:.9; color:var(--g-blue);}
+  #cdnum.n3{color:var(--g-blue);} #cdnum.n2{color:var(--g-red);} #cdnum.n1{color:var(--g-yellow);} #cdnum.go{color:var(--g-green);}
+  .cdpop{animation:cdpop .8s cubic-bezier(.2,1.3,.4,1);}
+  @keyframes cdpop{0%{transform:scale(.2);opacity:0}45%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+
+  /* ===== instrument row (memorize / recall / reveal) ===== */
+  .roundtag{font-family:var(--font-mono); font-size:clamp(22px,2.8vw,40px); color:var(--g-blue-700); font-weight:500;}
+  .instruments{display:flex; gap:2vw; flex-wrap:wrap; justify-content:center;}
+  .inst{width:min(16vw,180px); aspect-ratio:1/1; border-radius:var(--r-xl); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1vh;
+    font-family:var(--font-display); font-weight:700; color:#fff; opacity:.5; transform:scale(.94); transition:opacity .1s ease, transform .1s ease, filter .1s ease;
+    box-shadow:0 10px 30px rgba(0,0,0,.4);}
+  .inst .ico{font-size:clamp(30px,4vw,54px);}
+  .inst .lb{font-size:clamp(14px,1.6vw,22px);}
+  .inst.lit{opacity:1; transform:scale(1.08); filter:brightness(1.5); box-shadow:0 0 60px currentColor, 0 10px 30px rgba(0,0,0,.5);}
+
+  .subtext{font-size:clamp(18px,2.2vw,30px); color:var(--ink-2); font-weight:500;}
+  .alivebig{font-family:var(--font-mono); font-size:clamp(48px,7vw,110px); font-weight:700; color:var(--ink);}
+  .alivebig b{color:var(--g-green-700);}
+
+  /* ===== ENDED ===== */
+  .champlabel{font-size:clamp(22px,2.8vw,42px); font-weight:700; letter-spacing:.12em; color:var(--g-blue-700); text-transform:uppercase;}
+  .champ{display:flex; align-items:center; gap:2vw; max-width:92vw; background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+    border:1px solid rgba(161,66,244,.3); box-shadow:var(--e3), 0 0 44px rgba(161,66,244,.34); border-radius:var(--r-xl); padding:3vh 4vw; animation:cdpop .8s cubic-bezier(.2,1.3,.4,1);}
+  .champ .em{font-size:min(24vh,20vw); flex:none;}
+  .champ .info{text-align:left; min-width:0;}
+  .champ .nm{font-family:var(--font-display); font-size:clamp(32px,4.6vw,84px); font-weight:700; line-height:1.06; color:var(--ink); text-wrap:balance; overflow-wrap:break-word;}
+  .champ .nm .seq{font-family:var(--font-mono); color:var(--ink-2);}
+  .champ .ct{font-family:var(--font-mono); font-size:clamp(26px,3.2vw,52px); font-weight:500; color:var(--g-green-700);}
+  .podium{display:flex; gap:1.5vw; margin-top:1vh; flex-wrap:wrap; justify-content:center;}
+  .pod{background:var(--surface); border:1px solid var(--line); box-shadow:var(--e1); border-radius:var(--r-md); padding:12px 20px; font-weight:500; font-size:clamp(14px,1.5vw,24px); color:var(--ink);}
+  .pod b{font-family:var(--font-mono); color:var(--g-blue-700);}
+  .again{color:var(--ink-2); font-size:clamp(16px,1.7vw,26px); margin-top:1vh;}
+
+  .hidden{display:none !important;}
+</style>
+</head>
+<body class="noise-bg">
+  <canvas id="confetti"></canvas>
+  <div class="brand"><span class="ico">🥁</span> <span class="shimmer">Batucada</span></div>
+  <div class="chips" id="chips">
+    <div class="chip"><div class="k">Na roda</div><div class="v" id="cAlive">0</div></div>
+    <div class="chip timer" id="cTimerChip"><div class="k">Rodada</div><div class="v" id="cRound">—</div></div>
+  </div>
+
+  <!-- LOBBY -->
+  <div class="stage show" id="lobby">
+    <div class="big"><span>🥁</span> <span class="shimmer">Batucada</span></div>
+    <div class="sub">Escaneie, decore o ritmo, repita na ordem certa.</div>
+    <div class="qr" id="qr"></div>
+    <div class="ready"><span id="lobbyReady"></span></div>
+  </div>
+
+  <!-- COUNTDOWN -->
+  <div class="stage" id="countdown">
+    <div id="cdnum" class="cdpop n3">3</div>
+  </div>
+
+  <!-- MEMORIZE -->
+  <div class="stage" id="memorize">
+    <div class="roundtag">Rodada <span id="mRound">1</span> — decore!</div>
+    <div class="instruments" id="mInstruments"></div>
+  </div>
+
+  <!-- RECALL -->
+  <div class="stage" id="recall">
+    <div class="roundtag">Reproduzam de memória!</div>
+    <div class="instruments" id="rInstruments"></div>
+    <div class="aivebig"></div>
+    <div class="aivewrap"><div class="aliveDetail subtext" id="rDetail"></div></div>
+  </div>
+
+  <!-- REVEAL -->
+  <div class="stage" id="reveal">
+    <div class="roundtag" id="vTitle">Apurando…</div>
+    <div class="aivebig"></div>
+    <div class="aliveDetail aivebig" id="vAlive"><b id="vAliveNum">0</b></div>
+    <div class="subtext" id="vDetail"></div>
+  </div>
+
+  <!-- ENDED -->
+  <div class="stage" id="ended">
+    <div class="champlabel" id="champlabel">🏆 Campeão da Batucada 🏆</div>
+    <div class="champ" id="champ"></div>
+    <div class="podium" id="podium"></div>
+    <div class="again">Aguardando o host… (uma nova rodada pode começar a qualquer momento)</div>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id)=>document.getElementById(id);
+  const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', MEMORIZE:'memorize', RECALL:'recall', REVEAL:'reveal', ENDED:'ended' };
+  const stages = { lobby:$('lobby'), countdown:$('countdown'), memorize:$('memorize'), recall:$('recall'), reveal:$('reveal'), ended:$('ended') };
+  function showStage(name){ for (const k in stages) stages[k].classList.toggle('show', k===name); }
+
+  // Same six, same order as src/batucada.js's INSTRUMENTS.
+  const INSTRUMENTS = [
+    { key:'surdo',     label:'Surdo',      color:'#4285F4' },
+    { key:'pandeiro',  label:'Pandeiro',   color:'#FBBC04' },
+    { key:'cuica',     label:'Cuíca',      color:'#34A853' },
+    { key:'agogo',     label:'Agogô',      color:'#EA4335' },
+    { key:'tamborim',  label:'Tamborim',   color:'#A142F4' },
+    { key:'reco-reco', label:'Reco-reco',  color:'#00BCD4' },
+  ];
+
+  function buildInstruments(container){
+    container.innerHTML = '';
+    INSTRUMENTS.forEach((inst) => {
+      const d = document.createElement('div');
+      d.className = 'inst';
+      d.style.background = inst.color;
+      d.style.color = inst.color;
+      d.innerHTML = '<span class="ico">🥁</span><span class="lb" style="color:#fff">'+inst.label+'</span>';
+      container.appendChild(d);
+    });
+    return [...container.children];
+  }
+  const mTiles = buildInstruments($('mInstruments'));
+  const rTiles = buildInstruments($('rInstruments'));
+
+  let clockOffset=0, bestRtt=Infinity;
+  const estServerNow=()=>Date.now()+clockOffset;
+  let cur=PHASE.LOBBY, lastCd=null, state={phase:PHASE.LOBBY,total:0,aliveCount:0,round:0,sequence:[]};
+  let lastAliveShown=null, endedShownRound=-1, lastLitIndex=-1, memorizeRoundBuilt=-1;
+
+  // Single client, so the extra request to compensate the one-way SSE offset
+  // is free (see Tap Race's screen.html) — and the flash animation genuinely
+  // needs the precision this buys, unlike the phone's cosmetic bar.
+  async function sampleClock(){
+    const t0=Date.now();
+    try{
+      const r=await fetch('/batucada/state');
+      const s=await r.json();
+      const t1=Date.now(), rtt=t1-t0;
+      if (typeof s.serverNow!=='number' || rtt<0 || rtt>5000) return;
+      if (Math.abs((s.serverNow-t1)-clockOffset)>5000) bestRtt=Infinity;
+      if (rtt>bestRtt) return;
+      bestRtt=rtt; clockOffset=s.serverNow+rtt/2-t1;
+    }catch(_){}
+  }
+
+  const origin=location.origin;
+  fetch('/qr.svg?data='+encodeURIComponent(origin+'/batucada')).then(r=>r.text()).then(svg=>{$('qr').innerHTML=svg;}).catch(()=>{});
+
+  function connect(){
+    const es=new EventSource('/batucada/events');
+    es.onmessage=(e)=>{ try{ onState(JSON.parse(e.data)); }catch(_){} };
+    es.onerror=()=>{ es.close(); setTimeout(connect,1500); };
+  }
+
+  function onState(s){
+    if (bestRtt===Infinity && typeof s.serverNow==='number') clockOffset=s.serverNow-Date.now();
+    const changed = s.phase!==cur;
+    state=s; cur=s.phase;
+    $('cAlive').textContent = fmt(s.aliveCount)+' / '+fmt(s.total);
+    $('cRound').textContent = s.round || '—';
+    if (changed) enterPhase(s.phase, s);
+    if (s.phase===PHASE.LOBBY) renderReady(s.total);
+    if (s.phase===PHASE.MEMORIZE) renderMemorize(s);
+    if (s.phase===PHASE.RECALL) renderRecall(s);
+    if (s.phase===PHASE.REVEAL) renderReveal(s);
+    if (s.phase===PHASE.ENDED) renderEnded(s);
+  }
+
+  function enterPhase(phase, s){
+    stopConfetti();
+    showStage(phase);
+    if (phase===PHASE.MEMORIZE){ memorizeRoundBuilt=-1; lastLitIndex=-1; }
+    if (phase===PHASE.ENDED) renderEnded(s);
+  }
+
+  const NUM=new Intl.NumberFormat('pt-BR');
+  function fmt(n){ return NUM.format(Number(n)||0); }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function renderReady(total){
+    const n=total||0;
+    $('lobbyReady').innerHTML='<b>'+escapeHtml(fmt(n))+'</b> '+(n===1?'jogador pronto':'jogadores prontos');
+  }
+
+  // ---- countdown ----
+  function tickCountdown(){
+    if (cur===PHASE.COUNTDOWN && state.startsAt){
+      const ms=state.startsAt-estServerNow();
+      const num=Math.ceil(ms/1000);
+      const txt= num>0? String(num):'VAI!';
+      if (txt!==lastCd){
+        lastCd=txt; const el=$('cdnum');
+        el.textContent=txt;
+        el.className='cdnum '+(num>0?('n'+Math.min(num,3)):'go');
+        void el.offsetWidth; el.classList.add('cdpop');
+      }
+    }
+    requestAnimationFrame(tickCountdown);
+  }
+
+  // ---- memorize: flash the sequence in real time off the synced clock ----
+  function renderMemorize(s){
+    $('mRound').textContent = s.round;
+    if (memorizeRoundBuilt !== s.round){
+      memorizeRoundBuilt = s.round;
+      mTiles.forEach(t=>t.classList.remove('lit'));
+      lastLitIndex = -1;
+    }
+  }
+  function tickMemorize(){
+    if (cur===PHASE.MEMORIZE && state.memorizeStartsAt!=null && Array.isArray(state.sequence)){
+      const onMs = state.symbolOnMs||700, gapMs = state.symbolGapMs||300, step = onMs+gapMs;
+      const elapsed = estServerNow() - state.memorizeStartsAt;
+      const idx = Math.floor(elapsed/step);
+      const within = elapsed - idx*step;
+      const lit = idx>=0 && idx<state.sequence.length && within < onMs ? idx : -1;
+      if (lit !== lastLitIndex){
+        mTiles.forEach(t=>t.classList.remove('lit'));
+        if (lit>=0) mTiles[state.sequence[lit]].classList.add('lit');
+        lastLitIndex = lit;
+      }
+    }
+    requestAnimationFrame(tickMemorize);
+  }
+
+  // ---- recall: dimmed row, just a live "who's still in" readout ----
+  function renderRecall(s){
+    rTiles.forEach(t=>t.classList.remove('lit'));
+    $('rDetail').innerHTML = '<b>'+fmt(s.aliveCount)+'</b> de '+fmt(s.total)+' tentando a rodada '+s.round;
+  }
+
+  // ---- reveal ----
+  function renderReveal(s){
+    const dropped = lastAliveShown!=null ? Math.max(0, lastAliveShown - s.aliveCount) : 0;
+    lastAliveShown = s.aliveCount;
+    $('vTitle').textContent = 'Rodada '+s.round+' concluída';
+    $('vAliveNum').textContent = fmt(s.aliveCount);
+    $('vDetail').textContent = dropped>0
+      ? (dropped===1 ? '1 pessoa caiu da roda' : dropped+' pessoas caíram da roda')
+      : 'Todo mundo que tentou continua!';
+  }
+
+  // ---- ended ----
+  function renderEnded(s){
+    showStage('ended');
+    if (endedShownRound===s.roundId) return;
+    endedShownRound=s.roundId;
+    const w=s.winner; const top=s.top||[];
+    const champ=$('champ');
+    if (w){
+      const winnerStats = top.find(p=>p.id===w.id);
+      const rounds = winnerStats ? winnerStats.roundsCleared : s.round;
+      champ.innerHTML=`<div class="em">${w.emoji}</div><div class="info"><div class="nm">${escapeHtml(w.name)} <span class="seq">#${w.seq}</span></div><div class="ct">${fmt(rounds)} ${rounds===1?'rodada':'rodadas'}</div></div>`;
+    } else {
+      champ.innerHTML=`<div class="info"><div class="nm">Ninguém completou uma rodada 😴</div></div>`;
+    }
+    const pod=$('podium'); pod.innerHTML='';
+    top.slice(0,5).forEach(p=>{
+      const d=document.createElement('div'); d.className='pod';
+      d.innerHTML=`<b>#${p.rank}</b> ${p.emoji||''} ${escapeHtml(p.name)} <span class="seq">#${p.seq}</span> — ${fmt(p.roundsCleared)} ${p.roundsCleared===1?'rodada':'rodadas'}`;
+      pod.appendChild(d);
+    });
+    launchConfetti();
+  }
+
+  // ---- confetti (self-contained, no CDN — same as Tap Race's screen.html) ----
+  const cvs=$('confetti'), ctx=cvs.getContext('2d');
+  let parts=[], confettiOn=false, confettiActive=false;
+  function resize(){ cvs.width=innerWidth; cvs.height=innerHeight; }
+  resize(); addEventListener('resize',resize);
+  const COLORS=['#4285F4','#EA4335','#FBBC04','#34A853','#A142F4','#00BCD4'];
+  function launchConfetti(){
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    parts=[];
+    const N=280;
+    for (let i=0;i<N;i++){
+      parts.push({
+        x:Math.random()*cvs.width, y:Math.random()*cvs.height*0.4-60,
+        vx:(Math.random()-0.5)*10, vy:-5+Math.random()*6,
+        s:7+Math.random()*11, rot:Math.random()*6.28, vr:(Math.random()-0.5)*0.35,
+        c:COLORS[i%COLORS.length],
+      });
+    }
+    confettiActive=true;
+    if (!confettiOn){ confettiOn=true; requestAnimationFrame(raf); }
+  }
+  function stopConfetti(){ confettiActive=false; }
+  function raf(){
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    let alive=0;
+    for (const p of parts){
+      p.vy+=0.13; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
+      if (p.y<cvs.height+40){
+        alive++;
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.c;
+        ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.6); ctx.restore();
+      }
+    }
+    if (alive>0 && confettiActive){ requestAnimationFrame(raf); }
+    else { ctx.clearRect(0,0,cvs.width,cvs.height); confettiOn=false; }
+  }
+
+  // boot
+  renderReady(0);
+  connect();
+  for (let i=0;i<4;i++) setTimeout(sampleClock, i*200);
+  setInterval(sampleClock, 15000);
+  requestAnimationFrame(tickCountdown);
+  requestAnimationFrame(tickMemorize);
+})();
+</script>
+</body>
+</html>

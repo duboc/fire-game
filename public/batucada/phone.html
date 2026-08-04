@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Batucada</title>
+<!-- Roboto is self-hosted in theme.css; no external font request. -->
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  html,body{height:100%;}
+  body{
+    overflow:hidden; overscroll-behavior:none; touch-action:manipulation;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
+    display:flex; flex-direction:column;
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+    background:radial-gradient(130% 70% at 50% -20%, rgba(161,66,244,.16), transparent 60%), var(--bg);
+  }
+  .appbar{display:flex; align-items:center; gap:8px; padding:calc(12px + var(--safe-top)) 18px 4px;}
+  .appbar .ico{font-size:18px; line-height:1;}
+  .appbar .title{font-family:var(--font-display); font-weight:700; font-size:18px; color:var(--ink); margin-right:auto; letter-spacing:-.01em;}
+  .wrap{flex:1; display:flex; flex-direction:column; padding:8px 16px calc(16px + var(--safe-bot)); gap:12px; min-height:0;}
+
+  .id-card{background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid var(--line);
+    border-radius:var(--r-lg); box-shadow:var(--e1); text-align:center; padding:14px;}
+  .id-card .who{font-size:11px; letter-spacing:.14em; color:var(--ink-2); text-transform:uppercase; font-weight:500;}
+  .id-card .name{font-family:var(--font-display); font-size:clamp(19px,5.6vw,26px); font-weight:700; line-height:1.15; margin-top:4px; color:var(--ink);
+    text-wrap:balance; overflow-wrap:break-word;}
+  .id-card .seq{font-family:var(--font-mono); color:var(--g-blue-700); font-weight:500;}
+
+  .stage{flex:1; display:flex; flex-direction:column; gap:14px; min-height:0;}
+
+  .center{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px;}
+  .center .big{font-size:clamp(48px,16vw,84px); line-height:1;}
+  .center .msg{font-family:var(--font-display); font-size:clamp(18px,5vw,24px); font-weight:700; color:var(--ink);}
+  .center .sub{color:var(--ink-2); font-size:15px; font-weight:500;}
+  .pulse-ico{animation:pulseIco 1.6s ease-in-out infinite;}
+  @keyframes pulseIco{0%,100%{transform:scale(1); opacity:.85} 50%{transform:scale(1.12); opacity:1}}
+
+  .round-tag{font-family:var(--font-mono); color:var(--g-blue-700); font-weight:500; font-size:14px; letter-spacing:.04em;}
+
+  .timewrap{height:8px; border-radius:var(--r-full); background:var(--surface-2); overflow:hidden; border:1px solid var(--line);}
+  .timebar{height:100%; width:100%; border-radius:var(--r-full); background:linear-gradient(90deg,#A142F4,#4285F4);}
+
+  .dots{display:flex; gap:8px; justify-content:center; flex-wrap:wrap;}
+  .dot{width:14px; height:14px; border-radius:50%; background:var(--surface-2); border:1px solid var(--line);}
+  .dot.fill{background:var(--g-blue); box-shadow:0 0 10px rgba(66,133,244,.6);}
+
+  .grid{flex:1; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(3,1fr); gap:12px; min-height:0;}
+  .inst{border:none; border-radius:var(--r-lg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    font-family:var(--font-display); font-weight:700; color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent;
+    transition:transform .06s ease, filter .12s ease; box-shadow:0 8px 20px rgba(0,0,0,.4);}
+  .inst:active{transform:scale(.94);}
+  .inst.flash{filter:brightness(1.6);}
+  .inst.disabled{opacity:.3; pointer-events:none;}
+  .inst .ico{font-size:clamp(26px,7vw,38px);}
+  .inst .lb{font-size:clamp(13px,3.4vw,16px);}
+
+  .status{text-align:center; min-height:22px; font-weight:500; color:var(--ink-2); font-size:14px;}
+
+  .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
+    background:rgba(0,0,0,.92); backdrop-filter:blur(8px); z-index:50;}
+  .overlay.show{display:flex;}
+  .cd{font-family:var(--font-mono); font-size:clamp(140px,46vw,260px); font-weight:500; line-height:1; color:var(--g-blue); animation:cdpop .9s ease-out;}
+  .cd.n3{color:var(--g-blue);} .cd.n2{color:var(--g-red);} .cd.n1{color:var(--g-yellow);} .cd.go{color:var(--g-green);}
+  @keyframes cdpop{0%{transform:scale(.3);opacity:0}40%{transform:scale(1.15);opacity:1}100%{transform:scale(1)}}
+  .cd-sub{color:var(--ink-2); font-weight:500; letter-spacing:.14em; text-transform:uppercase; margin-top:10px;}
+
+  .hidden{display:none !important;}
+</style>
+</head>
+<body class="noise-bg">
+  <div class="appbar">
+    <span class="ico">🥁</span>
+    <span class="title shimmer">Batucada</span>
+  </div>
+  <div class="wrap">
+    <div class="id-card">
+      <div class="who">Você é</div>
+      <div class="name"><span class="emoji" id="emoji">🎮</span> <span id="name">Conectando…</span> <span class="seq" id="seq"></span></div>
+    </div>
+    <div class="stage" id="stage"></div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="cd n3" id="cd">3</div>
+    <div class="cd-sub">Prepare a memória…</div>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const els = { emoji:$('emoji'), name:$('name'), seq:$('seq'), stage:$('stage'), status:$('status'),
+                overlay:$('overlay'), cd:$('cd') };
+
+  const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', MEMORIZE:'memorize', RECALL:'recall', REVEAL:'reveal', ENDED:'ended' };
+
+  // Same six, same order as src/batucada.js's INSTRUMENTS — the wire format is
+  // an index into this array, so the order must match exactly.
+  const INSTRUMENTS = [
+    { key:'surdo',     label:'Surdo',      color:'#4285F4' },
+    { key:'pandeiro',  label:'Pandeiro',   color:'#FBBC04' },
+    { key:'cuica',     label:'Cuíca',      color:'#34A853' },
+    { key:'agogo',     label:'Agogô',      color:'#EA4335' },
+    { key:'tamborim',  label:'Tamborim',   color:'#A142F4' },
+    { key:'reco-reco', label:'Reco-reco',  color:'#00BCD4' },
+  ];
+
+  let me = { id: localStorage.getItem('batucadaId') || null };
+  // Rough offset only — used for a cosmetic countdown/progress bar, never to
+  // gate scoring (grading happens server-side off the /recall POST's own
+  // arrival time). Full RTT compensation (see index.html) buys nothing here.
+  let clockOffset = 0;
+  const estServerNow = () => Date.now() + clockOffset;
+
+  let state = { phase: PHASE.LOBBY, known:false, total:0, aliveCount:0, round:0 };
+  let myRoundId = null;
+  let mySeq = [];
+  let submitted = false;
+  let gridBuiltForRound = -1;
+  let lastResult = null; // { alive, roundsCleared, eliminatedRound, prefixMatched } from the last /recall response
+  let lastCdShown = null;
+
+  async function apiJson(url, opts){
+    const t0 = Date.now();
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
+    try{
+      const r = await fetch(url, Object.assign({ signal: ctl.signal }, opts));
+      const s = await r.json();
+      if (typeof s.serverNow === 'number') clockOffset = s.serverNow - Date.now();
+      return s;
+    } finally { clearTimeout(timer); }
+  }
+
+  function setIdentity(s){
+    if (s.id){ me.id = s.id; localStorage.setItem('batucadaId', s.id); }
+    els.emoji.textContent = s.emoji || '🎮';
+    els.name.textContent = s.name || '—';
+    els.seq.textContent = s.seq ? ('#' + s.seq) : '';
+  }
+
+  function applyState(s){
+    if (!s) return;
+    if (s.known === false && me.id) { reregister(); return; }
+    if (typeof s.roundId === 'number' && s.roundId !== myRoundId){
+      myRoundId = s.roundId; mySeq = []; submitted = false; gridBuiltForRound = -1; lastResult = null;
+    }
+    state = s;
+    if (s.name) setIdentity(s);
+    render();
+  }
+
+  let reregistering = false;
+  async function reregister(){
+    if (reregistering) return; reregistering = true;
+    try{
+      const s = await apiJson(joinUrl(), { method:'POST' });
+      mySeq = []; submitted = false; gridBuiltForRound = -1; lastResult = null; myRoundId = null;
+      setIdentity(s);
+    }catch(_){ /* retry on next poll */ }
+    finally{ reregistering = false; }
+  }
+
+  function joinUrl(){
+    let l = null;
+    try{ l = new URLSearchParams(location.search).get('lang'); }catch(_){}
+    return l ? '/batucada/join?lang=' + encodeURIComponent(l) : '/batucada/join';
+  }
+
+  async function join(){
+    try{
+      if (me.id){
+        const s = await apiJson('/batucada/state?id=' + encodeURIComponent(me.id));
+        if (s.known){ setIdentity(s); applyState(s); return; }
+      }
+      const s = await apiJson(joinUrl(), { method:'POST' });
+      setIdentity(s);
+    }catch(e){ els.status.textContent = 'Sem conexão… tentando de novo'; }
+  }
+
+  let pollInFlight = false;
+  async function pollState(){
+    if (pollInFlight) return;
+    pollInFlight = true;
+    try{ applyState(await apiJson('/batucada/state?id=' + encodeURIComponent(me.id || ''))); }
+    catch(e){}
+    finally{ pollInFlight = false; }
+  }
+
+  async function submitRecall(){
+    submitted = true;
+    render();
+    try{
+      const s = await apiJson('/batucada/recall', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ id: me.id, sequence: mySeq }),
+      });
+      lastResult = { alive: s.alive, roundsCleared: s.roundsCleared, eliminatedRound: s.eliminatedRound, prefixMatched: s.prefixMatched };
+      applyState(s);
+    }catch(e){ /* the next poll will still grade us via the timeout path if this never lands */ }
+  }
+
+  function vibe(ms){
+    try{
+      if (!navigator.vibrate) return;
+      const ua = navigator.userActivation;
+      if (ua && !ua.hasBeenActive) return;
+      navigator.vibrate(ms);
+    }catch(_){}
+  }
+
+  // ---- rendering ------------------------------------------------------------
+
+  function showCountdown(show){
+    els.overlay.classList.toggle('show', show);
+    if (!show){ lastCdShown = null; return; }
+    const ms = (state.startsAt||0) - estServerNow();
+    const num = Math.ceil(ms/1000);
+    const shown = num > 0 ? String(num) : 'GO!';
+    if (shown !== lastCdShown){
+      lastCdShown = shown;
+      els.cd.textContent = shown;
+      els.cd.className = 'cd ' + (num>=3?'n3':num===2?'n2':num===1?'n1':'go');
+      vibe(num>0?20:60);
+    }
+  }
+
+  function centerHtml(icon, msg, sub){
+    return '<div class="center"><div class="big">'+icon+'</div><div class="msg">'+msg+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';
+  }
+
+  function buildRecallGrid(){
+    gridBuiltForRound = state.round;
+    mySeq = []; submitted = false;
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    INSTRUMENTS.forEach((inst, idx) => {
+      const b = document.createElement('button');
+      b.className = 'inst';
+      b.style.background = inst.color;
+      b.innerHTML = '<span class="ico">🥁</span><span class="lb">'+inst.label+'</span>';
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (submitted || mySeq.length >= state.round) return;
+        mySeq.push(idx);
+        b.classList.add('flash'); setTimeout(()=>b.classList.remove('flash'), 150);
+        vibe(15);
+        updateDots();
+        if (mySeq.length >= state.round) submitRecall();
+      }, { passive:false });
+      grid.appendChild(b);
+    });
+    const dots = document.createElement('div');
+    dots.className = 'dots';
+    dots.id = 'dots';
+    for (let i=0;i<state.round;i++){ const d=document.createElement('div'); d.className='dot'; dots.appendChild(d); }
+    const bar = document.createElement('div');
+    bar.className = 'timewrap';
+    bar.innerHTML = '<div class="timebar" id="recallbar"></div>';
+    els.stage.innerHTML = '';
+    els.stage.appendChild(dots);
+    els.stage.appendChild(grid);
+    els.stage.appendChild(bar);
+  }
+
+  function updateDots(){
+    const dots = document.getElementById('dots');
+    if (!dots) return;
+    [...dots.children].forEach((d,i) => d.classList.toggle('fill', i < mySeq.length));
+  }
+
+  function render(){
+    if (!state.known){
+      els.stage.innerHTML = centerHtml('🥁', 'Conectando…');
+      els.status.textContent = '';
+      showCountdown(false);
+      return;
+    }
+
+    showCountdown(state.phase === PHASE.COUNTDOWN);
+
+    if (state.phase === PHASE.ENDED){
+      const champ = state.yourRank === 1;
+      els.stage.innerHTML = centerHtml(
+        champ ? '🏆' : '🥁',
+        champ ? 'Você é o campeão da batucada!' : ('Você ficou em #' + (state.yourRank ?? '?')),
+        state.roundsCleared + (state.roundsCleared === 1 ? ' rodada completa' : ' rodadas completas'),
+      );
+      els.status.textContent = '';
+      return;
+    }
+
+    if (state.alive === false){
+      els.stage.innerHTML = centerHtml(
+        '👀',
+        'Você caiu na rodada ' + state.eliminatedRound,
+        state.prefixMatched + '/' + state.eliminatedRound + ' certos — acompanhe a tela!',
+      );
+      els.status.textContent = state.aliveCount + ' de ' + state.total + ' continuam na roda';
+      return;
+    }
+
+    if (state.phase === PHASE.LOBBY){
+      els.stage.innerHTML = centerHtml('🥁', 'Aguardando o host iniciar…');
+      els.status.textContent = '';
+    } else if (state.phase === PHASE.COUNTDOWN){
+      els.stage.innerHTML = centerHtml('🥁', 'Prepare-se!');
+      els.status.textContent = '';
+    } else if (state.phase === PHASE.MEMORIZE){
+      els.stage.innerHTML = centerHtml('<span class="pulse-ico">👀</span>', 'Olhe para a tela', 'Rodada ' + state.round);
+      els.status.textContent = '';
+    } else if (state.phase === PHASE.RECALL){
+      if (submitted){
+        els.stage.innerHTML = centerHtml('✅', 'Enviado!', 'Aguardando o resultado…');
+        els.status.textContent = '';
+      } else {
+        if (gridBuiltForRound !== state.round) buildRecallGrid();
+        els.status.textContent = 'Toque na ordem que apareceu na tela — rodada ' + state.round;
+      }
+    } else if (state.phase === PHASE.REVEAL){
+      if (lastResult){
+        els.stage.innerHTML = lastResult.alive
+          ? centerHtml('✅', 'Isso mesmo!', 'Rodada ' + state.roundsCleared + ' completa')
+          : centerHtml('😵', 'Você errou', state.prefixMatched + '/' + state.eliminatedRound + ' certos');
+      } else {
+        els.stage.innerHTML = centerHtml('⏳', 'Apurando…');
+      }
+      els.status.textContent = '';
+    }
+  }
+
+  function frame(){
+    if (state.phase === PHASE.COUNTDOWN) showCountdown(true);
+    if (state.phase === PHASE.RECALL && !submitted && state.memorizeEndsAt && state.recallEndsAt){
+      const total = state.recallEndsAt - state.memorizeEndsAt;
+      const remain = Math.max(0, state.recallEndsAt - estServerNow());
+      const bar = document.getElementById('recallbar');
+      if (bar) bar.style.width = (Math.max(0, Math.min(1, remain/total))*100).toFixed(1) + '%';
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function loop(){
+    pollState();
+    setTimeout(loop, 300);
+  }
+
+  (async () => { await join(); render(); loop(); requestAnimationFrame(frame); })();
+})();
+</script>
+</body>
+</html>

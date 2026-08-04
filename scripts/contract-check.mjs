@@ -231,6 +231,63 @@ try {
   ok(done.phase === 'ended' && done.settled, 'round ended and settled');
 
   // -------------------------------------------------------------------------
+  // Batucada — the companion game (docs/BATUCADA_SPEC.md). Same process, own
+  // routes. A full round is already exercised end-to-end by Playwright; this
+  // is the happy-path contract for the routes themselves: shapes, admin auth,
+  // and the SSE stream, not gameplay.
+  // -------------------------------------------------------------------------
+  console.log('\n== batucada: routes, shapes, admin auth ==');
+  {
+    await fetch(B + '/batucada/admin/reset', { method: 'POST', headers: { 'x-admin-token': TOKEN } });
+
+    const bMe = await (await fetch(B + '/batucada/join', { method: 'POST' })).json();
+    ok(!!bMe.id && !!bMe.name && !!bMe.label, `/batucada/join returns an identity (${bMe.label})`);
+
+    const anon = await (await fetch(B + '/batucada/state')).json();
+    ok(anon.known === false && anon.phase === 'lobby', '/batucada/state with no id is honestly unknown, lobby');
+
+    const known = await (await fetch(B + '/batucada/state?id=' + bMe.id)).json();
+    ok(known.known === true && known.alive === true && known.roundsCleared === 0,
+      '/batucada/state?id= resolves the joined player, alive, no rounds yet');
+
+    const noToken = await fetch(B + '/batucada/admin/start', { method: 'POST' });
+    ok(noToken.status === 401, '/batucada/admin/start without a token is refused');
+
+    const started = await (await fetch(B + '/batucada/admin/start', {
+      method: 'POST', headers: { 'x-admin-token': TOKEN },
+    })).json();
+    ok(started.phase === 'countdown' && typeof started.startsAt === 'number',
+      '/batucada/admin/start begins a countdown, same as Tap Race');
+
+    // A recall for an unknown id self-heals exactly like /tap does.
+    const healed = await (await fetch(B + '/batucada/recall', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: 'nope-not-a-real-id', sequence: [0] }),
+    })).json();
+    ok(healed.rejoined === true && !!healed.id, '/batucada/recall self-heals an unknown id');
+
+    // SSE: right content type, and the first frame is the same publicState
+    // shape the screen renders from.
+    const sse = await fetch(B + '/batucada/events');
+    ok((sse.headers.get('content-type') || '').includes('text/event-stream'), '/batucada/events is an SSE stream');
+    const reader = sse.body.getReader();
+    const { value } = await reader.read();
+    const frame = new TextDecoder().decode(value);
+    await reader.cancel();
+    const line = frame.split('\n').find((l) => l.startsWith('data: '));
+    const firstState = line && JSON.parse(line.slice(6));
+    ok(!!firstState && 'aliveCount' in firstState && 'round' in firstState && Array.isArray(firstState.sequence),
+      '/batucada/events pushes a publicState frame on connect');
+
+    const reset = await (await fetch(B + '/batucada/admin/reset', {
+      method: 'POST', headers: { 'x-admin-token': TOKEN },
+    })).json();
+    ok(reset.phase === 'lobby' && reset.total === 0, '/batucada/admin/reset clears the room back to lobby');
+    const afterReset = await (await fetch(B + '/batucada/state?id=' + bMe.id)).json();
+    ok(afterReset.known === false, 'a reset forgets players the same way Tap Race does');
+  }
+
+  // -------------------------------------------------------------------------
   // /metrics is what makes /dashboard possible, and it is public. Everything
   // here is defending one claim: the handler does no work, so it does not
   // matter how many people open the page.
