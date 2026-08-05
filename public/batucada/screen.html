@@ -51,6 +51,15 @@
     box-shadow:0 0 0 8px rgba(255,255,255,.95), 0 0 110px 30px currentColor, 0 10px 30px rgba(0,0,0,.5);
     animation:tilepop .22s ease-out;}
   @keyframes tilepop{0%{transform:scale(.9)}55%{transform:scale(1.32)}100%{transform:scale(1.22)}}
+  /* opening cue — the instruction owns the screen, blinking, until the
+     action starts. This is what tells a first-timer WHAT to do before the
+     moment they must already be doing it. */
+  .bigcue{font-family:var(--font-display); font-size:clamp(44px,6.4vw,108px); font-weight:700; color:var(--ink);
+    text-align:center; text-wrap:balance; max-width:90vw; animation:cuepulse 1.1s ease-in-out infinite;}
+  @keyframes cuepulse{0%,100%{opacity:.45; transform:scale(.97)}50%{opacity:1; transform:scale(1.04)}}
+  .bigcue.go{animation:cdpop .5s cubic-bezier(.2,1.3,.4,1); color:var(--g-green-700); opacity:1;}
+  .cuedetail{font-size:clamp(22px,2.9vw,46px); color:var(--ink); font-weight:500; max-width:82vw; text-align:center;}
+
   /* which symbol of the sequence we're on — fills as the flashes go by */
   .mdots{display:flex; gap:1.2vw; justify-content:center;}
   .mdots .md{width:clamp(14px,1.6vw,24px); height:clamp(14px,1.6vw,24px); border-radius:50%;
@@ -141,7 +150,8 @@
 
   <!-- MEMORIZE -->
   <div class="stage" id="memorize">
-    <div class="roundtag">Rodada <span id="mRound">1</span> — decore!</div>
+    <div class="bigcue" id="mCue">👀 DECORE A SEQUÊNCIA!</div>
+    <div class="roundtag hidden" id="mTag">Rodada <span id="mRound">1</span> — decore!</div>
     <div class="tiles" id="mTiles"></div>
     <div class="mdots" id="mDots"></div>
   </div>
@@ -165,9 +175,9 @@
 
   <!-- BONUS (arm + hit share the stage; the lit tile is the whole reveal) -->
   <div class="stage" id="bonus">
-    <div class="roundtag" id="bTitle">⚡ Rodada Bônus — Reflexo!</div>
+    <div class="bigcue" id="bCue">⚡ REFLEXO!</div>
+    <div class="cuedetail" id="bDetail"></div>
     <div class="tiles" id="bTiles"></div>
-    <div class="subtext" id="bDetail"></div>
   </div>
 
   <!-- ENDED -->
@@ -265,12 +275,17 @@
   // ---- bonus: suspense, then ONE color — the tile lights the instant the
   // phase flips to bonus_hit (the server withholds the color until then) ----
   function renderBonus(s){
+    const cue = $('bCue');
     if (s.phase===PHASE.BONUS_ARM){
       bTiles.forEach(t=>t.classList.remove('lit'));
-      $('bDetail').textContent = 'Prepare o dedo… quando uma cor acender, toque nela no celular. Tocar antes queima a vez!';
+      cue.classList.remove('go');
+      cue.textContent = '⚡ REFLEXO!';
+      $('bDetail').textContent = 'Quando uma cor acender, TOQUE NELA no celular — tocar antes queima a vez!';
     } else {
       bTiles.forEach((t,i)=>t.classList.toggle('lit', i===s.bonusColor));
-      $('bDetail').textContent = 'AGORA!';
+      cue.classList.add('go');
+      cue.textContent = 'AGORA!';
+      $('bDetail').textContent = '';
     }
   }
 
@@ -300,12 +315,15 @@
   }
 
   // ---- memorize: flash the sequence in real time off the synced clock ----
+  let cueShowing = null; // the big blinking DECORE owns the lead-in, then swaps out
   function renderMemorize(s){
     $('mRound').textContent = s.round;
     if (memorizeRoundBuilt !== s.round){
       memorizeRoundBuilt = s.round;
       mTiles.forEach(t=>t.classList.remove('lit'));
       lastLitIndex = -1;
+      cueShowing = null;
+      $('mCue').textContent = '👀 Rodada '+s.round+' — DECORE!';
       const dots=$('mDots'); dots.innerHTML='';
       for (let i=0;i<s.round;i++){ const d=document.createElement('div'); d.className='md'; dots.appendChild(d); }
     }
@@ -314,9 +332,14 @@
     if (cur===PHASE.MEMORIZE && state.memorizeStartsAt!=null && Array.isArray(state.sequence)){
       const onMs = state.symbolOnMs||1200, gapMs = state.symbolGapMs||700, step = onMs+gapMs;
       // The lead-in is the breath between "stage appeared" and the first
-      // flash — without subtracting it the animation runs ahead of the timing
-      // the server actually planned.
+      // flash — the big blinking cue owns it, then hands off to the tiles.
       const elapsed = estServerNow() - state.memorizeStartsAt - (state.memorizeLeadInMs||0);
+      const cueing = elapsed < 0;
+      if (cueing !== cueShowing){
+        cueShowing = cueing;
+        $('mCue').classList.toggle('hidden', !cueing);
+        $('mTag').classList.toggle('hidden', cueing);
+      }
       const idx = Math.floor(elapsed/step);
       const within = elapsed - idx*step;
       const lit = elapsed>=0 && idx>=0 && idx<state.sequence.length && within < onMs ? idx : -1;

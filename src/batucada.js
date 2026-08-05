@@ -43,8 +43,9 @@ export const DEFAULTS = Object.freeze({
   minSymbolGapMs: 450,
   // A breath between "the stage appeared" and the first flash. Without it the
   // first symbol fires during the phase transition itself and gets half-seen
-  // — the exact "I never saw it blink" complaint.
-  memorizeLeadInMs: 1200,
+  // — the exact "I never saw it blink" complaint. Long enough to read the
+  // big blinking "DECORE!" cue the screen shows in this window.
+  memorizeLeadInMs: 1600,
 
   recallBaseMs: 1500,
   recallPerSymbolMs: 1200,

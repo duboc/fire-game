@@ -550,3 +550,14 @@ MEMORIZE.
   finale.
 - [x] Verified: 82 unit tests, full e2e (hero card asserted on both memory
   and bonus reveals), screenshot of the staggered entrance mid-beat.
+
+### Revision 6.3: the instruction owns its moment
+
+- [x] Big centered blinking cues open both action phases: "👀 Rodada N —
+  DECORE!" through the memorize lead-in (1.200 → 1.600ms so it reads),
+  swapping out the instant the first tile lights; "⚡ REFLEXO!" + the rule
+  line through the bonus suspense, snapping to a green "AGORA!" on the
+  flash. Phone mirrors both: pulsing memorize card, yellow pulsing bonus
+  instruction. Soft opacity pulse, not a strobe; reduced-motion safe.
+- [x] Verified: 82 unit tests, full e2e (cue text asserted on the bonus
+  stage), screenshot of the DECORE cue owning the lead-in.

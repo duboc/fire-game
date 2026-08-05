@@ -397,3 +397,23 @@ Played again; three adjustments, all about how alive the room feels:
   burst (the finale keeps its full 280-rain). Guarded once per reveal — the
   SSE frame repeats 10×/s and a burst must never become a hose.
 - Standings/spotlight chips got a full size bump for the back of the room.
+
+### Revision 6.3: the instruction owns its moment
+
+First-timers were meeting the flash before they knew what to do with it.
+Both action phases now open with a big, centered, blinking cue that owns the
+screen until the action starts, then hands off:
+
+- **MEMORIZE**: "👀 Rodada N — DECORE!" blinks through the lead-in (bumped
+  1.200 → 1.600ms so it can actually be read), then swaps for the small
+  round tag the instant the first tile lights.
+- **BONUS_ARM**: "⚡ REFLEXO!" blinks over the rule line ("quando uma cor
+  acender, TOQUE NELA no celular — tocar antes queima a vez!") for the whole
+  suspense; on the flash it snaps to a static green "AGORA!".
+- **Phone**: the memorize card pulses ("OLHE PARA A TELA — decore a
+  ordem!") and the bonus instruction line turns yellow and pulses while the
+  grid is armed.
+
+The blink is a soft opacity/scale pulse (1,1s), not a hard strobe — urgency
+without assault, and `prefers-reduced-motion` still kills all of it via the
+global rule in theme.css.
