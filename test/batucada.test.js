@@ -17,10 +17,13 @@ function fresh(opts = {}) {
   return new Batucada({
     countdownMs: 1000,
     totalRounds: 3,
+    memorizeLeadInMs: 0, // most tests want exact round arithmetic; lead-in has its own test
     symbolOnMs: 100,
     symbolGapMs: 50,
     symbolOnStepMs: 0, // no speed ramp unless a test asks for one
     symbolGapStepMs: 0,
+    minSymbolOnMs: 0, // the default perceptual floors would clamp these tiny test speeds
+    minSymbolGapMs: 0,
     recallBaseMs: 200,
     recallPerSymbolMs: 100,
     revealMs: 50,
@@ -226,10 +229,23 @@ test('playerView reports yourRank once ENDED and the per-round result for the ph
 test('default ramp lands on a floor the eye can still follow', () => {
   const g = new Batucada({ nameFactory: fixedNames() });
   assert.equal(g.totalRounds, 12);
-  assert.equal(g.symbolOnFor(1), 900);
-  assert.equal(g.symbolGapFor(1), 500);
-  assert.equal(g.symbolOnFor(12), 550, 'on-time floor: below ~550ms encoding into working memory degrades');
-  assert.equal(g.symbolGapFor(12), 302);
+  assert.equal(g.symbolOnFor(1), 1200);
+  assert.equal(g.symbolGapFor(1), 700);
+  assert.equal(g.symbolOnFor(12), 750, 'even round 12 stays comfortably readable');
+  assert.equal(g.symbolGapFor(12), 450);
+  assert.ok(g.memorizeLeadInMs >= 1000, 'a breath before the first flash, or the phase transition eats it');
+});
+
+test('the lead-in delays the first flash and is published so the screen can offset its animation', () => {
+  const g = fresh({ memorizeLeadInMs: 1000 });
+  g.join('p1');
+  g.start({ now: 0 });
+  g.tick(1000); // -> round 1 MEMORIZE
+  // 1000 lead-in + 1 symbol * (100 on + 50 gap)
+  assert.equal(g.memorizeEndsAt - g.memorizeStartsAt, 1000 + 150);
+  const pub = g.publicState(1000);
+  assert.equal(pub.memorizeLeadInMs, 1000);
+  assert.equal(g.playerView('p1', 1000).memorizeLeadInMs, 1000);
 });
 
 test('all answers in → the round closes early, no dead air', () => {

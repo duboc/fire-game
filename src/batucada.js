@@ -29,17 +29,22 @@ export const DEFAULTS = Object.freeze({
 
   // Round-1 flash cadence. Difficulty ramps on two axes: the sequence grows
   // (+1 symbol per round) AND the flash speeds up per round, clamped at the
-  // floors below. The floors are perceptual, not aesthetic: encoding a visual
-  // item into working memory needs roughly 400–600ms of exposure, and this is
-  // a projector read from across a room — 550ms on-time keeps round 12 fast
-  // but followable, never subliminal. The steps are sized so the glide
-  // reaches the floor exactly at the final round instead of plateauing early.
-  symbolOnMs: 900,
-  symbolGapMs: 500,
-  symbolOnStepMs: 32, // shaved off per round after the first
-  symbolGapStepMs: 18,
-  minSymbolOnMs: 550,
-  minSymbolGapMs: 300,
+  // floors below. The floors are perceptual, not aesthetic: this is a
+  // projector read from across a room, and played-by-hand feedback was that
+  // a 900/500→550/300 glide still felt rushed — the game is about attention,
+  // so the whole band moved up. Round 1 is a deliberate 1,9s per symbol;
+  // round 12 still gives 1,2s. The steps are sized so the glide reaches the
+  // floor exactly at the final round instead of plateauing early.
+  symbolOnMs: 1200,
+  symbolGapMs: 700,
+  symbolOnStepMs: 41, // shaved off per round after the first
+  symbolGapStepMs: 23,
+  minSymbolOnMs: 750,
+  minSymbolGapMs: 450,
+  // A breath between "the stage appeared" and the first flash. Without it the
+  // first symbol fires during the phase transition itself and gets half-seen
+  // — the exact "I never saw it blink" complaint.
+  memorizeLeadInMs: 1200,
 
   recallBaseMs: 1500,
   recallPerSymbolMs: 1200,
@@ -98,6 +103,7 @@ export class Batucada {
     this.symbolGapStepMs = opts.symbolGapStepMs ?? DEFAULTS.symbolGapStepMs;
     this.minSymbolOnMs = opts.minSymbolOnMs ?? DEFAULTS.minSymbolOnMs;
     this.minSymbolGapMs = opts.minSymbolGapMs ?? DEFAULTS.minSymbolGapMs;
+    this.memorizeLeadInMs = Math.max(0, opts.memorizeLeadInMs ?? DEFAULTS.memorizeLeadInMs);
     this.recallBaseMs = opts.recallBaseMs ?? DEFAULTS.recallBaseMs;
     this.recallPerSymbolMs = opts.recallPerSymbolMs ?? DEFAULTS.recallPerSymbolMs;
     this.revealMs = opts.revealMs ?? DEFAULTS.revealMs;
@@ -403,7 +409,7 @@ export class Batucada {
     for (const p of this.players.values()) p.submitted = false;
     this.phase = PHASE.MEMORIZE;
     this.memorizeStartsAt = now;
-    this.memorizeEndsAt = now + round * (this.symbolOnFor(round) + this.symbolGapFor(round));
+    this.memorizeEndsAt = now + this.memorizeLeadInMs + round * (this.symbolOnFor(round) + this.symbolGapFor(round));
     this.recallStartsAt = this.memorizeEndsAt;
     this.recallEndsAt = this.recallStartsAt + this.recallBaseMs + round * this.recallPerSymbolMs;
   }
@@ -460,6 +466,7 @@ export class Batucada {
       countdownMs: this.countdownMs,
       symbolOnMs: this.round > 0 ? this.symbolOnFor(this.round) : this.symbolOnMs,
       symbolGapMs: this.round > 0 ? this.symbolGapFor(this.round) : this.symbolGapMs,
+      memorizeLeadInMs: this.memorizeLeadInMs,
       total: this.players.size,
       bonusReveal: this.bonusReveal,
       roundId: this.roundId,
@@ -518,6 +525,7 @@ export class Batucada {
       countdownMs: this.countdownMs,
       symbolOnMs: this.round > 0 ? this.symbolOnFor(this.round) : this.symbolOnMs,
       symbolGapMs: this.round > 0 ? this.symbolGapFor(this.round) : this.symbolGapMs,
+      memorizeLeadInMs: this.memorizeLeadInMs,
       total: this.players.size,
       roundClearedCount: this.roundClearedCount,
       // Standings only in the phases that show them: sorting the roster on

@@ -301,3 +301,23 @@ disables). A palate cleanser that tests the opposite skill of memory:
 Bonus points land in `symbols` only — never in `cleared` — so memory stays
 the primary ranking axis and the bonus spices the score without letting a
 fast thumb outrank a good memory.
+
+## Revision 4: slower still, a lead-in breath, and an unmissable flash
+
+Played on the live deploy, Revision 3 still failed the only test that
+matters — "eu não to vendo a tela piscando". Three fixes, all client-visible:
+
+- **The whole band slowed again**: 1200/700ms in round 1 gliding to a
+  750/450ms floor at round 12 (steps 41/23ms). Round 1 is a deliberate 1,9s
+  per symbol; even round 12 gives 1,2s.
+- **`memorizeLeadInMs` (1200ms)**: a breath between "the stage appeared" and
+  the first flash. Without it the first symbol fired *during* the phase
+  transition and was half-seen — on round 1, whose whole memorize pass lasted
+  under 1,5s, that alone explained "I never saw it blink". The engine adds it
+  to the memorize window and publishes it; the screen subtracts it before
+  animating.
+- **The flash itself got loud**: at rest the tiles sit at 22% opacity; the
+  lit one pops to 122% scale with a thick white ring and floods its own color
+  as glow (contrast carries further than brightness on a washed-out
+  projector). A row of progress dots under the tiles fills as the sequence
+  advances, so you always know how many symbols have gone by.

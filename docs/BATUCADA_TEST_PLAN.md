@@ -53,9 +53,14 @@ anyway — same habit as Tap Race.
 
 - [ ] Countdown-to-memorize handoff has no visible stutter or double-flash on
   the screen.
-- [ ] The flash cadence starts calm (900ms on / 500ms gap in round 1) and
-  tightens each round down to the 550/300ms floor — round 12 should feel
+- [ ] Each round opens with a ~1,2s breath before the first flash — the first
+  symbol must never feel "eaten" by the stage transition.
+- [ ] The flash cadence starts calm (1200ms on / 700ms gap in round 1) and
+  tightens each round down to the 750/450ms floor — round 12 should feel
   fast-but-followable, never subliminal, from across a room-sized distance.
+- [ ] The lit tile is unmissable: white ring, size pop, colored glow, with
+  the other three tiles nearly extinguished. Progress dots under the tiles
+  fill as the sequence advances.
 - [ ] When everyone has answered, the round closes immediately instead of
   waiting out the window — no dead air between "last answer" and the reveal.
 - [ ] **Bonus round (after round 6)**: the screen holds an unpredictable

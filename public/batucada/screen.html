@@ -38,12 +38,24 @@
   .cdpop{animation:cdpop .8s cubic-bezier(.2,1.3,.4,1);}
   @keyframes cdpop{0%{transform:scale(.2);opacity:0}45%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
 
-  /* ===== color tiles (memorize / recall / reveal) — classic Simon Says ===== */
+  /* ===== color tiles (memorize / recall / reveal) — classic Simon Says =====
+     The flash must be unmissable from the back of a room: at rest the tiles
+     are nearly extinguished, and the lit one pops in size, gains a thick
+     white ring and floods its own color as glow. Contrast carries further
+     than brightness alone on a washed-out projector. ===== */
   .roundtag{font-family:var(--font-mono); font-size:clamp(22px,2.8vw,40px); color:var(--g-blue-700); font-weight:500;}
-  .tiles{display:flex; gap:2vw; flex-wrap:wrap; justify-content:center;}
-  .tile{width:min(16vw,180px); aspect-ratio:1/1; border-radius:var(--r-xl); opacity:.5; transform:scale(.94);
-    transition:opacity .1s ease, transform .1s ease, filter .1s ease; box-shadow:0 10px 30px rgba(0,0,0,.4);}
-  .tile.lit{opacity:1; transform:scale(1.08); filter:brightness(1.5); box-shadow:0 0 60px currentColor, 0 10px 30px rgba(0,0,0,.5);}
+  .tiles{display:flex; gap:2vw; flex-wrap:wrap; justify-content:center; padding:3vh 0;}
+  .tile{width:min(18vw,220px); aspect-ratio:1/1; border-radius:var(--r-xl); opacity:.22; transform:scale(.9);
+    transition:opacity .08s ease, transform .08s ease, filter .08s ease; box-shadow:0 10px 30px rgba(0,0,0,.4);}
+  .tile.lit{opacity:1; transform:scale(1.22); filter:brightness(1.45) saturate(1.25);
+    box-shadow:0 0 0 8px rgba(255,255,255,.95), 0 0 110px 30px currentColor, 0 10px 30px rgba(0,0,0,.5);
+    animation:tilepop .22s ease-out;}
+  @keyframes tilepop{0%{transform:scale(.9)}55%{transform:scale(1.32)}100%{transform:scale(1.22)}}
+  /* which symbol of the sequence we're on — fills as the flashes go by */
+  .mdots{display:flex; gap:1.2vw; justify-content:center;}
+  .mdots .md{width:clamp(14px,1.6vw,24px); height:clamp(14px,1.6vw,24px); border-radius:50%;
+    background:var(--surface-2); border:1px solid var(--line);}
+  .mdots .md.done{background:var(--g-blue); box-shadow:0 0 14px rgba(66,133,244,.6);}
 
   .subtext{font-size:clamp(18px,2.2vw,30px); color:var(--ink-2); font-weight:500;}
   .alivebig{font-family:var(--font-mono); font-size:clamp(48px,7vw,110px); font-weight:700; color:var(--ink);}
@@ -91,6 +103,7 @@
   <div class="stage" id="memorize">
     <div class="roundtag">Rodada <span id="mRound">1</span> — decore!</div>
     <div class="tiles" id="mTiles"></div>
+    <div class="mdots" id="mDots"></div>
   </div>
 
   <!-- RECALL -->
@@ -249,20 +262,28 @@
       memorizeRoundBuilt = s.round;
       mTiles.forEach(t=>t.classList.remove('lit'));
       lastLitIndex = -1;
+      const dots=$('mDots'); dots.innerHTML='';
+      for (let i=0;i<s.round;i++){ const d=document.createElement('div'); d.className='md'; dots.appendChild(d); }
     }
   }
   function tickMemorize(){
     if (cur===PHASE.MEMORIZE && state.memorizeStartsAt!=null && Array.isArray(state.sequence)){
-      const onMs = state.symbolOnMs||700, gapMs = state.symbolGapMs||300, step = onMs+gapMs;
-      const elapsed = estServerNow() - state.memorizeStartsAt;
+      const onMs = state.symbolOnMs||1200, gapMs = state.symbolGapMs||700, step = onMs+gapMs;
+      // The lead-in is the breath between "stage appeared" and the first
+      // flash — without subtracting it the animation runs ahead of the timing
+      // the server actually planned.
+      const elapsed = estServerNow() - state.memorizeStartsAt - (state.memorizeLeadInMs||0);
       const idx = Math.floor(elapsed/step);
       const within = elapsed - idx*step;
-      const lit = idx>=0 && idx<state.sequence.length && within < onMs ? idx : -1;
+      const lit = elapsed>=0 && idx>=0 && idx<state.sequence.length && within < onMs ? idx : -1;
       if (lit !== lastLitIndex){
         mTiles.forEach(t=>t.classList.remove('lit'));
         if (lit>=0) mTiles[state.sequence[lit]].classList.add('lit');
         lastLitIndex = lit;
       }
+      // progress dots: fill every symbol whose flash has started
+      const dots=$('mDots').children;
+      for (let i=0;i<dots.length;i++) dots[i].classList.toggle('done', elapsed >= i*step);
     }
     requestAnimationFrame(tickMemorize);
   }

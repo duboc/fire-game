@@ -464,3 +464,25 @@ middle. Full rationale in `docs/BATUCADA_SPEC.md`, "Revision 3".
   e2e: miss → keep playing → burn the bonus start (locked out) → reflex hit
   (+3 pts) → bonus-labeled reveal → memory rounds resume → final ✓2·6pts
   champion.
+
+### Revision 4: slower still, lead-in breath, unmissable flash
+
+Live playtest verdict: "ainda está muito rápido e eu não to vendo a tela
+piscando". Root causes: the first flash of every round fired during the
+stage transition itself (round 1's whole memorize pass was under 1,5s), and
+the lit style was too subtle for a projector. See spec Revision 4.
+
+- [x] `src/batucada.js`: band raised to 1200/700ms → 750/450ms floor (steps
+  41/23); new `memorizeLeadInMs` (1200ms) added to the memorize window and
+  published in both views so the screen offsets its animation. Exposed as
+  `SEQ_MEMORIZE_LEAD_IN_MS`. The lead-in test flushed out that the default
+  perceptual floors silently clamped the test suite's tiny speeds — fresh()
+  now zeroes the floors so round arithmetic is exact.
+- [x] `public/batucada/screen.html`: rest tiles at 22% opacity; lit tile pops
+  to 122% with a thick white ring + own-color flood glow (contrast carries
+  further than brightness on a washed-out projector); progress dots fill as
+  the sequence advances.
+- [x] Verified: 76 unit tests, full e2e re-run (including a same-color
+  [1,1] sequence read correctly off the screen — the gap extinguishes
+  between repeats), screenshot confirms the lit tile reads from across a
+  room.

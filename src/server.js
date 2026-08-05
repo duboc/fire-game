@@ -185,6 +185,7 @@ const batucada = new Batucada({
   totalRounds: numEnv('SEQ_ROUNDS'),
   symbolOnMs: numEnv('SEQ_SYMBOL_ON_MS'),
   symbolGapMs: numEnv('SEQ_SYMBOL_GAP_MS'),
+  memorizeLeadInMs: numEnv('SEQ_MEMORIZE_LEAD_IN_MS'),
   recallBaseMs: numEnv('SEQ_RECALL_BASE_MS'),
   recallPerSymbolMs: numEnv('SEQ_RECALL_PER_SYMBOL_MS'),
   revealMs: numEnv('SEQ_REVEAL_MS'),
