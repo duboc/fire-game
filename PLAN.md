@@ -561,3 +561,6 @@ MEMORIZE.
   instruction. Soft opacity pulse, not a strobe; reduced-motion safe.
 - [x] Verified: 82 unit tests, full e2e (cue text asserted on the bonus
   stage), screenshot of the DECORE cue owning the lead-in.
+- [x] Follow-up by feel: the phone's memorize card went back to a quiet
+  "Olhe para a tela" — the big blinking cue belongs on the projector; the
+  phone's only job in that moment is to point the eyes away from itself.
