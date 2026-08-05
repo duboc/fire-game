@@ -94,7 +94,8 @@
   const els = { emoji:$('emoji'), name:$('name'), seq:$('seq'), stage:$('stage'), status:$('status'),
                 overlay:$('overlay'), cd:$('cd') };
 
-  const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', MEMORIZE:'memorize', RECALL:'recall', REVEAL:'reveal', ENDED:'ended' };
+  const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', MEMORIZE:'memorize', RECALL:'recall', REVEAL:'reveal',
+                  BONUS_ARM:'bonus_arm', BONUS_HIT:'bonus_hit', ENDED:'ended' };
 
   // Same four, same order as src/batucada.js's SYMBOLS — the wire format is
   // an index into this array, so the order must match exactly. Plain colors,
@@ -111,6 +112,7 @@
   let state = { phase: PHASE.LOBBY, known:false, total:0, round:0, totalRounds:10 };
   let myRoundId = null; // a whole new game (start() bumps it)
   let myRound = -1; // the round within the game — input state resets per round
+  let myBonusKey = null; // the bonus round's own input reset (round number doesn't change)
   let mySeq = [];
   let submitted = false;
   let gridBuiltForRound = -1;
@@ -146,6 +148,11 @@
     // the elimination version — no test room ever survived to round 2.)
     if (typeof s.round === 'number' && s.round !== myRound){
       myRound = s.round; mySeq = []; submitted = false; gridBuiltForRound = -1;
+    }
+    // The bonus keeps the same round number, so it needs its own reset when
+    // the suspense phase arrives (once per game — keyed on roundId).
+    if (s.phase === PHASE.BONUS_ARM && myBonusKey !== s.roundId){
+      myBonusKey = s.roundId; mySeq = []; submitted = false; gridBuiltForRound = -1;
     }
     state = s;
     if (s.name) setIdentity(s);
@@ -230,8 +237,11 @@
     return '<div class="center"><div class="big">'+icon+'</div><div class="msg">'+msg+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';
   }
 
-  function buildRecallGrid(){
-    gridBuiltForRound = state.round;
+  // `bonus` mode: expect a single tap, no dots, no time bar — the only thing
+  // on screen is the four colors and the player's nerve.
+  function buildRecallGrid(bonus){
+    const expect = bonus ? 1 : state.round;
+    gridBuiltForRound = bonus ? 'bonus' : state.round;
     mySeq = []; submitted = false;
     const grid = document.createElement('div');
     grid.className = 'grid';
@@ -241,26 +251,30 @@
       b.style.background = color;
       b.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        if (submitted || mySeq.length >= state.round) return;
+        if (submitted || mySeq.length >= expect) return;
         mySeq.push(idx);
         b.classList.add('flash'); setTimeout(()=>b.classList.remove('flash'), 150);
         vibe(15);
         updateDots();
-        if (mySeq.length >= state.round) submitRecall();
+        if (mySeq.length >= expect) submitRecall();
       }, { passive:false });
       grid.appendChild(b);
     });
-    const dots = document.createElement('div');
-    dots.className = 'dots';
-    dots.id = 'dots';
-    for (let i=0;i<state.round;i++){ const d=document.createElement('div'); d.className='dot'; dots.appendChild(d); }
-    const bar = document.createElement('div');
-    bar.className = 'timewrap';
-    bar.innerHTML = '<div class="timebar" id="recallbar"></div>';
     els.stage.innerHTML = '';
-    els.stage.appendChild(dots);
+    if (!bonus){
+      const dots = document.createElement('div');
+      dots.className = 'dots';
+      dots.id = 'dots';
+      for (let i=0;i<expect;i++){ const d=document.createElement('div'); d.className='dot'; dots.appendChild(d); }
+      els.stage.appendChild(dots);
+    }
     els.stage.appendChild(grid);
-    els.stage.appendChild(bar);
+    if (!bonus){
+      const bar = document.createElement('div');
+      bar.className = 'timewrap';
+      bar.innerHTML = '<div class="timebar" id="recallbar"></div>';
+      els.stage.appendChild(bar);
+    }
   }
 
   function updateDots(){
@@ -309,13 +323,33 @@
         els.stage.innerHTML = centerHtml('✅', 'Enviado!', 'Aguardando o resultado…');
         els.status.textContent = '';
       } else {
-        if (gridBuiltForRound !== state.round) buildRecallGrid();
+        if (gridBuiltForRound !== state.round) buildRecallGrid(false);
         els.status.textContent = 'Toque na ordem que apareceu na tela — ' + roundLabel().toLowerCase();
       }
+    } else if (state.phase === PHASE.BONUS_ARM || state.phase === PHASE.BONUS_HIT){
+      if (submitted || state.submitted){
+        els.stage.innerHTML = state.lastBonusOutcome === 'early'
+          ? centerHtml('😬', 'Queimou a largada!', 'tocou antes da cor acender — 0 pontos')
+          : centerHtml('✅', 'Enviado!', 'Aguardando o resultado…');
+        els.status.textContent = '';
+      } else {
+        if (gridBuiltForRound !== 'bonus') buildRecallGrid(true);
+        els.status.textContent = '⚡ BÔNUS: quando a cor acender NA TELA, toque nela aqui — rápido!';
+      }
     } else if (state.phase === PHASE.REVEAL){
+      if (state.bonusReveal){
+        if (state.lastBonusOutcome === 'hit'){
+          els.stage.innerHTML = centerHtml('⚡', '+' + state.lastBonusPts + (state.lastBonusPts===1?' ponto!':' pontos!'), 'reflexo certeiro');
+        } else if (state.lastBonusOutcome === 'early'){
+          els.stage.innerHTML = centerHtml('😬', 'Queimou a largada!', 'calma na próxima…');
+        } else if (state.lastBonusOutcome === 'wrong'){
+          els.stage.innerHTML = centerHtml('🎨', 'Cor errada!', 'era rápido E na cor certa');
+        } else {
+          els.stage.innerHTML = centerHtml('😴', 'Não deu tempo…', 'o jogo continua');
+        }
       // No elimination: a miss costs the round, never the seat. Both faces of
       // this card say "next round is coming".
-      if (state.lastCleared === true){
+      } else if (state.lastCleared === true){
         els.stage.innerHTML = centerHtml('✅', 'Isso mesmo!', roundLabel() + ' completa');
       } else if (state.lastCleared === false){
         els.stage.innerHTML = centerHtml('😅', 'Errou essa!',

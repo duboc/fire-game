@@ -435,3 +435,32 @@ and exactly 10 rounds. Full model in `docs/BATUCADA_SPEC.md`, "Revision 2".
 - [x] Verified: 67 unit / 173 contract / Playwright e2e with `SEQ_ROUNDS=2`
   proving the key new behavior — a player who misses round 1 gets their grid
   back in round 2 and finishes ranked #2 with partial credit.
+
+### Revision 3: perceptual pacing, 12 rounds, Reflexo bonus round
+
+Feedback after playing: the acceleration must stay within what the eye can
+follow, more rounds to build attention, and a different mini-game in the
+middle. Full rationale in `docs/BATUCADA_SPEC.md`, "Revision 3".
+
+- [x] `src/batucada.js`: 12 rounds; ramp floor 450/250 → 550/300ms (encoding
+  into working memory needs ~400–600ms of exposure — the floor is perceptual,
+  not aesthetic) with 32/18ms steps sized to land the glide exactly on round
+  12; RECALL and the bonus window close early once every player has answered
+  (no dead air — a room that answered in 5s no longer stares at a ~16s
+  window); new `BONUS_ARM`/`BONUS_HIT` phases after round 6 — unpredictable
+  suspense (tapping during it burns the start), one lit color, speed-scaled
+  points (10→1) into `symbols` only, never `cleared`, so memory remains the
+  primary ranking axis. Color withheld from `publicState` until the flash so
+  a state-reading phone can't script the reflex. 20 engine tests.
+- [x] Clients: phone gets a bare 4-tile grid during the bonus (live during
+  suspense — that's the trap), burned/hit/wrong/slow reveal cards, and the
+  screen gets a shared bonus stage with the suspense beat and the lit tile;
+  host shows `BÔNUS…`/`BÔNUS!` and `⚡`. New `SEQ_BONUS_*` env knobs.
+- [x] Found by e2e before it shipped: `bonusReveal` was on `publicState` but
+  missing from `playerView`, so the phone rendered the memory-round card
+  ("Isso mesmo!") instead of the bonus result. Unit test added, then fixed.
+- [x] Verified: 20 engine tests green, 173/173 contract (twice — one flaky
+  timing assertion on a loaded machine, clean on re-runs), full Playwright
+  e2e: miss → keep playing → burn the bonus start (locked out) → reflex hit
+  (+3 pts) → bonus-labeled reveal → memory rounds resume → final ✓2·6pts
+  champion.

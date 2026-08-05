@@ -34,6 +34,7 @@
   .phase{font-weight:700; text-transform:uppercase; letter-spacing:.06em;}
   .phase.lobby{color:var(--ink-2);} .phase.countdown{color:var(--g-yellow-700);} .phase.running{color:var(--g-green-700);} .phase.ended{color:var(--g-blue-700);}
   .phase.memorize{color:var(--g-yellow-700);} .phase.recall{color:var(--g-green-700);} .phase.reveal{color:#c893fa;}
+  .phase.bonus_arm{color:var(--g-yellow-700);} .phase.bonus_hit{color:var(--g-red-700);}
   .links{display:flex; gap:18px; align-items:center; flex-wrap:wrap;}
   .qr{background:#fff; padding:10px; border-radius:var(--r-sm); width:150px; height:150px; border:1px solid rgba(66,133,244,.3); box-shadow:0 0 24px rgba(66,133,244,.18);}
   .qr svg{width:100%; height:100%; display:block;}
@@ -220,9 +221,9 @@
     es.onerror=()=>{ es.close(); setTimeout(connectBatucada,1500); };
   }
   function renderBatucada(s){
-    $('bPhase').textContent=s.phase.toUpperCase();
+    $('bPhase').textContent=s.phase==='bonus_arm'?'BÔNUS…':s.phase==='bonus_hit'?'BÔNUS!':s.phase.toUpperCase();
     $('bPhase').className='v phase '+s.phase;
-    $('bRound').textContent=s.round?(s.round+'/'+s.totalRounds):'—';
+    $('bRound').textContent=s.phase.startsWith('bonus')?'⚡':(s.round?(s.round+'/'+s.totalRounds):'—');
     $('bPlayers').textContent=fmt(s.total||0);
   }
   connectBatucada();

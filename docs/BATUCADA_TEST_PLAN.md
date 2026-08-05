@@ -43,7 +43,7 @@ anyway — same habit as Tap Race.
   round**. Nobody is ever benched.
 - [ ] Between rounds the screen shows how many people cleared the round and a
   top-5 running standings (✓rounds · pts).
-- [ ] The game runs all 10 rounds regardless of misses, then confetti +
+- [ ] The game runs all 12 rounds (plus the bonus) regardless of misses, then confetti +
   champion + podium. The champion's phone shows "Você é o campeão!"; everyone
   else sees their rank and score.
 - [ ] `/host` Sequência panel reflects the phase, round `N/10` and player
@@ -54,8 +54,15 @@ anyway — same habit as Tap Race.
 - [ ] Countdown-to-memorize handoff has no visible stutter or double-flash on
   the screen.
 - [ ] The flash cadence starts calm (900ms on / 500ms gap in round 1) and
-  tightens each round down to the 450/250ms floor — round 10 should feel
+  tightens each round down to the 550/300ms floor — round 12 should feel
   fast-but-followable, never subliminal, from across a room-sized distance.
+- [ ] When everyone has answered, the round closes immediately instead of
+  waiting out the window — no dead air between "last answer" and the reveal.
+- [ ] **Bonus round (after round 6)**: the screen holds an unpredictable
+  suspense beat, then ONE color lights. Tap it fast on the phone → "+N
+  pontos". Deliberately tap during the suspense on one phone → "Queimou a
+  largada!" and locked out of the flash. Wrong color → zero. The reveal is
+  labeled "⚡ Rodada Bônus" and the memory rounds resume afterward.
 - [ ] The recall window feels fair for the round length — round 1 (1 symbol)
   isn't a hair-trigger, and by round 5+ (5 symbols) the timer doesn't run out
   before an honestly-remembering player can finish tapping.

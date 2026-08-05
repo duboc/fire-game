@@ -188,6 +188,10 @@ const batucada = new Batucada({
   recallBaseMs: numEnv('SEQ_RECALL_BASE_MS'),
   recallPerSymbolMs: numEnv('SEQ_RECALL_PER_SYMBOL_MS'),
   revealMs: numEnv('SEQ_REVEAL_MS'),
+  bonusAfterRound: numEnv('SEQ_BONUS_AFTER'), // 0 disables the reflex round
+  bonusArmMinMs: numEnv('SEQ_BONUS_ARM_MIN_MS'),
+  bonusArmJitterMs: numEnv('SEQ_BONUS_ARM_JITTER_MS'),
+  bonusHitWindowMs: numEnv('SEQ_BONUS_HIT_WINDOW_MS'),
 });
 
 const app = express();

@@ -263,3 +263,41 @@ masking: the phone reset its input state (`submitted`, the tapped sequence)
 per *game*, not per *round* — harmless when no two-player test room ever
 survived to round 2, fatal the moment everyone plays all 10. Input state now
 keys off the round number.
+
+## Revision 3: perceptual pacing, 12 rounds, and the Reflexo bonus round
+
+Three changes, all in service of attention rather than reflexes:
+
+**The ramp now respects the eye.** Encoding a visual item into working memory
+takes roughly 400–600ms of exposure — and this is a projector read from
+across a room. The floor moved from 450/250ms to **550/300ms**, the game grew
+to **12 rounds**, and the steps shrank (32/18ms per round) so the glide from
+900/500ms reaches the floor exactly at round 12. The acceleration is felt as
+a continuous tightening, never as a jump, and round 12 is fast but always
+followable.
+
+**No dead air.** RECALL (and the bonus window) now closes the moment the last
+player has answered, instead of always sitting out the full window — a
+round-12 window is ~16s, and a room that answered in 5 should not stare at a
+frozen screen for the other 11. With stragglers the window still holds, so
+nothing changes at scale; in an engaged room the pace tightens itself.
+
+**Reflexo! — the mid-game bonus round** (after round 6; `SEQ_BONUS_AFTER=0`
+disables). A palate cleanser that tests the opposite skill of memory:
+
+1. `BONUS_ARM` — the screen holds a suspense beat of *unpredictable* length
+   (2–5s, drawn from the injected rng). The phone grid is live, which is the
+   trap: tapping during the suspense **burns your start** — locked out, zero
+   points. The color and the arm deadline are deliberately withheld from
+   `publicState` during this phase, so a phone reading `/batucada/state`
+   cannot script the reflex; the screen learns the color on the same phase
+   flip the room does.
+2. `BONUS_HIT` — ONE tile lights. Tap that color on the phone: points scale
+   with speed (`bonusMaxPts` 10 down to 1 across the 2.5s window). Wrong
+   color or no tap: zero.
+3. The reveal (flagged `bonusReveal` in both views) shows how many reflexes
+   hit, then the memory rounds resume where they left off.
+
+Bonus points land in `symbols` only — never in `cleared` — so memory stays
+the primary ranking axis and the bonus spices the score without letting a
+fast thumb outrank a good memory.

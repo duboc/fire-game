@@ -7,6 +7,8 @@ export const PHASE = Object.freeze({
   MEMORIZE: 'memorize', // the screen lights the round's sequence
   RECALL: 'recall', // phones collect taps
   REVEAL: 'reveal', // who cleared the round, live standings
+  BONUS_ARM: 'bonus_arm', // mid-game reflex round: suspense, color not yet shown
+  BONUS_HIT: 'bonus_hit', // the color is lit — fastest correct tap wins the most
   ENDED: 'ended',
 });
 
@@ -22,22 +24,36 @@ export const DEFAULTS = Object.freeze({
   countdownMs: 3000,
   // The game always runs this many rounds — no elimination. A miss costs the
   // round's points, never the seat: the whole room plays start to finish,
-  // which is what makes a fixed 10-round arc predictable for an event.
-  totalRounds: 10,
+  // which is what makes a fixed arc predictable for an event.
+  totalRounds: 12,
 
   // Round-1 flash cadence. Difficulty ramps on two axes: the sequence grows
   // (+1 symbol per round) AND the flash speeds up per round, clamped at the
-  // floors below so late rounds stay readable rather than subliminal.
+  // floors below. The floors are perceptual, not aesthetic: encoding a visual
+  // item into working memory needs roughly 400–600ms of exposure, and this is
+  // a projector read from across a room — 550ms on-time keeps round 12 fast
+  // but followable, never subliminal. The steps are sized so the glide
+  // reaches the floor exactly at the final round instead of plateauing early.
   symbolOnMs: 900,
   symbolGapMs: 500,
-  symbolOnStepMs: 50, // shaved off per round after the first
-  symbolGapStepMs: 25,
-  minSymbolOnMs: 450,
-  minSymbolGapMs: 250,
+  symbolOnStepMs: 32, // shaved off per round after the first
+  symbolGapStepMs: 18,
+  minSymbolOnMs: 550,
+  minSymbolGapMs: 300,
 
   recallBaseMs: 1500,
   recallPerSymbolMs: 1200,
   revealMs: 2500,
+
+  // Mid-game bonus: a pure-reflex palate cleanser after this round (0
+  // disables it). The screen holds a suspense beat of unpredictable length,
+  // then lights ONE color — tap it on the phone, fastest tap scores most.
+  // Tapping during the suspense burns your start: locked out, zero points.
+  bonusAfterRound: 6,
+  bonusArmMinMs: 2000, // suspense floor…
+  bonusArmJitterMs: 3000, // …plus up to this much unpredictability
+  bonusHitWindowMs: 2500, // how long the lit color accepts taps
+  bonusMaxPts: 10, // an instant tap is worth this many symbols-points
 });
 
 /**
@@ -85,6 +101,11 @@ export class Batucada {
     this.recallBaseMs = opts.recallBaseMs ?? DEFAULTS.recallBaseMs;
     this.recallPerSymbolMs = opts.recallPerSymbolMs ?? DEFAULTS.recallPerSymbolMs;
     this.revealMs = opts.revealMs ?? DEFAULTS.revealMs;
+    this.bonusAfterRound = opts.bonusAfterRound ?? DEFAULTS.bonusAfterRound;
+    this.bonusArmMinMs = opts.bonusArmMinMs ?? DEFAULTS.bonusArmMinMs;
+    this.bonusArmJitterMs = opts.bonusArmJitterMs ?? DEFAULTS.bonusArmJitterMs;
+    this.bonusHitWindowMs = opts.bonusHitWindowMs ?? DEFAULTS.bonusHitWindowMs;
+    this.bonusMaxPts = opts.bonusMaxPts ?? DEFAULTS.bonusMaxPts;
     this.symbols = opts.symbols ?? SYMBOLS;
     this._nextIndex = opts.rng ?? ((n) => Math.floor(Math.random() * n));
     // Kept so reset() can tell an injected factory (tests pin one) from the
@@ -107,6 +128,16 @@ export class Batucada {
     this.roundClearedCount = 0; // how many players fully matched the round just graded
     this.winner = null;
     this.roundId = 0;
+
+    // Bonus-round state. bonusColor stays server-side until BONUS_HIT — see
+    // publicState, which deliberately withholds it (and the arm deadline)
+    // while the room is waiting for the flash.
+    this.bonusPlayed = false;
+    this.bonusReveal = false; // the REVEAL on screen is the bonus result, not a memory round's
+    this.bonusColor = null;
+    this.bonusArmEndsAt = null;
+    this.bonusHitStartsAt = null;
+    this.bonusHitEndsAt = null;
   }
 
   /** Effective flash duration for a round — the per-round speed ramp, clamped. */
@@ -140,6 +171,8 @@ export class Batucada {
       submitted: false,
       lastPrefix: null, // last graded round's matched prefix, for the phone
       lastCleared: null,
+      lastBonusOutcome: null, // 'early' | 'hit' | 'wrong' | 'none'
+      lastBonusPts: 0,
     };
     this.players.set(id, player);
     return this._identity(player);
@@ -166,6 +199,29 @@ export class Batucada {
       player.submitted = true;
       player.elapsedTotalMs += Math.max(0, now - this.recallStartsAt);
       this._grade(player, sequence);
+    } else if (this.phase === PHASE.BONUS_ARM && !player.submitted) {
+      // Jumped the gun: the tap during the suspense IS the answer, and it is
+      // wrong by definition. Locked out of the flash — that sting is the
+      // whole tension of a reflex round.
+      player.submitted = true;
+      player.lastBonusOutcome = 'early';
+      player.lastBonusPts = 0;
+      player.elapsedTotalMs += this.bonusHitWindowMs;
+    } else if (this.phase === PHASE.BONUS_HIT && !player.submitted) {
+      player.submitted = true;
+      const arr = Array.isArray(sequence) ? sequence : [];
+      if (arr.length === 1 && arr[0] === this.bonusColor) {
+        const elapsed = Math.max(0, now - this.bonusHitStartsAt);
+        const frac = Math.min(1, elapsed / this.bonusHitWindowMs);
+        player.lastBonusOutcome = 'hit';
+        player.lastBonusPts = Math.max(1, Math.round(this.bonusMaxPts * (1 - frac)));
+        player.symbols += player.lastBonusPts;
+        player.elapsedTotalMs += elapsed;
+      } else {
+        player.lastBonusOutcome = 'wrong';
+        player.lastBonusPts = 0;
+        player.elapsedTotalMs += this.bonusHitWindowMs;
+      }
     }
     return this.playerView(id, now);
   }
@@ -182,6 +238,8 @@ export class Batucada {
       p.submitted = false;
       p.lastPrefix = null;
       p.lastCleared = null;
+      p.lastBonusOutcome = null;
+      p.lastBonusPts = 0;
     }
     this.round = 0;
     this.sequence = [];
@@ -193,6 +251,7 @@ export class Batucada {
     this.recallStartsAt = null;
     this.recallEndsAt = null;
     this.revealEndsAt = null;
+    this._resetBonus();
     this.phase = PHASE.COUNTDOWN;
     this.roundId += 1;
     return this.publicState(now);
@@ -213,7 +272,17 @@ export class Batucada {
     this.recallEndsAt = null;
     this.revealEndsAt = null;
     this.winner = null;
+    this._resetBonus();
     return this.publicState(now ?? 0);
+  }
+
+  _resetBonus() {
+    this.bonusPlayed = false;
+    this.bonusReveal = false;
+    this.bonusColor = null;
+    this.bonusArmEndsAt = null;
+    this.bonusHitStartsAt = null;
+    this.bonusHitEndsAt = null;
   }
 
   /** Advances the phase machine. Belongs on the driving tick loop. */
@@ -245,7 +314,10 @@ export class Batucada {
     if (this.phase === PHASE.MEMORIZE && now >= this.memorizeEndsAt) {
       this.phase = PHASE.RECALL;
     }
-    if (this.phase === PHASE.RECALL && now >= this.recallEndsAt) {
+    // The window also closes the moment the last player has answered — a
+    // round-12 window is ~16s, and a room that answered in 5 should not
+    // stare at a frozen screen for the other 11. Attention is the product.
+    if (this.phase === PHASE.RECALL && (now >= this.recallEndsAt || this._allSubmitted())) {
       // Anyone silent ran out the clock: graded as a miss, and the full
       // window lands on their elapsed tiebreak — answering late must never
       // rank better than answering at all.
@@ -261,16 +333,68 @@ export class Batucada {
         if (p.lastCleared) this.roundClearedCount += 1;
       }
       this.phase = PHASE.REVEAL;
+      this.bonusReveal = false;
+      this.revealEndsAt = now + this.revealMs;
+    }
+    if (this.phase === PHASE.BONUS_ARM && now >= this.bonusArmEndsAt) {
+      this.phase = PHASE.BONUS_HIT;
+      this.bonusHitStartsAt = now;
+      this.bonusHitEndsAt = now + this.bonusHitWindowMs;
+    }
+    if (this.phase === PHASE.BONUS_HIT && (now >= this.bonusHitEndsAt || this._allSubmitted())) {
+      for (const p of this.players.values()) {
+        if (!p.submitted) {
+          p.submitted = true;
+          p.lastBonusOutcome = 'none';
+          p.lastBonusPts = 0;
+          p.elapsedTotalMs += this.bonusHitWindowMs;
+        }
+      }
+      this.roundClearedCount = 0;
+      for (const p of this.players.values()) {
+        if (p.lastBonusOutcome === 'hit') this.roundClearedCount += 1;
+      }
+      this.phase = PHASE.REVEAL;
+      this.bonusReveal = true;
       this.revealEndsAt = now + this.revealMs;
     }
     if (this.phase === PHASE.REVEAL && now >= this.revealEndsAt) {
-      if (this.round >= this.totalRounds) {
+      if (!this.bonusReveal && this.bonusAfterRound > 0 && !this.bonusPlayed
+          && this.round === this.bonusAfterRound && this.round < this.totalRounds) {
+        this._startBonus(now);
+      } else if (this.round >= this.totalRounds) {
         this.phase = PHASE.ENDED;
         this.winner = this._ranking()[0] ?? null;
       } else {
         this._startRound(this.round + 1, now);
       }
     }
+  }
+
+  _allSubmitted() {
+    if (this.players.size === 0) return false;
+    for (const p of this.players.values()) {
+      if (!p.submitted) return false;
+    }
+    return true;
+  }
+
+  _startBonus(now) {
+    this.bonusPlayed = true;
+    this.bonusReveal = false;
+    this.bonusColor = this._nextIndex(this.symbols.length);
+    // Suspense of unpredictable length, drawn from the same injectable rng as
+    // the sequences — a fixed delay would make the "reflex" a metronome.
+    const jitter = this.bonusArmJitterMs > 0 ? this._nextIndex(this.bonusArmJitterMs + 1) : 0;
+    this.bonusArmEndsAt = now + this.bonusArmMinMs + jitter;
+    this.bonusHitStartsAt = null;
+    this.bonusHitEndsAt = null;
+    for (const p of this.players.values()) {
+      p.submitted = false;
+      p.lastBonusOutcome = null;
+      p.lastBonusPts = 0;
+    }
+    this.phase = PHASE.BONUS_ARM;
   }
 
   _startRound(round, now) {
@@ -337,6 +461,7 @@ export class Batucada {
       symbolOnMs: this.round > 0 ? this.symbolOnFor(this.round) : this.symbolOnMs,
       symbolGapMs: this.round > 0 ? this.symbolGapFor(this.round) : this.symbolGapMs,
       total: this.players.size,
+      bonusReveal: this.bonusReveal,
       roundId: this.roundId,
     };
     const p = this.players.get(id);
@@ -354,6 +479,8 @@ export class Batucada {
       submitted: p.submitted,
       lastPrefix: p.lastPrefix,
       lastCleared: p.lastCleared,
+      lastBonusOutcome: p.lastBonusOutcome,
+      lastBonusPts: p.lastBonusPts,
     };
     // Only meaningful once ENDED, and cheap only there: ranking the whole
     // roster per request would be the same mistake /state's old tick() call
@@ -368,7 +495,16 @@ export class Batucada {
   /** Aggregate state broadcast to the big screen via SSE. */
   publicState(now) {
     const showStandings = this.phase === PHASE.REVEAL || this.phase === PHASE.ENDED;
+    // Withheld on purpose during BONUS_ARM: publishing the color (or the arm
+    // deadline) ahead of the flash would let a phone reading /batucada/state
+    // script the "reflex". The screen learns the color the same instant the
+    // room does — on the phase flip to BONUS_HIT.
+    const bonus = this.phase === PHASE.BONUS_HIT
+      ? { bonusColor: this.bonusColor, bonusHitStartsAt: this.bonusHitStartsAt, bonusHitEndsAt: this.bonusHitEndsAt }
+      : {};
     return {
+      ...bonus,
+      bonusReveal: this.bonusReveal,
       phase: this.phase,
       serverNow: now,
       round: this.round,

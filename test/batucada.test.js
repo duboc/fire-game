@@ -223,6 +223,154 @@ test('playerView reports yourRank once ENDED and the per-round result for the ph
   assert.equal(g.playerView('a', g.revealEndsAt).yourRank, 2);
 });
 
+test('default ramp lands on a floor the eye can still follow', () => {
+  const g = new Batucada({ nameFactory: fixedNames() });
+  assert.equal(g.totalRounds, 12);
+  assert.equal(g.symbolOnFor(1), 900);
+  assert.equal(g.symbolGapFor(1), 500);
+  assert.equal(g.symbolOnFor(12), 550, 'on-time floor: below ~550ms encoding into working memory degrades');
+  assert.equal(g.symbolGapFor(12), 302);
+});
+
+test('all answers in → the round closes early, no dead air', () => {
+  const g = fresh({ totalRounds: 2 });
+  g.join('a');
+  g.join('b');
+  g.start({ now: 0 });
+  g.tick(1000);
+  g.tick(g.memorizeEndsAt);
+  g.recall('a', [0], g.recallStartsAt + 10);
+  g.recall('b', [0], g.recallStartsAt + 20);
+
+  const early = g.recallStartsAt + 30; // way before recallEndsAt
+  assert.ok(early < g.recallEndsAt);
+  g.tick(early);
+  assert.equal(g.phase, PHASE.REVEAL, 'everyone answered — no reason to sit out the window');
+  assert.equal(g.revealEndsAt, early + 50);
+});
+
+function freshWithBonus(opts = {}) {
+  return fresh({
+    totalRounds: 2,
+    bonusAfterRound: 1,
+    bonusArmMinMs: 100,
+    bonusArmJitterMs: 0,
+    bonusHitWindowMs: 1000,
+    bonusMaxPts: 10,
+    ...opts,
+  });
+}
+
+/** Plays round 1 (both players clear it) and advances into BONUS_ARM. */
+function playIntoBonus(g) {
+  g.start({ now: 0 });
+  g.tick(1000);
+  g.tick(g.memorizeEndsAt);
+  g.recall('a', [0], g.recallStartsAt + 10);
+  g.recall('b', [0], g.recallStartsAt + 20);
+  g.tick(g.recallEndsAt);
+  g.tick(g.revealEndsAt);
+  assert.equal(g.phase, PHASE.BONUS_ARM);
+}
+
+test('the bonus round arms after the configured round, hides its color, then flashes it', () => {
+  const g = freshWithBonus();
+  g.join('a');
+  g.join('b');
+  playIntoBonus(g);
+
+  const armPub = g.publicState(g.revealEndsAt);
+  assert.ok(!('bonusColor' in armPub) || armPub.bonusColor == null,
+    'the color must not leak while everyone is waiting for it');
+
+  g.tick(g.bonusArmEndsAt);
+  assert.equal(g.phase, PHASE.BONUS_HIT);
+  const hitPub = g.publicState(g.bonusArmEndsAt);
+  assert.equal(hitPub.bonusColor, 0, 'rng()=>0 pins the bonus color');
+});
+
+test('bonus scoring: fast correct tap earns speed-scaled points into symbols, never into cleared', () => {
+  const g = freshWithBonus();
+  g.join('a');
+  g.join('b');
+  playIntoBonus(g);
+  g.tick(g.bonusArmEndsAt); // -> BONUS_HIT
+
+  g.recall('a', [0], g.bonusHitStartsAt + 100); // correct, 10% into the window
+  const a = g.players.get('a');
+  assert.equal(a.lastBonusOutcome, 'hit');
+  assert.equal(a.lastBonusPts, 9); // round(10 * 0.9)
+  assert.equal(a.symbols, 1 + 9, 'round-1 symbol plus the bonus');
+  assert.equal(a.cleared, 1, 'the bonus never counts as a cleared round');
+
+  g.recall('b', [1], g.bonusHitStartsAt + 100); // wrong color
+  assert.equal(g.players.get('b').lastBonusOutcome, 'wrong');
+  assert.equal(g.players.get('b').lastBonusPts, 0);
+
+  g.tick(g.bonusHitStartsAt + 200); // both answered -> early close into REVEAL
+  assert.equal(g.phase, PHASE.REVEAL);
+  const pub = g.publicState(g.bonusHitStartsAt + 200);
+  assert.equal(pub.bonusReveal, true);
+  assert.equal(pub.roundClearedCount, 1, 'one reflex hit');
+  const phoneView = g.playerView('a', g.bonusHitStartsAt + 200);
+  assert.equal(phoneView.bonusReveal, true,
+    'the phone must know this reveal is the bonus, or it renders the memory-round card');
+
+  g.tick(g.revealEndsAt); // -> round 2, the game resumes where it left off
+  assert.equal(g.phase, PHASE.MEMORIZE);
+  assert.equal(g.round, 2);
+});
+
+test('tapping during the suspense burns the start — locked out with zero points', () => {
+  const g = freshWithBonus();
+  g.join('a');
+  g.join('b');
+  playIntoBonus(g);
+
+  g.recall('b', [0], g.revealEndsAt + 10); // jumped the gun during ARM
+  const b = g.players.get('b');
+  assert.equal(b.lastBonusOutcome, 'early');
+  assert.equal(b.lastBonusPts, 0);
+
+  g.tick(g.bonusArmEndsAt); // -> BONUS_HIT
+  g.recall('b', [0], g.bonusHitStartsAt + 50); // locked: the burn was final
+  assert.equal(g.players.get('b').lastBonusOutcome, 'early');
+  assert.equal(g.players.get('b').symbols, 1, 'still only the round-1 symbol');
+});
+
+test('never tapping the bonus scores nothing and the game moves on', () => {
+  const g = freshWithBonus();
+  g.join('a');
+  playIntoBonus(g);
+  g.tick(g.bonusArmEndsAt);
+  g.tick(g.bonusHitEndsAt); // window expires untouched
+  assert.equal(g.phase, PHASE.REVEAL);
+  assert.equal(g.players.get('a').lastBonusOutcome, 'none');
+  assert.equal(g.publicState(g.bonusHitEndsAt).roundClearedCount, 0);
+});
+
+test('bonusAfterRound 0 disables the bonus entirely', () => {
+  const g = freshWithBonus({ bonusAfterRound: 0 });
+  g.join('a');
+  g.start({ now: 0 });
+  g.tick(1000);
+  g.tick(g.memorizeEndsAt);
+  g.recall('a', [0], g.recallStartsAt + 10);
+  g.tick(g.recallEndsAt);
+  g.tick(g.revealEndsAt);
+  assert.equal(g.phase, PHASE.MEMORIZE, 'straight into round 2, no bonus');
+  assert.equal(g.round, 2);
+});
+
+test('a new game re-arms the bonus', () => {
+  const g = freshWithBonus();
+  g.join('a');
+  playIntoBonus(g);
+  assert.equal(g.bonusPlayed, true);
+  g.start({ now: 99000 });
+  assert.equal(g.bonusPlayed, false);
+});
+
 test('reset clears the roster and returns to LOBBY', () => {
   const g = fresh();
   g.join('p1');

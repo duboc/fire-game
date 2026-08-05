@@ -108,6 +108,13 @@
     <div class="podium" id="vStandings"></div>
   </div>
 
+  <!-- BONUS (arm + hit share the stage; the lit tile is the whole reveal) -->
+  <div class="stage" id="bonus">
+    <div class="roundtag" id="bTitle">⚡ Rodada Bônus — Reflexo!</div>
+    <div class="tiles" id="bTiles"></div>
+    <div class="subtext" id="bDetail"></div>
+  </div>
+
   <!-- ENDED -->
   <div class="stage" id="ended">
     <div class="champlabel" id="champlabel">🏆 Campeão 🏆</div>
@@ -120,8 +127,11 @@
 (() => {
   'use strict';
   const $ = (id)=>document.getElementById(id);
-  const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', MEMORIZE:'memorize', RECALL:'recall', REVEAL:'reveal', ENDED:'ended' };
-  const stages = { lobby:$('lobby'), countdown:$('countdown'), memorize:$('memorize'), recall:$('recall'), reveal:$('reveal'), ended:$('ended') };
+  const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', MEMORIZE:'memorize', RECALL:'recall', REVEAL:'reveal',
+                  BONUS_ARM:'bonus_arm', BONUS_HIT:'bonus_hit', ENDED:'ended' };
+  const stages = { lobby:$('lobby'), countdown:$('countdown'), memorize:$('memorize'), recall:$('recall'),
+                   reveal:$('reveal'), bonus:$('bonus'), ended:$('ended') };
+  const stageFor = (phase)=> phase.startsWith('bonus') ? 'bonus' : phase;
   function showStage(name){ for (const k in stages) stages[k].classList.toggle('show', k===name); }
 
   // Same four, same order as src/batucada.js's SYMBOLS — classic Simon Says,
@@ -141,6 +151,7 @@
   }
   const mTiles = buildTiles($('mTiles'));
   const rTiles = buildTiles($('rTiles'));
+  const bTiles = buildTiles($('bTiles'));
 
   let clockOffset=0, bestRtt=Infinity;
   const estServerNow=()=>Date.now()+clockOffset;
@@ -177,20 +188,33 @@
     const changed = s.phase!==cur;
     state=s; cur=s.phase;
     $('cPlayers').textContent = fmt(s.total);
-    $('cRound').textContent = s.round ? (s.round+'/'+s.totalRounds) : '—';
+    $('cRound').textContent = s.phase.startsWith('bonus') ? '⚡' : (s.round ? (s.round+'/'+s.totalRounds) : '—');
     if (changed) enterPhase(s.phase, s);
     if (s.phase===PHASE.LOBBY) renderReady(s.total);
     if (s.phase===PHASE.MEMORIZE) renderMemorize(s);
     if (s.phase===PHASE.RECALL) renderRecall(s);
     if (s.phase===PHASE.REVEAL) renderReveal(s);
+    if (s.phase===PHASE.BONUS_ARM || s.phase===PHASE.BONUS_HIT) renderBonus(s);
     if (s.phase===PHASE.ENDED) renderEnded(s);
   }
 
   function enterPhase(phase, s){
     stopConfetti();
-    showStage(phase);
+    showStage(stageFor(phase));
     if (phase===PHASE.MEMORIZE){ memorizeRoundBuilt=-1; lastLitIndex=-1; }
     if (phase===PHASE.ENDED) renderEnded(s);
+  }
+
+  // ---- bonus: suspense, then ONE color — the tile lights the instant the
+  // phase flips to bonus_hit (the server withholds the color until then) ----
+  function renderBonus(s){
+    if (s.phase===PHASE.BONUS_ARM){
+      bTiles.forEach(t=>t.classList.remove('lit'));
+      $('bDetail').textContent = 'Prepare o dedo… quando uma cor acender, toque nela no celular. Tocar antes queima a vez!';
+    } else {
+      bTiles.forEach((t,i)=>t.classList.toggle('lit', i===s.bonusColor));
+      $('bDetail').textContent = 'AGORA!';
+    }
   }
 
   const NUM=new Intl.NumberFormat('pt-BR');
@@ -251,11 +275,19 @@
 
   // ---- reveal: how many nailed the round + the running standings ----
   function renderReveal(s){
-    $('vTitle').textContent = 'Rodada '+s.round+' de '+s.totalRounds;
-    $('vClearedNum').textContent = fmt(s.roundClearedCount);
-    $('vDetail').textContent = s.roundClearedCount===0
-      ? 'ninguém acertou essa — a próxima vem mais rápida!'
-      : (s.roundClearedCount===1?'pessoa acertou':'pessoas acertaram')+' a sequência inteira';
+    if (s.bonusReveal){
+      $('vTitle').textContent = '⚡ Rodada Bônus';
+      $('vClearedNum').textContent = fmt(s.roundClearedCount);
+      $('vDetail').textContent = s.roundClearedCount===0
+        ? 'nenhum reflexo certeiro — de volta à memória!'
+        : (s.roundClearedCount===1?'reflexo certeiro':'reflexos certeiros')+' — de volta à memória!';
+    } else {
+      $('vTitle').textContent = 'Rodada '+s.round+' de '+s.totalRounds;
+      $('vClearedNum').textContent = fmt(s.roundClearedCount);
+      $('vDetail').textContent = s.roundClearedCount===0
+        ? 'ninguém acertou essa — a próxima vem mais rápida!'
+        : (s.roundClearedCount===1?'pessoa acertou':'pessoas acertaram')+' a sequência inteira';
+    }
     const st=$('vStandings'); st.innerHTML='';
     (s.top||[]).slice(0,5).forEach(p=>{
       const d=document.createElement('div'); d.className='pod';
