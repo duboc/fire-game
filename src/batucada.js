@@ -6,7 +6,7 @@ export const PHASE = Object.freeze({
   COUNTDOWN: 'countdown',
   MEMORIZE: 'memorize', // the screen lights the round's sequence
   RECALL: 'recall', // phones collect taps
-  REVEAL: 'reveal', // who fell, how many remain
+  REVEAL: 'reveal', // who cleared the round, live standings
   ENDED: 'ended',
 });
 
@@ -20,15 +20,24 @@ export const SYMBOLS = Object.freeze(['blue', 'red', 'yellow', 'green']);
 
 export const DEFAULTS = Object.freeze({
   countdownMs: 3000,
-  // Deliberately slower than a first pass at 700/300 — this is meant to read
-  // as calm and attentive, not reflexive, and playtesting found the faster
-  // cadence read as "trying to be quick" instead of "trying to remember".
+  // The game always runs this many rounds — no elimination. A miss costs the
+  // round's points, never the seat: the whole room plays start to finish,
+  // which is what makes a fixed 10-round arc predictable for an event.
+  totalRounds: 10,
+
+  // Round-1 flash cadence. Difficulty ramps on two axes: the sequence grows
+  // (+1 symbol per round) AND the flash speeds up per round, clamped at the
+  // floors below so late rounds stay readable rather than subliminal.
   symbolOnMs: 900,
   symbolGapMs: 500,
+  symbolOnStepMs: 50, // shaved off per round after the first
+  symbolGapStepMs: 25,
+  minSymbolOnMs: 450,
+  minSymbolGapMs: 250,
+
   recallBaseMs: 1500,
   recallPerSymbolMs: 1200,
   revealMs: 2500,
-  maxRounds: 10,
 });
 
 /**
@@ -39,29 +48,43 @@ export const DEFAULTS = Object.freeze({
  * classic Simon Says' cumulative replay, so a round's duration depends only on
  * that round's length, not on the sum of every round before it — see
  * docs/BATUCADA_SPEC.md.
+ *
+ * Scoring, not elimination: every player plays every round. A full match
+ * counts a cleared round; a partial match still banks the matched prefix as
+ * points. Ranking: cleared desc, symbols desc, total elapsed asc, seq asc —
+ * the same strict-order guarantee the elimination version had, without ever
+ * benching anyone.
  */
 export class Batucada {
   /**
    * @param {object} [opts]
    * @param {number} [opts.countdownMs]
-   * @param {number} [opts.symbolOnMs]
-   * @param {number} [opts.symbolGapMs]
+   * @param {number} [opts.totalRounds]
+   * @param {number} [opts.symbolOnMs] round-1 flash duration
+   * @param {number} [opts.symbolGapMs] round-1 gap duration
+   * @param {number} [opts.symbolOnStepMs] flash speedup per round
+   * @param {number} [opts.symbolGapStepMs] gap speedup per round
+   * @param {number} [opts.minSymbolOnMs] readability floor
+   * @param {number} [opts.minSymbolGapMs]
    * @param {number} [opts.recallBaseMs]
    * @param {number} [opts.recallPerSymbolMs]
    * @param {number} [opts.revealMs]
-   * @param {number} [opts.maxRounds] defensive cap on how long the segment can run
    * @param {ReadonlyArray<string>} [opts.symbols]
    * @param {(n: number) => number} [opts.rng] returns an integer in [0,n); injectable for tests
    * @param {() => {name,emoji,seq,label}} [opts.nameFactory] injectable for tests
    */
   constructor(opts = {}) {
     this.countdownMs = opts.countdownMs ?? DEFAULTS.countdownMs;
+    this.totalRounds = Math.max(1, opts.totalRounds ?? DEFAULTS.totalRounds);
     this.symbolOnMs = opts.symbolOnMs ?? DEFAULTS.symbolOnMs;
     this.symbolGapMs = opts.symbolGapMs ?? DEFAULTS.symbolGapMs;
+    this.symbolOnStepMs = opts.symbolOnStepMs ?? DEFAULTS.symbolOnStepMs;
+    this.symbolGapStepMs = opts.symbolGapStepMs ?? DEFAULTS.symbolGapStepMs;
+    this.minSymbolOnMs = opts.minSymbolOnMs ?? DEFAULTS.minSymbolOnMs;
+    this.minSymbolGapMs = opts.minSymbolGapMs ?? DEFAULTS.minSymbolGapMs;
     this.recallBaseMs = opts.recallBaseMs ?? DEFAULTS.recallBaseMs;
     this.recallPerSymbolMs = opts.recallPerSymbolMs ?? DEFAULTS.recallPerSymbolMs;
     this.revealMs = opts.revealMs ?? DEFAULTS.revealMs;
-    this.maxRounds = opts.maxRounds ?? DEFAULTS.maxRounds;
     this.symbols = opts.symbols ?? SYMBOLS;
     this._nextIndex = opts.rng ?? ((n) => Math.floor(Math.random() * n));
     // Kept so reset() can tell an injected factory (tests pin one) from the
@@ -81,33 +104,42 @@ export class Batucada {
     this.recallStartsAt = null;
     this.recallEndsAt = null;
     this.revealEndsAt = null;
+    this.roundClearedCount = 0; // how many players fully matched the round just graded
     this.winner = null;
     this.roundId = 0;
   }
 
+  /** Effective flash duration for a round — the per-round speed ramp, clamped. */
+  symbolOnFor(round) {
+    return Math.max(this.minSymbolOnMs, this.symbolOnMs - (round - 1) * this.symbolOnStepMs);
+  }
+
+  symbolGapFor(round) {
+    return Math.max(this.minSymbolGapMs, this.symbolGapMs - (round - 1) * this.symbolGapStepMs);
+  }
+
   /**
-   * Registers a new player. A join while a game is in progress (anything past
-   * COUNTDOWN) is a spectator from the start — never injected mid-round — so it
-   * cannot see rounds it never played and cannot skew the room's tiebreak.
+   * Registers a new player. A latecomer simply starts scoring from the round
+   * they walked into — no spectator state, no special casing: rounds they
+   * missed are rounds they scored zero on, which the ranking already handles.
    * @param {string} id stable client id (uuid) generated by caller
    * @param {string} [locale]
    */
   join(id, locale) {
     if (this.players.has(id)) return this._identity(this.players.get(id));
     const ident = this._nextName(locale);
-    const midGame = this.phase !== PHASE.LOBBY && this.phase !== PHASE.COUNTDOWN;
     const player = {
       id,
       name: ident.name,
       emoji: ident.emoji,
       seq: ident.seq,
       locale: ident.locale,
-      alive: !midGame,
-      roundsCleared: 0,
-      eliminatedRound: null,
-      prefixMatched: 0,
-      elapsedMs: null,
+      cleared: 0, // rounds fully matched
+      symbols: 0, // cumulative matched symbols (partial credit included)
+      elapsedTotalMs: 0, // cumulative recall latency — final tiebreak
       submitted: false,
+      lastPrefix: null, // last graded round's matched prefix, for the phone
+      lastCleared: null,
     };
     this.players.set(id, player);
     return this._identity(player);
@@ -121,7 +153,7 @@ export class Batucada {
   /**
    * Records one player's attempt at the current round's sequence. Only the
    * first submission per round counts — a retry (flaky network) is a no-op —
-   * and only while RECALL is open for a player still alive.
+   * and only while RECALL is open.
    * @param {string} id
    * @param {number[]} sequence what the player tapped, in order
    * @param {number} now
@@ -130,29 +162,30 @@ export class Batucada {
   recall(id, sequence, now) {
     const player = this.players.get(id);
     if (!player) return null;
-    if (this.phase === PHASE.RECALL && player.alive && !player.submitted) {
+    if (this.phase === PHASE.RECALL && !player.submitted) {
       player.submitted = true;
-      player.elapsedMs = Math.max(0, now - this.recallStartsAt);
+      player.elapsedTotalMs += Math.max(0, now - this.recallStartsAt);
       this._grade(player, sequence);
     }
     return this.playerView(id, now);
   }
 
   /**
-   * Starts a new game: resets every player's round state, re-enters COUNTDOWN.
+   * Starts a new game: resets every player's score, re-enters COUNTDOWN.
    * @param {object} [opts] { now }
    */
   start({ now } = {}) {
     for (const p of this.players.values()) {
-      p.alive = true;
-      p.roundsCleared = 0;
-      p.eliminatedRound = null;
-      p.prefixMatched = 0;
-      p.elapsedMs = null;
+      p.cleared = 0;
+      p.symbols = 0;
+      p.elapsedTotalMs = 0;
       p.submitted = false;
+      p.lastPrefix = null;
+      p.lastCleared = null;
     }
     this.round = 0;
     this.sequence = [];
+    this.roundClearedCount = 0;
     this.winner = null;
     this.startsAt = now + this.countdownMs;
     this.memorizeStartsAt = null;
@@ -172,6 +205,7 @@ export class Batucada {
     this.phase = PHASE.LOBBY;
     this.round = 0;
     this.sequence = [];
+    this.roundClearedCount = 0;
     this.startsAt = null;
     this.memorizeStartsAt = null;
     this.memorizeEndsAt = null;
@@ -196,10 +230,9 @@ export class Batucada {
       name: p.name,
       emoji: p.emoji,
       seq: p.seq,
-      alive: p.alive,
-      roundsCleared: p.roundsCleared,
-      prefixMatched: p.prefixMatched,
-      elapsedMs: p.elapsedMs,
+      cleared: p.cleared,
+      symbols: p.symbols,
+      elapsedTotalMs: p.elapsedTotalMs,
     }));
   }
 
@@ -213,20 +246,25 @@ export class Batucada {
       this.phase = PHASE.RECALL;
     }
     if (this.phase === PHASE.RECALL && now >= this.recallEndsAt) {
-      // Anyone still alive and silent ran out the clock: graded as a miss.
+      // Anyone silent ran out the clock: graded as a miss, and the full
+      // window lands on their elapsed tiebreak — answering late must never
+      // rank better than answering at all.
       for (const p of this.players.values()) {
-        if (p.alive && !p.submitted) {
+        if (!p.submitted) {
           p.submitted = true;
-          p.elapsedMs = this.recallEndsAt - this.recallStartsAt;
+          p.elapsedTotalMs += this.recallEndsAt - this.recallStartsAt;
           this._grade(p, []);
         }
+      }
+      this.roundClearedCount = 0;
+      for (const p of this.players.values()) {
+        if (p.lastCleared) this.roundClearedCount += 1;
       }
       this.phase = PHASE.REVEAL;
       this.revealEndsAt = now + this.revealMs;
     }
     if (this.phase === PHASE.REVEAL && now >= this.revealEndsAt) {
-      const aliveCount = this._countAlive();
-      if (aliveCount <= 1 || this.round >= this.maxRounds) {
+      if (this.round >= this.totalRounds) {
         this.phase = PHASE.ENDED;
         this.winner = this._ranking()[0] ?? null;
       } else {
@@ -238,12 +276,10 @@ export class Batucada {
   _startRound(round, now) {
     this.round = round;
     this.sequence = this._nextSequence(round);
-    for (const p of this.players.values()) {
-      if (p.alive) p.submitted = false;
-    }
+    for (const p of this.players.values()) p.submitted = false;
     this.phase = PHASE.MEMORIZE;
     this.memorizeStartsAt = now;
-    this.memorizeEndsAt = now + round * (this.symbolOnMs + this.symbolGapMs);
+    this.memorizeEndsAt = now + round * (this.symbolOnFor(round) + this.symbolGapFor(round));
     this.recallStartsAt = this.memorizeEndsAt;
     this.recallEndsAt = this.recallStartsAt + this.recallBaseMs + round * this.recallPerSymbolMs;
   }
@@ -256,37 +292,27 @@ export class Batucada {
   }
 
   /**
-   * Grades one submission against `this.sequence`. A full match clears the
-   * round and keeps the player alive; anything short eliminates them, keeping
-   * the length of the correct prefix — that partial credit is what makes the
-   * final ranking a strict order even when several players fail the same round.
+   * Grades one submission against `this.sequence`. A full match counts a
+   * cleared round; either way the matched prefix banks into `symbols`, so two
+   * players who both missed still rank apart by how far each got.
    */
   _grade(player, submitted) {
     const seq = this.sequence;
     const arr = Array.isArray(submitted) ? submitted : [];
     let prefix = 0;
     while (prefix < seq.length && arr[prefix] === seq[prefix]) prefix += 1;
-    player.prefixMatched = prefix;
-    if (prefix === seq.length) {
-      player.roundsCleared = this.round;
-    } else {
-      player.alive = false;
-      player.eliminatedRound = this.round;
-    }
-  }
-
-  _countAlive() {
-    let n = 0;
-    for (const p of this.players.values()) if (p.alive) n += 1;
-    return n;
+    player.lastPrefix = prefix;
+    player.lastCleared = prefix === seq.length;
+    player.symbols += prefix;
+    if (player.lastCleared) player.cleared += 1;
   }
 
   _ranking() {
     return [...this.players.values()].sort(
       (a, b) =>
-        b.roundsCleared - a.roundsCleared ||
-        b.prefixMatched - a.prefixMatched ||
-        (a.elapsedMs ?? Infinity) - (b.elapsedMs ?? Infinity) ||
+        b.cleared - a.cleared ||
+        b.symbols - a.symbols ||
+        a.elapsedTotalMs - b.elapsedTotalMs ||
         a.seq - b.seq,
     );
   }
@@ -301,16 +327,16 @@ export class Batucada {
       phase: this.phase,
       serverNow: now,
       round: this.round,
+      totalRounds: this.totalRounds,
       startsAt: this.startsAt,
       memorizeStartsAt: this.memorizeStartsAt,
       memorizeEndsAt: this.memorizeEndsAt,
       recallEndsAt: this.recallEndsAt,
       revealEndsAt: this.revealEndsAt,
       countdownMs: this.countdownMs,
-      symbolOnMs: this.symbolOnMs,
-      symbolGapMs: this.symbolGapMs,
+      symbolOnMs: this.round > 0 ? this.symbolOnFor(this.round) : this.symbolOnMs,
+      symbolGapMs: this.round > 0 ? this.symbolGapFor(this.round) : this.symbolGapMs,
       total: this.players.size,
-      aliveCount: this._countAlive(),
       roundId: this.roundId,
     };
     const p = this.players.get(id);
@@ -323,10 +349,11 @@ export class Batucada {
       emoji: p.emoji,
       seq: p.seq,
       label: `${p.name} #${p.seq}`,
-      alive: p.alive,
-      roundsCleared: p.roundsCleared,
-      eliminatedRound: p.eliminatedRound,
-      prefixMatched: p.prefixMatched,
+      cleared: p.cleared,
+      symbols: p.symbols,
+      submitted: p.submitted,
+      lastPrefix: p.lastPrefix,
+      lastCleared: p.lastCleared,
     };
     // Only meaningful once ENDED, and cheap only there: ranking the whole
     // roster per request would be the same mistake /state's old tick() call
@@ -340,10 +367,12 @@ export class Batucada {
 
   /** Aggregate state broadcast to the big screen via SSE. */
   publicState(now) {
+    const showStandings = this.phase === PHASE.REVEAL || this.phase === PHASE.ENDED;
     return {
       phase: this.phase,
       serverNow: now,
       round: this.round,
+      totalRounds: this.totalRounds,
       sequence: this.sequence,
       startsAt: this.startsAt,
       memorizeStartsAt: this.memorizeStartsAt,
@@ -351,11 +380,14 @@ export class Batucada {
       recallEndsAt: this.recallEndsAt,
       revealEndsAt: this.revealEndsAt,
       countdownMs: this.countdownMs,
-      symbolOnMs: this.symbolOnMs,
-      symbolGapMs: this.symbolGapMs,
+      symbolOnMs: this.round > 0 ? this.symbolOnFor(this.round) : this.symbolOnMs,
+      symbolGapMs: this.round > 0 ? this.symbolGapFor(this.round) : this.symbolGapMs,
       total: this.players.size,
-      aliveCount: this._countAlive(),
-      top: this.phase === PHASE.ENDED ? this.results().slice(0, 10) : [],
+      roundClearedCount: this.roundClearedCount,
+      // Standings only in the phases that show them: sorting the roster on
+      // every 100ms broadcast would be _recount()-shaped work for frames the
+      // screen renders as a countdown or a flash anyway.
+      top: showStandings ? this.results().slice(0, 10) : [],
       winner: this.winner ? this._identity(this.winner) : null,
       roundId: this.roundId,
     };

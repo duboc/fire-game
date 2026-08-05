@@ -108,12 +108,12 @@
   let clockOffset = 0;
   const estServerNow = () => Date.now() + clockOffset;
 
-  let state = { phase: PHASE.LOBBY, known:false, total:0, aliveCount:0, round:0 };
-  let myRoundId = null;
+  let state = { phase: PHASE.LOBBY, known:false, total:0, round:0, totalRounds:10 };
+  let myRoundId = null; // a whole new game (start() bumps it)
+  let myRound = -1; // the round within the game — input state resets per round
   let mySeq = [];
   let submitted = false;
   let gridBuiltForRound = -1;
-  let lastResult = null; // { alive, roundsCleared, eliminatedRound, prefixMatched } from the last /recall response
   let lastCdShown = null;
 
   async function apiJson(url, opts){
@@ -139,7 +139,13 @@
     if (!s) return;
     if (s.known === false && me.id) { reregister(); return; }
     if (typeof s.roundId === 'number' && s.roundId !== myRoundId){
-      myRoundId = s.roundId; mySeq = []; submitted = false; gridBuiltForRound = -1; lastResult = null;
+      myRoundId = s.roundId; myRound = -1;
+    }
+    // Input state is per ROUND, not per game: without this, `submitted` from
+    // round 1 leaks into round 2 and the grid never comes back. (Latent in
+    // the elimination version — no test room ever survived to round 2.)
+    if (typeof s.round === 'number' && s.round !== myRound){
+      myRound = s.round; mySeq = []; submitted = false; gridBuiltForRound = -1;
     }
     state = s;
     if (s.name) setIdentity(s);
@@ -151,7 +157,7 @@
     if (reregistering) return; reregistering = true;
     try{
       const s = await apiJson(joinUrl(), { method:'POST' });
-      mySeq = []; submitted = false; gridBuiltForRound = -1; lastResult = null; myRoundId = null;
+      mySeq = []; submitted = false; gridBuiltForRound = -1; myRoundId = null; myRound = -1;
       setIdentity(s);
     }catch(_){ /* retry on next poll */ }
     finally{ reregistering = false; }
@@ -191,8 +197,7 @@
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ id: me.id, sequence: mySeq }),
       });
-      lastResult = { alive: s.alive, roundsCleared: s.roundsCleared, eliminatedRound: s.eliminatedRound, prefixMatched: s.prefixMatched };
-      applyState(s);
+      applyState(s); // the view carries lastPrefix/lastCleared — no client-side bookkeeping
     }catch(e){ /* the next poll will still grade us via the timeout path if this never lands */ }
   }
 
@@ -264,6 +269,9 @@
     [...dots.children].forEach((d,i) => d.classList.toggle('fill', i < mySeq.length));
   }
 
+  const roundLabel = () => 'Rodada ' + state.round + ' de ' + (state.totalRounds || 10);
+  const scoreLabel = () => '✓ ' + (state.cleared||0) + (state.cleared===1?' rodada':' rodadas') + ' · ' + (state.symbols||0) + (state.symbols===1?' ponto':' pontos');
+
   function render(){
     if (!state.known){
       els.stage.innerHTML = centerHtml('🧠', 'Conectando…');
@@ -279,19 +287,9 @@
       els.stage.innerHTML = centerHtml(
         champ ? '🏆' : '🧠',
         champ ? 'Você é o campeão!' : ('Você ficou em #' + (state.yourRank ?? '?')),
-        state.roundsCleared + (state.roundsCleared === 1 ? ' rodada completa' : ' rodadas completas'),
+        scoreLabel(),
       );
       els.status.textContent = '';
-      return;
-    }
-
-    if (state.alive === false){
-      els.stage.innerHTML = centerHtml(
-        '👀',
-        'Você caiu na rodada ' + state.eliminatedRound,
-        state.prefixMatched + '/' + state.eliminatedRound + ' certos — acompanhe a tela!',
-      );
-      els.status.textContent = state.aliveCount + ' de ' + state.total + ' seguem no jogo';
       return;
     }
 
@@ -302,25 +300,30 @@
       els.stage.innerHTML = centerHtml('🧠', 'Prepare-se!');
       els.status.textContent = '';
     } else if (state.phase === PHASE.MEMORIZE){
-      els.stage.innerHTML = centerHtml('<span class="pulse-ico">👀</span>', 'Olhe para a tela', 'Rodada ' + state.round);
-      els.status.textContent = '';
+      els.stage.innerHTML = centerHtml('<span class="pulse-ico">👀</span>', 'Olhe para a tela', roundLabel());
+      els.status.textContent = state.round > 1 ? scoreLabel() : '';
     } else if (state.phase === PHASE.RECALL){
-      if (submitted){
+      // `submitted` is the instant local flag; state.submitted covers a phone
+      // that reloaded mid-round after the server already took its answer.
+      if (submitted || state.submitted){
         els.stage.innerHTML = centerHtml('✅', 'Enviado!', 'Aguardando o resultado…');
         els.status.textContent = '';
       } else {
         if (gridBuiltForRound !== state.round) buildRecallGrid();
-        els.status.textContent = 'Toque na ordem que apareceu na tela — rodada ' + state.round;
+        els.status.textContent = 'Toque na ordem que apareceu na tela — ' + roundLabel().toLowerCase();
       }
     } else if (state.phase === PHASE.REVEAL){
-      if (lastResult){
-        els.stage.innerHTML = lastResult.alive
-          ? centerHtml('✅', 'Isso mesmo!', 'Rodada ' + state.roundsCleared + ' completa')
-          : centerHtml('😵', 'Você errou', state.prefixMatched + '/' + state.eliminatedRound + ' certos');
+      // No elimination: a miss costs the round, never the seat. Both faces of
+      // this card say "next round is coming".
+      if (state.lastCleared === true){
+        els.stage.innerHTML = centerHtml('✅', 'Isso mesmo!', roundLabel() + ' completa');
+      } else if (state.lastCleared === false){
+        els.stage.innerHTML = centerHtml('😅', 'Errou essa!',
+          state.lastPrefix + '/' + state.round + ' certos — a próxima já vem');
       } else {
         els.stage.innerHTML = centerHtml('⏳', 'Apurando…');
       }
-      els.status.textContent = '';
+      els.status.textContent = scoreLabel();
     }
   }
 

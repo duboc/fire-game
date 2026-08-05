@@ -70,7 +70,7 @@
   <canvas id="confetti"></canvas>
   <div class="brand"><span class="ico">🧠</span> <span class="shimmer">Sequência</span></div>
   <div class="chips" id="chips">
-    <div class="chip"><div class="k">No jogo</div><div class="v" id="cAlive">0</div></div>
+    <div class="chip"><div class="k">Jogadores</div><div class="v" id="cPlayers">0</div></div>
     <div class="chip timer" id="cTimerChip"><div class="k">Rodada</div><div class="v" id="cRound">—</div></div>
   </div>
 
@@ -97,16 +97,15 @@
   <div class="stage" id="recall">
     <div class="roundtag">Reproduzam de memória!</div>
     <div class="tiles" id="rTiles"></div>
-    <div class="aivebig"></div>
-    <div class="aivewrap"><div class="aliveDetail subtext" id="rDetail"></div></div>
+    <div class="subtext" id="rDetail"></div>
   </div>
 
   <!-- REVEAL -->
   <div class="stage" id="reveal">
     <div class="roundtag" id="vTitle">Apurando…</div>
-    <div class="aivebig"></div>
-    <div class="aliveDetail aivebig" id="vAlive"><b id="vAliveNum">0</b></div>
+    <div class="alivebig" id="vCleared"><b id="vClearedNum">0</b></div>
     <div class="subtext" id="vDetail"></div>
+    <div class="podium" id="vStandings"></div>
   </div>
 
   <!-- ENDED -->
@@ -145,8 +144,8 @@
 
   let clockOffset=0, bestRtt=Infinity;
   const estServerNow=()=>Date.now()+clockOffset;
-  let cur=PHASE.LOBBY, lastCd=null, state={phase:PHASE.LOBBY,total:0,aliveCount:0,round:0,sequence:[]};
-  let lastAliveShown=null, endedShownRound=-1, lastLitIndex=-1, memorizeRoundBuilt=-1;
+  let cur=PHASE.LOBBY, lastCd=null, state={phase:PHASE.LOBBY,total:0,round:0,totalRounds:10,sequence:[]};
+  let endedShownRound=-1, lastLitIndex=-1, memorizeRoundBuilt=-1;
 
   // Single client, so the extra request to compensate the one-way SSE offset
   // is free (see Tap Race's screen.html) — and the flash animation genuinely
@@ -177,8 +176,8 @@
     if (bestRtt===Infinity && typeof s.serverNow==='number') clockOffset=s.serverNow-Date.now();
     const changed = s.phase!==cur;
     state=s; cur=s.phase;
-    $('cAlive').textContent = fmt(s.aliveCount)+' / '+fmt(s.total);
-    $('cRound').textContent = s.round || '—';
+    $('cPlayers').textContent = fmt(s.total);
+    $('cRound').textContent = s.round ? (s.round+'/'+s.totalRounds) : '—';
     if (changed) enterPhase(s.phase, s);
     if (s.phase===PHASE.LOBBY) renderReady(s.total);
     if (s.phase===PHASE.MEMORIZE) renderMemorize(s);
@@ -244,21 +243,25 @@
     requestAnimationFrame(tickMemorize);
   }
 
-  // ---- recall: dimmed row, just a live "who's still in" readout ----
+  // ---- recall: dimmed tiles, everyone answers every round ----
   function renderRecall(s){
     rTiles.forEach(t=>t.classList.remove('lit'));
-    $('rDetail').innerHTML = '<b>'+fmt(s.aliveCount)+'</b> de '+fmt(s.total)+' tentando a rodada '+s.round;
+    $('rDetail').innerHTML = '<b>'+fmt(s.total)+'</b> '+(s.total===1?'jogador repetindo':'jogadores repetindo')+' a rodada '+s.round;
   }
 
-  // ---- reveal ----
+  // ---- reveal: how many nailed the round + the running standings ----
   function renderReveal(s){
-    const dropped = lastAliveShown!=null ? Math.max(0, lastAliveShown - s.aliveCount) : 0;
-    lastAliveShown = s.aliveCount;
-    $('vTitle').textContent = 'Rodada '+s.round+' concluída';
-    $('vAliveNum').textContent = fmt(s.aliveCount);
-    $('vDetail').textContent = dropped>0
-      ? (dropped===1 ? '1 pessoa saiu do jogo' : dropped+' pessoas saíram do jogo')
-      : 'Todo mundo que tentou continua!';
+    $('vTitle').textContent = 'Rodada '+s.round+' de '+s.totalRounds;
+    $('vClearedNum').textContent = fmt(s.roundClearedCount);
+    $('vDetail').textContent = s.roundClearedCount===0
+      ? 'ninguém acertou essa — a próxima vem mais rápida!'
+      : (s.roundClearedCount===1?'pessoa acertou':'pessoas acertaram')+' a sequência inteira';
+    const st=$('vStandings'); st.innerHTML='';
+    (s.top||[]).slice(0,5).forEach(p=>{
+      const d=document.createElement('div'); d.className='pod';
+      d.innerHTML=`<b>#${p.rank}</b> ${p.emoji||''} ${escapeHtml(p.name)} <span class="seq">#${p.seq}</span> — ✓${fmt(p.cleared)} · ${fmt(p.symbols)} pts`;
+      st.appendChild(d);
+    });
   }
 
   // ---- ended ----
@@ -270,15 +273,15 @@
     const champ=$('champ');
     if (w){
       const winnerStats = top.find(p=>p.id===w.id);
-      const rounds = winnerStats ? winnerStats.roundsCleared : s.round;
-      champ.innerHTML=`<div class="em">${w.emoji}</div><div class="info"><div class="nm">${escapeHtml(w.name)} <span class="seq">#${w.seq}</span></div><div class="ct">${fmt(rounds)} ${rounds===1?'rodada':'rodadas'}</div></div>`;
+      const cleared = winnerStats ? winnerStats.cleared : 0;
+      champ.innerHTML=`<div class="em">${w.emoji}</div><div class="info"><div class="nm">${escapeHtml(w.name)} <span class="seq">#${w.seq}</span></div><div class="ct">✓ ${fmt(cleared)} ${cleared===1?'rodada':'rodadas'}${winnerStats?` · ${fmt(winnerStats.symbols)} pts`:''}</div></div>`;
     } else {
-      champ.innerHTML=`<div class="info"><div class="nm">Ninguém completou uma rodada 😴</div></div>`;
+      champ.innerHTML=`<div class="info"><div class="nm">Ninguém jogou 😴</div></div>`;
     }
     const pod=$('podium'); pod.innerHTML='';
     top.slice(0,5).forEach(p=>{
       const d=document.createElement('div'); d.className='pod';
-      d.innerHTML=`<b>#${p.rank}</b> ${p.emoji||''} ${escapeHtml(p.name)} <span class="seq">#${p.seq}</span> — ${fmt(p.roundsCleared)} ${p.roundsCleared===1?'rodada':'rodadas'}`;
+      d.innerHTML=`<b>#${p.rank}</b> ${p.emoji||''} ${escapeHtml(p.name)} <span class="seq">#${p.seq}</span> — ✓${fmt(p.cleared)} · ${fmt(p.symbols)} pts`;
       pod.appendChild(d);
     });
     launchConfetti();

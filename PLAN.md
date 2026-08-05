@@ -405,3 +405,33 @@ plain colors instead of a percussion theme".
   champion), screenshots confirm the 2×2 color grid reads cleanly.
 - [x] Re-deployed to `riojucu` (see README, "Deploy to Cloud Run") and
   smoke-checked the live routes.
+
+### Revision 2: scoring instead of elimination, fixed 10-round arc
+
+Requirement: the game must run a *minimum of six rounds* with gradually
+increasing difficulty — which the elimination model can't guarantee (with a
+small room, `aliveCount <= 1` ends it in round 1–2, exactly what every test
+run showed). Decision: no elimination (a miss costs points, never the seat)
+and exactly 10 rounds. Full model in `docs/BATUCADA_SPEC.md`, "Revision 2".
+
+- [x] `src/batucada.js` rewritten: per-player `cleared`/`symbols`/
+  `elapsedTotalMs` replace `alive`/`eliminatedRound`; game ends only at
+  `totalRounds`; flash speed ramps per round (900/500 → 450/250ms floor) and
+  the effective per-round speeds ride on `publicState` so the screen animates
+  at the server's pace; latecomers just play from the round they walked into.
+  `test/batucada.test.js` rewritten first — 12 tests, including "a miss never
+  ends the game", the speed-ramp clamp, and the new tiebreak chain.
+- [x] `public/batucada/phone.html`: spectator state removed; per-round
+  feedback ("Isso mesmo!" / "Errou essa — a próxima já vem") with a running
+  score line; **fixed a latent bug elimination had masked** — input state
+  reset per game instead of per round, so `submitted` from round 1 leaked
+  into round 2 and the grid never came back. Never surfaced before because
+  no test room survived to round 2.
+- [x] `public/batucada/screen.html`: REVEAL shows how many cleared the round
+  plus a top-5 running standings; chips show round `N/10`.
+- [x] `src/server.js`: `SEQ_*` env overrides (rounds + timing) for test
+  harnesses and event pacing. `public/host.html`: Alive → Players, round
+  `N/total`. `scripts/contract-check.mjs` updated to the new field names.
+- [x] Verified: 67 unit / 173 contract / Playwright e2e with `SEQ_ROUNDS=2`
+  proving the key new behavior — a player who misses round 1 gets their grid
+  back in round 2 and finishes ranked #2 with partial credit.

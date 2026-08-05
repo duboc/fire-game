@@ -63,8 +63,9 @@ something each phone computes on its own.
 | Name | Proposed value | Role |
 |---|---|---|
 | `symbols` | `['blue', 'red', 'yellow', 'green']` | alphabet; each symbol drawn uniformly at random |
-| `symbolOnMs` | `900` | how long one tile stays lit |
-| `symbolGapMs` | `500` | dark gap between symbols — slower than a first pass at 700/300, deliberately calm rather than reflexive |
+| `totalRounds` | `10` | the game always runs exactly this many rounds (see Revision 2) |
+| `symbolOnMs` | `900` | round-1 flash; shrinks by `symbolOnStepMs` (50) per round, floor `minSymbolOnMs` (450) |
+| `symbolGapMs` | `500` | round-1 gap; shrinks by `symbolGapStepMs` (25) per round, floor `minSymbolGapMs` (250) — starts deliberately calm, ends quick |
 | `recallBaseMs` | `1500` | fixed reaction/setup time added to every recall window |
 | `recallPerSymbolMs` | `1200` | added per symbol in the round |
 | `revealMs` | `2500` | how long REVEAL holds before the next round |
@@ -225,3 +226,40 @@ Changed, additively (no route or file renames — only visuals and copy):
   class are unchanged internally, since renaming those would break nothing
   for a player but would churn every reference in this document and the
   server for no user-visible benefit.
+
+## Revision 2: scoring instead of elimination, a fixed 10-round arc
+
+Played again after the color simplification, the elimination model showed its
+real problem: with a small room the game is over in one or two rounds — the
+end condition `aliveCount <= 1` fires the moment one of two players misses.
+The whole point of the game is a *building* memory challenge, which needs
+guaranteed length. So elimination is gone entirely; the sections above that
+describe `alive`/`eliminatedRound` are superseded by this one.
+
+**The model now:** every player plays every round; the game always runs
+exactly `totalRounds` (10). A miss costs the round's points, never the seat.
+
+- Per-player score: `cleared` (rounds fully matched), `symbols` (cumulative
+  matched prefix across all rounds — partial credit, so a player who got 7 of
+  9 symbols outranks one who got 2), `elapsedTotalMs` (cumulative recall
+  latency). Ranking: `cleared` desc → `symbols` desc → `elapsedTotalMs` asc →
+  `seq` asc. Same strict-order guarantee the elimination tiebreak had.
+- Not answering a round grades as prefix 0 **and** adds the full recall
+  window to `elapsedTotalMs` — answering slowly must never rank better than
+  answering at all.
+- Difficulty ramps on two axes: sequence length (+1 per round, up to 10) and
+  flash speed (`symbolOnFor(round)`/`symbolGapFor(round)`: 900/500ms in round
+  1 shrinking 50/25ms per round to a 450/250ms floor in round 10 — late
+  rounds are fast, never subliminal). The engine publishes the *effective*
+  per-round speeds so the screen animates at exactly the pace the server
+  timed.
+- A latecomer joins as a normal player and simply scores zero for the rounds
+  they missed — the spectator state is gone along with elimination.
+- `SEQ_*` env vars (`SEQ_ROUNDS`, `SEQ_SYMBOL_ON_MS`, …) override the
+  constants without a rebuild, for test harnesses and event-day pacing.
+
+This also flushed out a latent client bug the elimination model had been
+masking: the phone reset its input state (`submitted`, the tapped sequence)
+per *game*, not per *round* — harmless when no two-player test room ever
+survived to round 2, fatal the moment everyone plays all 10. Input state now
+keys off the round number.

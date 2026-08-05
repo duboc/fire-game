@@ -35,24 +35,27 @@ anyway — same habit as Tap Race.
 - [ ] Recall opens on phones: a 2×2 grid of 4 colors. Tap the one that lit up.
 - [ ] Correct tap → phone immediately shows "Isso mesmo!" without waiting for
   the round to formally end.
-- [ ] Round 2+: sequence is new and one symbol longer each round. Confirm you
-  actually have to remember it — the screen doesn't replay earlier rounds.
+- [ ] Round 2+: sequence is new, one symbol longer each round, and the flash
+  is visibly a touch faster. Confirm you actually have to remember it — the
+  screen doesn't replay earlier rounds.
 - [ ] Deliberately tap wrong on one phone in some round → that phone shows
-  "Você caiu na rodada N — X/N certos" and switches to a live spectator view
-  (`aliveCount` ticking on its own, no more grid).
-- [ ] Game ends when one player remains (or nobody can be trusted to lose —
-  see §3). Screen shows confetti + champion + a top-5 podium. The champion's
-  phone shows "Você é o campeão!".
-- [ ] `/host` Sequência panel reflects `ENDED` and the correct alive/total the
-  whole time, without needing a page refresh.
+  "Errou essa! X/N certos — a próxima já vem" and **gets its grid back next
+  round**. Nobody is ever benched.
+- [ ] Between rounds the screen shows how many people cleared the round and a
+  top-5 running standings (✓rounds · pts).
+- [ ] The game runs all 10 rounds regardless of misses, then confetti +
+  champion + podium. The champion's phone shows "Você é o campeão!"; everyone
+  else sees their rank and score.
+- [ ] `/host` Sequência panel reflects the phase, round `N/10` and player
+  count the whole time, without needing a page refresh.
 
 ## 2. Timing & feel (the actual point of this game)
 
 - [ ] Countdown-to-memorize handoff has no visible stutter or double-flash on
   the screen.
-- [ ] The flash cadence (900ms on / 500ms gap by default) reads as calm and
-  deliberate, not a hair-trigger reflex test — and is comfortably readable
-  from across a room-sized distance, not just close up.
+- [ ] The flash cadence starts calm (900ms on / 500ms gap in round 1) and
+  tightens each round down to the 450/250ms floor — round 10 should feel
+  fast-but-followable, never subliminal, from across a room-sized distance.
 - [ ] The recall window feels fair for the round length — round 1 (1 symbol)
   isn't a hair-trigger, and by round 5+ (5 symbols) the timer doesn't run out
   before an honestly-remembering player can finish tapping.
@@ -63,9 +66,8 @@ anyway — same habit as Tap Race.
 ## 3. Edge cases
 
 - [ ] **Mid-game join**: while a round is in progress, join with a new phone.
-  It should land as a spectator immediately (`aliveCount`/`total` visible, no
-  grid, no "watch the screen" state) — never dropped into an in-progress
-  round.
+  It should start playing from the current round (grid appears at the next
+  RECALL), scoring zero for the rounds it missed — no error, no limbo state.
 - [ ] **Phone reload mid-game**: reload a phone's tab mid-round. It should
   resume its own identity and current status (alive/eliminated) rather than
   re-joining as a new player.
@@ -78,12 +80,11 @@ anyway — same habit as Tap Race.
 - [ ] **Reset mid-round**: hit **Clear the room** while a round is live.
   Screen and phones should all fall back to an empty lobby; a phone that
   reloads afterward gets a brand-new name.
-- [ ] **Everyone fails the same round simultaneously** (deliberately have all
-  active phones answer wrong in the same round): confirm the game still ends
-  cleanly with one ranked winner (whoever matched more symbols / answered
-  faster), not a tie or a stuck screen. This is the scenario the whole
-  ranking design (`roundsCleared` → `prefixMatched` → `elapsedMs` → `seq`)
-  exists for — worth deliberately forcing at least once.
+- [ ] **Everyone fails the same round** (all phones answer wrong on purpose):
+  the game keeps going to the next round — nobody out, screen says nobody
+  cleared it — and at the end there is still exactly one ranked winner by
+  partial credit (`cleared` → `symbols` → total elapsed → `seq`). Worth
+  deliberately forcing at least once.
 - [ ] **Two games at once**: with Sequência mid-round, also start a Tap Race
   round from `/host`. Confirm the two don't interfere (separate counters,
   separate screens, one shared login).

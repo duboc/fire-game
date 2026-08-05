@@ -137,7 +137,7 @@
       <div class="stat" style="margin-top:14px;">
         <div class="b"><div class="k">State</div><div class="v phase lobby" id="bPhase" style="font-size:16px;">LOBBY</div></div>
         <div class="b"><div class="k">Round</div><div class="v" id="bRound">—</div></div>
-        <div class="b"><div class="k">Alive</div><div class="v" id="bAlive">0 / 0</div></div>
+        <div class="b"><div class="k">Players</div><div class="v" id="bPlayers">0</div></div>
       </div>
       <div class="hint" style="margin-top:10px;">Same password as Tap Race. Player: <a href="/batucada" target="_blank">/batucada</a> · Screen: <a href="/batucada/screen" target="_blank">/batucada/screen</a></div>
     </div>
@@ -222,8 +222,8 @@
   function renderBatucada(s){
     $('bPhase').textContent=s.phase.toUpperCase();
     $('bPhase').className='v phase '+s.phase;
-    $('bRound').textContent=s.round||'—';
-    $('bAlive').textContent=fmt(s.aliveCount||0)+' / '+fmt(s.total||0);
+    $('bRound').textContent=s.round?(s.round+'/'+s.totalRounds):'—';
+    $('bPlayers').textContent=fmt(s.total||0);
   }
   connectBatucada();
 

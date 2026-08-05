@@ -247,8 +247,8 @@ try {
     ok(anon.known === false && anon.phase === 'lobby', '/batucada/state with no id is honestly unknown, lobby');
 
     const known = await (await fetch(B + '/batucada/state?id=' + bMe.id)).json();
-    ok(known.known === true && known.alive === true && known.roundsCleared === 0,
-      '/batucada/state?id= resolves the joined player, alive, no rounds yet');
+    ok(known.known === true && known.cleared === 0 && known.symbols === 0,
+      '/batucada/state?id= resolves the joined player with a zeroed score');
 
     const noToken = await fetch(B + '/batucada/admin/start', { method: 'POST' });
     ok(noToken.status === 401, '/batucada/admin/start without a token is refused');
@@ -276,7 +276,7 @@ try {
     await reader.cancel();
     const line = frame.split('\n').find((l) => l.startsWith('data: '));
     const firstState = line && JSON.parse(line.slice(6));
-    ok(!!firstState && 'aliveCount' in firstState && 'round' in firstState && Array.isArray(firstState.sequence),
+    ok(!!firstState && 'totalRounds' in firstState && 'round' in firstState && Array.isArray(firstState.sequence),
       '/batucada/events pushes a publicState frame on connect');
 
     const reset = await (await fetch(B + '/batucada/admin/reset', {

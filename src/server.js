@@ -179,7 +179,16 @@ const game = new Game({
 // docs/BATUCADA_SPEC.md. Deliberately not wired into `game`'s persistence
 // (out of scope for v1) or its tuning knobs: it has no continuous hot path
 // like /tap, so none of Tap Race's adaptive-cadence machinery applies.
-const batucada = new Batucada();
+// The SEQ_* env vars exist for the test harnesses (a 10-round game at real
+// speeds is minutes long) and for event-day pacing tweaks without a rebuild.
+const batucada = new Batucada({
+  totalRounds: numEnv('SEQ_ROUNDS'),
+  symbolOnMs: numEnv('SEQ_SYMBOL_ON_MS'),
+  symbolGapMs: numEnv('SEQ_SYMBOL_GAP_MS'),
+  recallBaseMs: numEnv('SEQ_RECALL_BASE_MS'),
+  recallPerSymbolMs: numEnv('SEQ_RECALL_PER_SYMBOL_MS'),
+  revealMs: numEnv('SEQ_REVEAL_MS'),
+});
 
 const app = express();
 app.disable('x-powered-by');
