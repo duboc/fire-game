@@ -445,6 +445,36 @@ test('the spotlight names the fastest correct answer and the longest streak, dur
   assert.equal(g.publicState(g.revealEndsAt).spotlight, null);
 });
 
+test('the spotlight crowns the round\'s biggest climber — someone who cleared and jumped the standings', () => {
+  const g = fresh({ totalRounds: 3 });
+  g.join('a');
+  g.join('b');
+  g.join('c');
+
+  g.start({ now: 0 });
+
+  // round 1: a and b clear, c misses -> c sits last
+  g.tick(1000);
+  g.tick(g.memorizeEndsAt);
+  g.recall('a', [0], g.recallStartsAt + 10);
+  g.recall('b', [0], g.recallStartsAt + 20);
+  g.recall('c', [1], g.recallStartsAt + 30);
+  g.tick(g.recallEndsAt);
+  assert.equal(g.publicState(g.recallEndsAt).spotlight.climber, null,
+    'nobody climbed in round 1 — the order only settled');
+
+  // round 2: only c clears -> c leaps over at least one of them
+  g.tick(g.revealEndsAt);
+  g.tick(g.memorizeEndsAt);
+  g.recall('a', [1, 1], g.recallStartsAt + 10);
+  g.recall('b', [1, 1], g.recallStartsAt + 20);
+  g.recall('c', [0, 0], g.recallStartsAt + 30);
+  g.tick(g.recallEndsAt);
+  const climber = g.publicState(g.recallEndsAt).spotlight.climber;
+  assert.equal(climber.seq, g.players.get('c').seq);
+  assert.ok(climber.up >= 1);
+});
+
 test('the bonus reveal spotlights the fastest reflex', () => {
   const g = freshWithBonus();
   g.join('a');

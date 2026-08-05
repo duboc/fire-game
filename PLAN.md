@@ -536,3 +536,17 @@ MEMORIZE.
   phone torcida bar made loud — glowing full-width buttons, entrance
   animation, explicit call-out in lobby and after answering.
 - [x] Verified: 81 unit tests, full e2e re-run, phone + screen screenshots.
+
+### Revision 6.2: the round has a hero
+
+- [x] Engine: `prevRank` snapshot at each memory round start; `spotlight.
+  climber` = biggest rank climb among players who cleared (null on round 1
+  and on bonus reveals). Test proves a last-place player who alone clears
+  round 2 is crowned.
+- [x] Screen: hero card (big emoji + display-size name + deed) for the
+  fastest answer — or a playful empty-card when nobody cleared; climber and
+  streak as bigger chips; standings font bumped; 120-particle confetti burst
+  once per cleared round (guarded per reveal key), full rain kept for the
+  finale.
+- [x] Verified: 82 unit tests, full e2e (hero card asserted on both memory
+  and bonus reveals), screenshot of the staggered entrance mid-beat.

@@ -58,8 +58,20 @@
   .mdots .md.done{background:var(--g-blue); box-shadow:0 0 14px rgba(66,133,244,.6);}
 
   .subtext{font-size:clamp(18px,2.2vw,30px); color:var(--ink-2); font-weight:500;}
-  .alivebig{font-family:var(--font-mono); font-size:clamp(48px,7vw,110px); font-weight:700; color:var(--ink);}
-  .alivebig b{color:var(--g-green-700);}
+
+  /* the round's hero — big card, big name, the deed underneath */
+  .vhero{display:flex; align-items:center; gap:2vw; max-width:92vw; background:var(--surface-glass);
+    backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid rgba(66,133,244,.35);
+    box-shadow:var(--e3), var(--glow-strong); border-radius:var(--r-xl); padding:2.2vh 3.5vw;
+    animation:cdpop .7s cubic-bezier(.2,1.3,.4,1);}
+  .vhero .em{font-size:min(15vh,12vw); flex:none;}
+  .vhero .info{text-align:left; min-width:0;}
+  .vhero .nm{font-family:var(--font-display); font-size:clamp(30px,4.4vw,76px); font-weight:700; line-height:1.06;
+    color:var(--ink); text-wrap:balance; overflow-wrap:break-word;}
+  .vhero .nm .seq{font-family:var(--font-mono); color:var(--ink-2); font-size:.55em;}
+  .vhero .deed{font-family:var(--font-mono); font-size:clamp(18px,2.4vw,38px); font-weight:500; color:var(--g-green-700); margin-top:.4vh;}
+  .vhero.none{border-color:var(--line); box-shadow:var(--e2);}
+  .vhero.none .nm{color:var(--ink-2);}
 
   /* live answer pulse during RECALL — the room watching itself finish */
   .pulsewrap{width:min(60vw,900px); height:14px; border-radius:var(--r-full); background:var(--surface-2);
@@ -83,10 +95,10 @@
 
   /* the reveal breathes: each block enters on its own beat */
   #reveal.show .roundtag{animation:reveal .5s cubic-bezier(.22,1,.36,1) both;}
-  #reveal.show .alivebig{animation:reveal .6s cubic-bezier(.22,1,.36,1) .35s both;}
-  #reveal.show .subtext{animation:reveal .6s cubic-bezier(.22,1,.36,1) .7s both;}
-  #reveal.show #vSpots{animation:reveal .7s cubic-bezier(.22,1,.36,1) 1.15s both;}
-  #reveal.show #vStandings{animation:reveal .7s cubic-bezier(.22,1,.36,1) 1.7s both;}
+  #reveal.show .vhero{animation:cdpop .7s cubic-bezier(.2,1.3,.4,1) .3s both;}
+  #reveal.show #vSpots{animation:reveal .7s cubic-bezier(.22,1,.36,1) 1.05s both;}
+  #reveal.show .subtext{animation:reveal .6s cubic-bezier(.22,1,.36,1) 1.45s both;}
+  #reveal.show #vStandings{animation:reveal .7s cubic-bezier(.22,1,.36,1) 1.85s both;}
 
   /* ===== ENDED ===== */
   .champlabel{font-size:clamp(22px,2.8vw,42px); font-weight:700; letter-spacing:.12em; color:var(--g-blue-700); text-transform:uppercase;}
@@ -98,7 +110,7 @@
   .champ .nm .seq{font-family:var(--font-mono); color:var(--ink-2);}
   .champ .ct{font-family:var(--font-mono); font-size:clamp(26px,3.2vw,52px); font-weight:500; color:var(--g-green-700);}
   .podium{display:flex; gap:1.5vw; margin-top:1vh; flex-wrap:wrap; justify-content:center;}
-  .pod{background:var(--surface); border:1px solid var(--line); box-shadow:var(--e1); border-radius:var(--r-md); padding:12px 20px; font-weight:500; font-size:clamp(14px,1.5vw,24px); color:var(--ink);}
+  .pod{background:var(--surface); border:1px solid var(--line); box-shadow:var(--e1); border-radius:var(--r-md); padding:14px 24px; font-weight:500; font-size:clamp(17px,2vw,32px); color:var(--ink);}
   .pod b{font-family:var(--font-mono); color:var(--g-blue-700);}
   .again{color:var(--ink-2); font-size:clamp(16px,1.7vw,26px); margin-top:1vh;}
 
@@ -145,9 +157,9 @@
   <!-- REVEAL -->
   <div class="stage" id="reveal">
     <div class="roundtag" id="vTitle">Apurando…</div>
-    <div class="alivebig" id="vCleared"><b id="vClearedNum">0</b></div>
-    <div class="subtext" id="vDetail"></div>
+    <div class="vhero" id="vHero"></div>
     <div class="podium" id="vSpots"></div>
+    <div class="subtext" id="vDetail"></div>
     <div class="podium" id="vStandings"></div>
   </div>
 
@@ -361,41 +373,65 @@
     $('rPulse').style.width = (s.total>0 ? Math.min(100,(s.submittedCount||0)/s.total*100) : 0).toFixed(1)+'%';
   }
 
-  // ---- reveal: how many nailed the round + the running standings ----
+  // ---- reveal: the round's hero, the bragging rights, the standings ----
+  // Rebuilt once per reveal (SSE repeats the frame 10x/s) — the guard is what
+  // keeps the confetti a burst instead of a hose.
+  let revealShownKey = null;
   function renderReveal(s){
+    const key = s.roundId + '/' + s.round + '/' + (s.bonusReveal ? 'b' : 'm');
+    if (revealShownKey === key) return;
+    revealShownKey = key;
+
+    const sp = s.spotlight || {};
+    const hero = $('vHero');
+    const secs = sp.fastest ? (sp.fastest.ms/1000).toFixed(1).replace('.', ',') + 's' : '';
+
     if (s.bonusReveal){
       $('vTitle').textContent = '⚡ Rodada Bônus';
-      $('vClearedNum').textContent = fmt(s.roundClearedCount);
-      $('vDetail').textContent = s.roundClearedCount===0
-        ? 'nenhum reflexo certeiro — de volta à memória!'
-        : (s.roundClearedCount===1?'reflexo certeiro':'reflexos certeiros')+' — de volta à memória!';
+      $('vDetail').textContent = fmt(s.roundClearedCount) + ' de ' + fmt(s.total) +
+        (s.roundClearedCount===1 ? ' acertou' : ' acertaram') + ' no reflexo — de volta à memória!';
     } else {
-      $('vTitle').textContent = 'Rodada '+s.round+' de '+s.totalRounds;
-      $('vClearedNum').textContent = fmt(s.roundClearedCount);
+      $('vTitle').textContent = 'Rodada ' + s.round + ' de ' + s.totalRounds;
       $('vDetail').textContent = s.roundClearedCount===0
-        ? 'ninguém acertou essa — a próxima vem mais rápida!'
-        : (s.roundClearedCount===1?'pessoa acertou':'pessoas acertaram')+' a sequência inteira';
+        ? 'ninguém acertou a sequência inteira dessa vez'
+        : fmt(s.roundClearedCount) + ' de ' + fmt(s.total) +
+          (s.roundClearedCount===1 ? ' acertou' : ' acertaram') + ' a sequência inteira';
     }
-    // spotlights: the round's bragging rights, straight from the engine
+
+    // The hero card: the fastest correct answer owns the round.
+    if (sp.fastest){
+      hero.className = 'vhero';
+      hero.innerHTML = `<div class="em">${sp.fastest.emoji||'🏅'}</div><div class="info">`+
+        `<div class="nm">${escapeHtml(sp.fastest.name)} <span class="seq">#${sp.fastest.seq}</span></div>`+
+        `<div class="deed">⚡ ${s.bonusReveal?'reflexo':'resposta'} mais rápida — ${secs}</div></div>`;
+    } else {
+      hero.className = 'vhero none';
+      hero.innerHTML = `<div class="em">😅</div><div class="info">`+
+        `<div class="nm">${s.bonusReveal?'Ninguém acertou o reflexo':'Essa pegou todo mundo!'}</div></div>`;
+    }
+
+    // secondary bragging rights
     const spots=$('vSpots'); spots.innerHTML='';
-    const sp = s.spotlight;
-    if (sp && sp.fastest){
-      const d=document.createElement('div'); d.className='pod';
-      const secs=(sp.fastest.ms/1000).toFixed(1).replace('.',',');
-      d.innerHTML=`⚡ Mais rápido: ${sp.fastest.emoji||''} ${escapeHtml(sp.fastest.name)} <span class="seq">#${sp.fastest.seq}</span> — ${secs}s`;
-      spots.appendChild(d);
-    }
-    if (sp && sp.bestStreak){
+    if (sp.bestStreak){
       const d=document.createElement('div'); d.className='pod';
       d.innerHTML=`🔥 Sequência perfeita: ${sp.bestStreak.emoji||''} ${escapeHtml(sp.bestStreak.name)} <span class="seq">#${sp.bestStreak.seq}</span> — ${sp.bestStreak.n} rodadas`;
       spots.appendChild(d);
     }
+    if (sp.climber){
+      const d=document.createElement('div'); d.className='pod';
+      d.innerHTML=`📈 Subiu ${sp.climber.up} ${sp.climber.up===1?'posição':'posições'}: ${sp.climber.emoji||''} ${escapeHtml(sp.climber.name)} <span class="seq">#${sp.climber.seq}</span>`;
+      spots.appendChild(d);
+    }
+
     const st=$('vStandings'); st.innerHTML='';
     (s.top||[]).slice(0,5).forEach(p=>{
       const d=document.createElement('div'); d.className='pod';
       d.innerHTML=`<b>#${p.rank}</b> ${p.emoji||''} ${escapeHtml(p.name)} <span class="seq">#${p.seq}</span> — ✓${fmt(p.cleared)} · ${fmt(p.symbols)} pts`;
       st.appendChild(d);
     });
+
+    // the fun beat: every round somebody cleared gets its own little rain
+    if ((s.roundClearedCount||0) > 0) launchConfetti(120);
   }
 
   // ---- ended ----
@@ -427,10 +463,10 @@
   function resize(){ cvs.width=innerWidth; cvs.height=innerHeight; }
   resize(); addEventListener('resize',resize);
   const COLORS=['#4285F4','#EA4335','#FBBC04','#34A853','#A142F4','#00BCD4'];
-  function launchConfetti(){
+  function launchConfetti(n){
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     parts=[];
-    const N=280;
+    const N=n||280; // full rain at the end; a lighter burst per cleared round
     for (let i=0;i<N;i++){
       parts.push({
         x:Math.random()*cvs.width, y:Math.random()*cvs.height*0.4-60,

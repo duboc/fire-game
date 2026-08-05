@@ -198,6 +198,7 @@ export class Batucada {
       lastCleared: null,
       lastElapsedMs: null, // this round's own latency — feeds the spotlight
       streak: 0, // consecutive memory rounds cleared — feeds the spotlight
+      prevRank: null, // standing when the round began — feeds the climber spotlight
       lastBonusOutcome: null, // 'early' | 'hit' | 'wrong' | 'none'
       lastBonusPts: 0,
     };
@@ -283,6 +284,7 @@ export class Batucada {
       p.lastCleared = null;
       p.lastElapsedMs = null;
       p.streak = 0;
+      p.prevRank = null;
       p.lastBonusOutcome = null;
       p.lastBonusPts = 0;
     }
@@ -385,6 +387,7 @@ export class Batucada {
         if (p.lastCleared) this.roundClearedCount += 1;
       }
       this.spotlight = this._spotlight((p) => p.lastCleared);
+      this.spotlight.climber = this._climber();
       this.phase = PHASE.REVEAL;
       this.bonusReveal = false;
       this.revealEndsAt = now + this.revealMs;
@@ -410,6 +413,7 @@ export class Batucada {
         if (p.lastBonusOutcome === 'hit') this.roundClearedCount += 1;
       }
       this.spotlight = this._spotlight((p) => p.lastBonusOutcome === 'hit');
+      this.spotlight.climber = null; // the bonus shuffles points, not the narrative
       this.phase = PHASE.REVEAL;
       this.bonusReveal = true;
       this.revealEndsAt = now + this.revealMs;
@@ -459,6 +463,9 @@ export class Batucada {
     this.round = round;
     this.sequence = this._nextSequence(round);
     for (const p of this.players.values()) p.submitted = false;
+    // Freeze the standings as they are: whoever beats their own line here is
+    // this round's climber.
+    this._ranking().forEach((p, i) => { p.prevRank = i + 1; });
     this.submittedCount = 0;
     this.spotlight = null;
     this.phase = PHASE.MEMORIZE;
@@ -521,6 +528,23 @@ export class Batucada {
       fastest: fastest ? { name: fastest.name, emoji: fastest.emoji, seq: fastest.seq, ms: fastest.lastElapsedMs } : null,
       bestStreak: best ? { name: best.name, emoji: best.emoji, seq: best.seq, n: best.streak } : null,
     };
+  }
+
+  /**
+   * The round's biggest climber: cleared this round AND rose past at least
+   * one player since the round began. Ties go to the bigger jump, then the
+   * earlier joiner.
+   */
+  _climber() {
+    let best = null;
+    this._ranking().forEach((p, i) => {
+      if (!p.lastCleared || p.prevRank === null) return;
+      const up = p.prevRank - (i + 1);
+      if (up >= 1 && (best === null || up > best.up || (up === best.up && p.seq < best.seq))) {
+        best = { name: p.name, emoji: p.emoji, seq: p.seq, up };
+      }
+    });
+    return best;
   }
 
   _identity(p) {

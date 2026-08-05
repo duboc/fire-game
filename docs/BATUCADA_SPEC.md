@@ -381,3 +381,19 @@ Played again; three adjustments, all about how alive the room feels:
   animation and an explicit call-out ("Manda uma reação pro telão 👇") in
   the lobby and after answering — it is the player's only voice between
   answers, so it stopped whispering.
+
+### Revision 6.2: the round has a hero
+
+- **Hero card on every reveal.** The fastest correct answer owns the round:
+  huge animal emoji, display-size name, the deed underneath ("⚡ resposta
+  mais rápida — 0,9s"). When nobody cleared, the card flips to a playful
+  "Essa pegou todo mundo! 😅" — the beat lands either way.
+- **Climber spotlight.** The engine snapshots everyone's rank at the start
+  of each memory round (`prevRank`); whoever cleared AND rose past someone
+  becomes `spotlight.climber` ("📈 Subiu N posições"). Ties go to the bigger
+  jump, then the earlier joiner. The bonus never crowns a climber — it
+  shuffles points, not the narrative.
+- **Confetti every round.** Any round somebody cleared gets a 120-particle
+  burst (the finale keeps its full 280-rain). Guarded once per reveal — the
+  SSE frame repeats 10×/s and a burst must never become a hose.
+- Standings/spotlight chips got a full size bump for the back of the room.
