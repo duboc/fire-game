@@ -526,3 +526,13 @@ MEMORIZE.
   throttle, SSE delta observed on the wire), e2e asserting the pulse reads
   "1 de 2 já responderam" between the two answers and a 👏 floats on the
   screen after a phone cheers.
+
+### Revision 6.1: presence tuned by feel
+
+- [x] Reactions spawn in a 32–68vw center band, bigger glyphs; `revealMs`
+  2.500 → 4.500ms with staggered entrance animations per reveal block;
+  submission pops (player's animal emoji rises from the pulse bar, keyed on
+  `submittedCount` moving so retries never double-pop, clamped 12/frame);
+  phone torcida bar made loud — glowing full-width buttons, entrance
+  animation, explicit call-out in lobby and after answering.
+- [x] Verified: 81 unit tests, full e2e re-run, phone + screen screenshots.

@@ -400,7 +400,13 @@ app.post('/batucada/recall', (req, res) => {
     const ident = batucada.join(id, req.get('accept-language'));
     return res.json({ ...batucada.playerView(id, now), ...ident, rejoined: true });
   }
-  res.json(batucada.recall(id, sequence, now));
+  // A genuinely new answer pops the player's animal emoji on the big screen —
+  // the room watching itself arrive, one by one. Detected by the counter
+  // moving, so retries and late taps never double-pop.
+  const before = batucada.submittedCount;
+  const view = batucada.recall(id, sequence, now);
+  if (batucada.submittedCount > before && view.emoji) submitPops.push(view.emoji);
+  res.json(view);
 });
 
 // Pure read, same reason as /state above: the tick loop already advances the
@@ -424,6 +430,7 @@ const REACT_MIN_INTERVAL_MS = 250;
 const REACT_BLOCKED_PHASES = new Set(['memorize', 'bonus_arm', 'bonus_hit']);
 let reactionDeltas = new Array(REACTION_COUNT).fill(0);
 const lastReactAt = new Map(); // playerId -> last accepted reaction timestamp
+let submitPops = []; // animal emojis of players whose answer just landed (drained per frame)
 
 app.post('/batucada/react', (req, res) => {
   const { id, r } = req.body || {};
@@ -464,12 +471,17 @@ function broadcastBatucada() {
     // Nobody watching: drop the deltas rather than hoarding them for a burst
     // the moment a screen connects.
     if (reactionDeltas.some((c) => c > 0)) reactionDeltas = new Array(REACTION_COUNT).fill(0);
+    if (submitPops.length) submitPops = [];
     return;
   }
   const state = batucada.publicState(Date.now());
   if (reactionDeltas.some((c) => c > 0)) {
     state.reactions = reactionDeltas;
     reactionDeltas = new Array(REACTION_COUNT).fill(0);
+  }
+  if (submitPops.length) {
+    state.pops = submitPops.slice(0, 12); // a 300-answer stampede stays a stream, not a wall
+    submitPops = [];
   }
   const payload = `data: ${JSON.stringify(state)}\n\n`;
   for (const res of batucadaSseClients) {

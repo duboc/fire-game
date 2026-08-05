@@ -235,6 +235,7 @@ test('default ramp lands on a floor the eye can still follow', () => {
   assert.equal(g.symbolOnFor(12), 750, 'even round 12 stays comfortably readable');
   assert.equal(g.symbolGapFor(12), 450);
   assert.ok(g.memorizeLeadInMs >= 1000, 'a breath before the first flash, or the phase transition eats it');
+  assert.ok(g.revealMs >= 4000, 'the reveal carries spotlights and standings — it must be readable, not a flash');
 });
 
 test('the lead-in delays the first flash and is published so the screen can offset its animation', () => {

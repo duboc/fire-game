@@ -362,3 +362,22 @@ touch the sacred phase (MEMORIZE stays silent):
   and the longest active streak of cleared rounds (2+; a 1-round streak is
   not news). Published as `spotlight` during REVEAL only, wiped at the next
   round. The bonus reveal spotlights the fastest reflex the same way.
+
+### Revision 6.1: presence tuned by feel
+
+Played again; three adjustments, all about how alive the room feels:
+
+- **Reactions fly through the center.** The emoji spawn band narrowed from
+  the full width to 32–68vw and the glyphs grew — the middle of the screen
+  is where every eye already is, so that is where the crowd shows.
+- **The reveal breathes.** `revealMs` 2.500 → 4.500ms, and the screen
+  staggers the blocks in (count → detail → spotlights → standings, ~2s of
+  entrance beats) — unhurried, not waiting.
+- **Answers are visible people.** Each landing answer pops that player's
+  animal emoji up from the pulse bar (`pops` on the SSE frame, drained per
+  broadcast like reactions, clamped 12/frame). Retries never double-pop:
+  the server keys on `submittedCount` actually moving.
+- **The torcida bar earns its place.** Big glowing buttons with an entrance
+  animation and an explicit call-out ("Manda uma reação pro telão 👇") in
+  the lobby and after answering — it is the player's only voice between
+  answers, so it stopped whispering.

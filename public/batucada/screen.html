@@ -67,12 +67,26 @@
   .pulsebar{height:100%; width:0%; border-radius:var(--r-full); background:linear-gradient(90deg,#34A853,#4285F4);
     transition:width .25s ease;}
 
-  /* floating crowd reactions — Instagram-live style, pointer-through */
+  /* floating crowd reactions — Instagram-live style, pointer-through.
+     Spawned in a center band, not across the full width: the middle of the
+     screen is where every eye already is, so that is where the crowd shows. */
   #fx{position:fixed; inset:0; pointer-events:none; z-index:55; overflow:hidden;}
-  .fx{position:absolute; bottom:-8vh; font-size:clamp(28px,3.4vw,54px); opacity:0;
-    animation:fxup 3.2s ease-out forwards; will-change:transform,opacity;}
+  .fx{position:absolute; bottom:-8vh; font-size:clamp(36px,4.2vw,68px); opacity:0;
+    animation:fxup 3.4s ease-out forwards; will-change:transform,opacity;}
   @keyframes fxup{0%{transform:translateY(0) scale(.8); opacity:0}10%{opacity:1}
     100%{transform:translateY(-105vh) scale(1.3) rotate(var(--fxr,0deg)); opacity:0}}
+  /* an answer landing: the player's animal pops up from the pulse bar */
+  .fxp{position:absolute; bottom:16vh; font-size:clamp(24px,2.6vw,40px); opacity:0;
+    animation:fxpop 1.8s ease-out forwards; will-change:transform,opacity;}
+  @keyframes fxpop{0%{transform:translateY(0) scale(.6); opacity:0}15%{opacity:1; transform:translateY(-4vh) scale(1.15)}
+    100%{transform:translateY(-38vh) scale(1); opacity:0}}
+
+  /* the reveal breathes: each block enters on its own beat */
+  #reveal.show .roundtag{animation:reveal .5s cubic-bezier(.22,1,.36,1) both;}
+  #reveal.show .alivebig{animation:reveal .6s cubic-bezier(.22,1,.36,1) .35s both;}
+  #reveal.show .subtext{animation:reveal .6s cubic-bezier(.22,1,.36,1) .7s both;}
+  #reveal.show #vSpots{animation:reveal .7s cubic-bezier(.22,1,.36,1) 1.15s both;}
+  #reveal.show #vStandings{animation:reveal .7s cubic-bezier(.22,1,.36,1) 1.7s both;}
 
   /* ===== ENDED ===== */
   .champlabel{font-size:clamp(22px,2.8vw,42px); font-weight:700; letter-spacing:.12em; color:var(--g-blue-700); text-transform:uppercase;}
@@ -215,6 +229,7 @@
   function onState(s){
     if (bestRtt===Infinity && typeof s.serverNow==='number') clockOffset=s.serverNow-Date.now();
     if (Array.isArray(s.reactions)) floatReactions(s.reactions);
+    if (Array.isArray(s.pops)) floatPops(s.pops);
     const changed = s.phase!==cur;
     state=s; cur=s.phase;
     $('cPlayers').textContent = fmt(s.total);
@@ -316,12 +331,26 @@
         const el = document.createElement('span');
         el.className = 'fx';
         el.textContent = REACT_EMOJI[i] || '❤️';
-        el.style.left = (4 + Math.random()*92) + 'vw';
+        el.style.left = (32 + Math.random()*36) + 'vw'; // center band — where every eye already is
         el.style.animationDelay = (Math.random()*0.4).toFixed(2) + 's';
         el.style.setProperty('--fxr', (Math.random()*40 - 20).toFixed(0) + 'deg');
         el.addEventListener('animationend', () => el.remove());
         layer.appendChild(el);
       }
+    });
+  }
+
+  // an answer landing: the player's animal emoji hops up near the pulse bar
+  function floatPops(emojis){
+    const layer = $('fx');
+    emojis.slice(0, 12).forEach((em) => {
+      const el = document.createElement('span');
+      el.className = 'fxp';
+      el.textContent = em;
+      el.style.left = (36 + Math.random()*28) + 'vw';
+      el.style.animationDelay = (Math.random()*0.3).toFixed(2) + 's';
+      el.addEventListener('animationend', () => el.remove());
+      layer.appendChild(el);
     });
   }
 

@@ -48,7 +48,11 @@ export const DEFAULTS = Object.freeze({
 
   recallBaseMs: 1500,
   recallPerSymbolMs: 1200,
-  revealMs: 2500,
+  // Long enough to actually read: the reveal carries a cleared-count, up to
+  // two spotlights and a top-5 — at 2.500ms it flashed past like a slide
+  // nobody asked to skip. The screen staggers the elements in over ~2s, so
+  // this is "unhurried", not "waiting".
+  revealMs: 4500,
 
   // Mid-game bonus: a pure-reflex palate cleanser. The screen holds a
   // suspense beat of unpredictable length, then lights ONE color — tap it on
