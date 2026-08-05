@@ -293,6 +293,39 @@ try {
     ok(reset.phase === 'lobby' && reset.total === 0, '/batucada/admin/reset clears the room back to lobby');
     const afterReset = await (await fetch(B + '/batucada/state?id=' + bMe.id)).json();
     ok(afterReset.known === false, 'a reset forgets players the same way Tap Race does');
+
+    // Crowd reactions: known id only, per-player throttle, and the delta
+    // rides the SSE frame so the screen can float it.
+    const fan = await (await fetch(B + '/batucada/join', { method: 'POST' })).json();
+    const react = (id, r) => fetch(B + '/batucada/react', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, r }),
+    });
+    ok((await react('not-a-player', 1)).status === 400, 'a reaction from an unknown id is refused');
+    ok((await (await react(fan.id, 99)).json()).ok === false, 'an out-of-range emoji is refused');
+    const sseReact = await fetch(B + '/batucada/events'); // subscribe BEFORE reacting — deltas are dropped unseen
+    const first = await (await react(fan.id, 2)).json();
+    ok(first.ok === true, 'a lobby reaction lands');
+    const second = await (await react(fan.id, 2)).json();
+    ok(second.throttled === true, 'a second reaction inside 250ms is throttled');
+    const rReader = sseReact.body.getReader();
+    const dec = new TextDecoder();
+    let sawDelta = false;
+    const deadline = Date.now() + 1500;
+    let buf = '';
+    while (Date.now() < deadline && !sawDelta) {
+      const { value, done: eof } = await rReader.read();
+      if (eof) break;
+      buf += dec.decode(value, { stream: true });
+      for (const l of buf.split('\n')) {
+        if (l.startsWith('data: ') && l.includes('"reactions"')) {
+          const s = JSON.parse(l.slice(6));
+          if (Array.isArray(s.reactions) && s.reactions[2] >= 1) sawDelta = true;
+        }
+      }
+    }
+    await rReader.cancel();
+    ok(sawDelta, 'the reaction delta rides the SSE frame to the screen');
+    await fetch(B + '/batucada/admin/reset', { method: 'POST', headers: { 'x-admin-token': TOKEN } });
   }
 
   // -------------------------------------------------------------------------

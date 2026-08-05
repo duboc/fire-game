@@ -42,8 +42,14 @@ anyway — same habit as Tap Race.
 - [ ] Deliberately tap wrong on one phone in some round → that phone shows
   "Errou essa! X/N certos — a próxima já vem" and **gets its grid back next
   round**. Nobody is ever benched.
-- [ ] Between rounds the screen shows how many people cleared the round and a
-  top-5 running standings (✓rounds · pts).
+- [ ] While people answer, the screen's pulse bar fills live ("X de N já
+  responderam") — it must move within ~a second of each phone submitting.
+- [ ] After answering (and in lobby/reveal/ended), the phone shows the
+  torcida bar (🔥 👏 😱 ❤️); taps float up the big screen within ~a second.
+  Confirm the bar is HIDDEN during the flash and the whole bonus round.
+- [ ] Between rounds the screen shows how many people cleared the round, the
+  spotlights (⚡ fastest of the round, 🔥 longest 2+ streak) and a top-5
+  running standings (✓rounds · pts).
 - [ ] The game runs all picked rounds (plus the bonus) regardless of misses, then confetti +
   champion + podium. The champion's phone shows "Você é o campeão!"; everyone
   else sees their rank and score.

@@ -61,6 +61,19 @@
   .alivebig{font-family:var(--font-mono); font-size:clamp(48px,7vw,110px); font-weight:700; color:var(--ink);}
   .alivebig b{color:var(--g-green-700);}
 
+  /* live answer pulse during RECALL — the room watching itself finish */
+  .pulsewrap{width:min(60vw,900px); height:14px; border-radius:var(--r-full); background:var(--surface-2);
+    border:1px solid var(--line); overflow:hidden;}
+  .pulsebar{height:100%; width:0%; border-radius:var(--r-full); background:linear-gradient(90deg,#34A853,#4285F4);
+    transition:width .25s ease;}
+
+  /* floating crowd reactions — Instagram-live style, pointer-through */
+  #fx{position:fixed; inset:0; pointer-events:none; z-index:55; overflow:hidden;}
+  .fx{position:absolute; bottom:-8vh; font-size:clamp(28px,3.4vw,54px); opacity:0;
+    animation:fxup 3.2s ease-out forwards; will-change:transform,opacity;}
+  @keyframes fxup{0%{transform:translateY(0) scale(.8); opacity:0}10%{opacity:1}
+    100%{transform:translateY(-105vh) scale(1.3) rotate(var(--fxr,0deg)); opacity:0}}
+
   /* ===== ENDED ===== */
   .champlabel{font-size:clamp(22px,2.8vw,42px); font-weight:700; letter-spacing:.12em; color:var(--g-blue-700); text-transform:uppercase;}
   .champ{display:flex; align-items:center; gap:2vw; max-width:92vw; background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
@@ -80,6 +93,7 @@
 </head>
 <body class="noise-bg">
   <canvas id="confetti"></canvas>
+  <div id="fx"></div>
   <div class="brand"><span class="ico">🧠</span> <span class="shimmer">Sequência</span></div>
   <div class="chips" id="chips">
     <div class="chip"><div class="k">Jogadores</div><div class="v" id="cPlayers">0</div></div>
@@ -111,6 +125,7 @@
     <div class="roundtag">Reproduzam de memória!</div>
     <div class="tiles" id="rTiles"></div>
     <div class="subtext" id="rDetail"></div>
+    <div class="pulsewrap"><div class="pulsebar" id="rPulse"></div></div>
   </div>
 
   <!-- REVEAL -->
@@ -118,6 +133,7 @@
     <div class="roundtag" id="vTitle">Apurando…</div>
     <div class="alivebig" id="vCleared"><b id="vClearedNum">0</b></div>
     <div class="subtext" id="vDetail"></div>
+    <div class="podium" id="vSpots"></div>
     <div class="podium" id="vStandings"></div>
   </div>
 
@@ -198,6 +214,7 @@
 
   function onState(s){
     if (bestRtt===Infinity && typeof s.serverNow==='number') clockOffset=s.serverNow-Date.now();
+    if (Array.isArray(s.reactions)) floatReactions(s.reactions);
     const changed = s.phase!==cur;
     state=s; cur=s.phase;
     $('cPlayers').textContent = fmt(s.total);
@@ -288,10 +305,31 @@
     requestAnimationFrame(tickMemorize);
   }
 
-  // ---- recall: dimmed tiles, everyone answers every round ----
+  // ---- crowd reactions: same emoji order as the phone's torcida bar ----
+  const REACT_EMOJI = ['🔥','👏','😱','❤️'];
+  const FX_MAX_PER_FRAME = 24; // one SSE frame's worth — a huge room stays a shower, not a wall
+  function floatReactions(counts){
+    const layer = $('fx');
+    let budget = FX_MAX_PER_FRAME;
+    counts.forEach((n, i) => {
+      for (let k = 0; k < n && budget > 0; k++, budget--){
+        const el = document.createElement('span');
+        el.className = 'fx';
+        el.textContent = REACT_EMOJI[i] || '❤️';
+        el.style.left = (4 + Math.random()*92) + 'vw';
+        el.style.animationDelay = (Math.random()*0.4).toFixed(2) + 's';
+        el.style.setProperty('--fxr', (Math.random()*40 - 20).toFixed(0) + 'deg');
+        el.addEventListener('animationend', () => el.remove());
+        layer.appendChild(el);
+      }
+    });
+  }
+
+  // ---- recall: dimmed tiles + the live answer pulse ----
   function renderRecall(s){
     rTiles.forEach(t=>t.classList.remove('lit'));
-    $('rDetail').innerHTML = '<b>'+fmt(s.total)+'</b> '+(s.total===1?'jogador repetindo':'jogadores repetindo')+' a rodada '+s.round;
+    $('rDetail').innerHTML = '<b>'+fmt(s.submittedCount||0)+'</b> de '+fmt(s.total)+' já responderam';
+    $('rPulse').style.width = (s.total>0 ? Math.min(100,(s.submittedCount||0)/s.total*100) : 0).toFixed(1)+'%';
   }
 
   // ---- reveal: how many nailed the round + the running standings ----
@@ -308,6 +346,20 @@
       $('vDetail').textContent = s.roundClearedCount===0
         ? 'ninguém acertou essa — a próxima vem mais rápida!'
         : (s.roundClearedCount===1?'pessoa acertou':'pessoas acertaram')+' a sequência inteira';
+    }
+    // spotlights: the round's bragging rights, straight from the engine
+    const spots=$('vSpots'); spots.innerHTML='';
+    const sp = s.spotlight;
+    if (sp && sp.fastest){
+      const d=document.createElement('div'); d.className='pod';
+      const secs=(sp.fastest.ms/1000).toFixed(1).replace('.',',');
+      d.innerHTML=`⚡ Mais rápido: ${sp.fastest.emoji||''} ${escapeHtml(sp.fastest.name)} <span class="seq">#${sp.fastest.seq}</span> — ${secs}s`;
+      spots.appendChild(d);
+    }
+    if (sp && sp.bestStreak){
+      const d=document.createElement('div'); d.className='pod';
+      d.innerHTML=`🔥 Sequência perfeita: ${sp.bestStreak.emoji||''} ${escapeHtml(sp.bestStreak.name)} <span class="seq">#${sp.bestStreak.seq}</span> — ${sp.bestStreak.n} rodadas`;
+      spots.appendChild(d);
     }
     const st=$('vStandings'); st.innerHTML='';
     (s.top||[]).slice(0,5).forEach(p=>{

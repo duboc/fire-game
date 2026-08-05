@@ -144,6 +144,8 @@ export class Batucada {
     this.recallEndsAt = null;
     this.revealEndsAt = null;
     this.roundClearedCount = 0; // how many players fully matched the round just graded
+    this.submittedCount = 0; // answers in so far this round — the screen's live pulse
+    this.spotlight = null; // { fastest, bestStreak } — set entering REVEAL, wiped at the next round
     this.winner = null;
     this.roundId = 0;
 
@@ -190,6 +192,8 @@ export class Batucada {
       submitted: false,
       lastPrefix: null, // last graded round's matched prefix, for the phone
       lastCleared: null,
+      lastElapsedMs: null, // this round's own latency — feeds the spotlight
+      streak: 0, // consecutive memory rounds cleared — feeds the spotlight
       lastBonusOutcome: null, // 'early' | 'hit' | 'wrong' | 'none'
       lastBonusPts: 0,
     };
@@ -216,18 +220,23 @@ export class Batucada {
     if (!player) return null;
     if (this.phase === PHASE.RECALL && !player.submitted) {
       player.submitted = true;
-      player.elapsedTotalMs += Math.max(0, now - this.recallStartsAt);
+      this.submittedCount += 1;
+      player.lastElapsedMs = Math.max(0, now - this.recallStartsAt);
+      player.elapsedTotalMs += player.lastElapsedMs;
       this._grade(player, sequence);
     } else if (this.phase === PHASE.BONUS_ARM && !player.submitted) {
       // Jumped the gun: the tap during the suspense IS the answer, and it is
       // wrong by definition. Locked out of the flash — that sting is the
       // whole tension of a reflex round.
       player.submitted = true;
+      this.submittedCount += 1;
       player.lastBonusOutcome = 'early';
       player.lastBonusPts = 0;
+      player.lastElapsedMs = this.bonusHitWindowMs;
       player.elapsedTotalMs += this.bonusHitWindowMs;
     } else if (this.phase === PHASE.BONUS_HIT && !player.submitted) {
       player.submitted = true;
+      this.submittedCount += 1;
       const arr = Array.isArray(sequence) ? sequence : [];
       if (arr.length === 1 && arr[0] === this.bonusColor) {
         const elapsed = Math.max(0, now - this.bonusHitStartsAt);
@@ -235,10 +244,12 @@ export class Batucada {
         player.lastBonusOutcome = 'hit';
         player.lastBonusPts = Math.max(1, Math.round(this.bonusMaxPts * (1 - frac)));
         player.symbols += player.lastBonusPts;
+        player.lastElapsedMs = elapsed;
         player.elapsedTotalMs += elapsed;
       } else {
         player.lastBonusOutcome = 'wrong';
         player.lastBonusPts = 0;
+        player.lastElapsedMs = this.bonusHitWindowMs;
         player.elapsedTotalMs += this.bonusHitWindowMs;
       }
     }
@@ -266,12 +277,16 @@ export class Batucada {
       p.submitted = false;
       p.lastPrefix = null;
       p.lastCleared = null;
+      p.lastElapsedMs = null;
+      p.streak = 0;
       p.lastBonusOutcome = null;
       p.lastBonusPts = 0;
     }
     this.round = 0;
     this.sequence = [];
     this.roundClearedCount = 0;
+    this.submittedCount = 0;
+    this.spotlight = null;
     this.winner = null;
     this.startsAt = now + this.countdownMs;
     this.memorizeStartsAt = null;
@@ -294,6 +309,8 @@ export class Batucada {
     this.round = 0;
     this.sequence = [];
     this.roundClearedCount = 0;
+    this.submittedCount = 0;
+    this.spotlight = null;
     this.startsAt = null;
     this.memorizeStartsAt = null;
     this.memorizeEndsAt = null;
@@ -353,14 +370,17 @@ export class Batucada {
       for (const p of this.players.values()) {
         if (!p.submitted) {
           p.submitted = true;
-          p.elapsedTotalMs += this.recallEndsAt - this.recallStartsAt;
+          p.lastElapsedMs = this.recallEndsAt - this.recallStartsAt;
+          p.elapsedTotalMs += p.lastElapsedMs;
           this._grade(p, []);
         }
       }
+      this.submittedCount = this.players.size;
       this.roundClearedCount = 0;
       for (const p of this.players.values()) {
         if (p.lastCleared) this.roundClearedCount += 1;
       }
+      this.spotlight = this._spotlight((p) => p.lastCleared);
       this.phase = PHASE.REVEAL;
       this.bonusReveal = false;
       this.revealEndsAt = now + this.revealMs;
@@ -376,13 +396,16 @@ export class Batucada {
           p.submitted = true;
           p.lastBonusOutcome = 'none';
           p.lastBonusPts = 0;
+          p.lastElapsedMs = this.bonusHitWindowMs;
           p.elapsedTotalMs += this.bonusHitWindowMs;
         }
       }
+      this.submittedCount = this.players.size;
       this.roundClearedCount = 0;
       for (const p of this.players.values()) {
         if (p.lastBonusOutcome === 'hit') this.roundClearedCount += 1;
       }
+      this.spotlight = this._spotlight((p) => p.lastBonusOutcome === 'hit');
       this.phase = PHASE.REVEAL;
       this.bonusReveal = true;
       this.revealEndsAt = now + this.revealMs;
@@ -423,6 +446,8 @@ export class Batucada {
       p.lastBonusOutcome = null;
       p.lastBonusPts = 0;
     }
+    this.submittedCount = 0;
+    this.spotlight = null;
     this.phase = PHASE.BONUS_ARM;
   }
 
@@ -430,6 +455,8 @@ export class Batucada {
     this.round = round;
     this.sequence = this._nextSequence(round);
     for (const p of this.players.values()) p.submitted = false;
+    this.submittedCount = 0;
+    this.spotlight = null;
     this.phase = PHASE.MEMORIZE;
     this.memorizeStartsAt = now;
     this.memorizeEndsAt = now + this.memorizeLeadInMs + round * (this.symbolOnFor(round) + this.symbolGapFor(round));
@@ -458,6 +485,7 @@ export class Batucada {
     player.lastCleared = prefix === seq.length;
     player.symbols += prefix;
     if (player.lastCleared) player.cleared += 1;
+    player.streak = player.lastCleared ? player.streak + 1 : 0;
   }
 
   _ranking() {
@@ -468,6 +496,27 @@ export class Batucada {
         a.elapsedTotalMs - b.elapsedTotalMs ||
         a.seq - b.seq,
     );
+  }
+
+  /**
+   * The round's bragging rights, computed once entering REVEAL: the fastest
+   * player among those `won` selects, and the longest active streak (2+ —
+   * a 1-round streak is not news). Ties go to the earlier joiner, matching
+   * every other tiebreak in this file.
+   */
+  _spotlight(won) {
+    let fastest = null;
+    let best = null;
+    for (const p of this.players.values()) {
+      if (won(p) && (fastest === null || p.lastElapsedMs < fastest.lastElapsedMs
+          || (p.lastElapsedMs === fastest.lastElapsedMs && p.seq < fastest.seq))) fastest = p;
+      if (p.streak >= 2 && (best === null || p.streak > best.streak
+          || (p.streak === best.streak && p.seq < best.seq))) best = p;
+    }
+    return {
+      fastest: fastest ? { name: fastest.name, emoji: fastest.emoji, seq: fastest.seq, ms: fastest.lastElapsedMs } : null,
+      bestStreak: best ? { name: best.name, emoji: best.emoji, seq: best.seq, n: best.streak } : null,
+    };
   }
 
   _identity(p) {
@@ -551,6 +600,8 @@ export class Batucada {
       memorizeLeadInMs: this.memorizeLeadInMs,
       total: this.players.size,
       roundClearedCount: this.roundClearedCount,
+      submittedCount: this.submittedCount,
+      spotlight: this.phase === PHASE.REVEAL ? this.spotlight : null,
       // Standings only in the phases that show them: sorting the roster on
       // every 100ms broadcast would be _recount()-shaped work for frames the
       // screen renders as a countdown or a flash anyway.

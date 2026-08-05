@@ -412,6 +412,38 @@ app.get('/batucada/state', (req, res) => {
   res.json(batucada.playerView(null, now));
 });
 
+// ---------------------------------------------------------------------------
+// Crowd reactions — plateia noise, deliberately NOT game state, so it lives
+// here and not in the engine. Phones POST an emoji index; the counts ride the
+// next SSE frame as deltas and the screen floats them up. Blocked during the
+// phases that need silence (the flash, the bonus suspense/hit), throttled
+// per player so one thumb cannot become a firehose.
+// ---------------------------------------------------------------------------
+const REACTION_COUNT = 4; // 🔥 👏 😱 ❤️ — order shared with both client pages
+const REACT_MIN_INTERVAL_MS = 250;
+const REACT_BLOCKED_PHASES = new Set(['memorize', 'bonus_arm', 'bonus_hit']);
+let reactionDeltas = new Array(REACTION_COUNT).fill(0);
+const lastReactAt = new Map(); // playerId -> last accepted reaction timestamp
+
+app.post('/batucada/react', (req, res) => {
+  const { id, r } = req.body || {};
+  const idx = Number(r);
+  if (!batucada.has(id) || !Number.isInteger(idx) || idx < 0 || idx >= REACTION_COUNT) {
+    return res.status(400).json({ ok: false });
+  }
+  if (REACT_BLOCKED_PHASES.has(batucada.phase)) return res.json({ ok: false, blocked: true });
+  const now = Date.now();
+  if (now - (lastReactAt.get(id) ?? 0) < REACT_MIN_INTERVAL_MS) {
+    return res.json({ ok: false, throttled: true });
+  }
+  // Bounded by the roster in practice (only known ids get here); the sweep
+  // guards a very long day of resets re-minting ids.
+  if (lastReactAt.size > 20000) lastReactAt.clear();
+  lastReactAt.set(id, now);
+  reactionDeltas[idx] += 1;
+  res.json({ ok: true });
+});
+
 const batucadaSseClients = new Set();
 
 app.get('/batucada/events', (req, res) => {
@@ -428,8 +460,18 @@ app.get('/batucada/events', (req, res) => {
 });
 
 function broadcastBatucada() {
-  if (batucadaSseClients.size === 0) return;
-  const payload = `data: ${JSON.stringify(batucada.publicState(Date.now()))}\n\n`;
+  if (batucadaSseClients.size === 0) {
+    // Nobody watching: drop the deltas rather than hoarding them for a burst
+    // the moment a screen connects.
+    if (reactionDeltas.some((c) => c > 0)) reactionDeltas = new Array(REACTION_COUNT).fill(0);
+    return;
+  }
+  const state = batucada.publicState(Date.now());
+  if (reactionDeltas.some((c) => c > 0)) {
+    state.reactions = reactionDeltas;
+    reactionDeltas = new Array(REACTION_COUNT).fill(0);
+  }
+  const payload = `data: ${JSON.stringify(state)}\n\n`;
   for (const res of batucadaSseClients) {
     try { res.write(payload); } catch { batucadaSseClients.delete(res); }
   }

@@ -337,3 +337,28 @@ became the host's call, and the bonus stopped being tied to a fixed round:
   surprise round always plays, halfway through whatever length was picked
   (`floor(totalRounds/2)`) — after round 3 of 6, round 4 of 8, round 6 of 12.
   `0` still disables it and a positive value still pins it (tests, env).
+
+## Revision 6: the crowd on the screen
+
+Three additions that put the room itself on the projector, none of which
+touch the sacred phase (MEMORIZE stays silent):
+
+- **Answer pulse (RECALL).** The engine keeps an incremental
+  `submittedCount` per round; the screen renders "34 de 120 já responderam"
+  with a filling progress bar. RECALL was the screen's deadest phase — now
+  it is the room watching itself finish, and the bar filling up is also the
+  early-close approaching.
+- **Torcida (crowd emojis).** `POST /batucada/react {id, r}` — four emojis
+  (🔥 👏 😱 ❤️, order shared by both pages), throttled per player (250ms)
+  and blocked during `memorize`/`bonus_arm`/`bonus_hit`. Deliberately NOT
+  engine state: the counts live in server.js, ride the next SSE frame as
+  deltas (`reactions: [n,n,n,n]`) and are dropped when no screen is
+  connected. The screen floats them up Instagram-live style, clamped at 24
+  per frame so a big room reads as a shower, not a wall. The phone shows the
+  reaction bar only when tapping it can't hurt anyone's focus: lobby,
+  reveal, ended, and recall *after your own answer is in*.
+- **Spotlights (REVEAL).** Zero new input — the engine derives, per round:
+  the fastest correct answer (`lastElapsedMs`, ties to the earlier joiner)
+  and the longest active streak of cleared rounds (2+; a 1-round streak is
+  not news). Published as `spotlight` during REVEAL only, wiped at the next
+  round. The bonus reveal spotlights the fastest reflex the same way.

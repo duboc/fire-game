@@ -57,6 +57,14 @@
 
   .status{text-align:center; min-height:22px; font-weight:500; color:var(--ink-2); font-size:14px;}
 
+  /* torcida — crowd reactions that float up the big screen */
+  .torcida{display:none; gap:10px; justify-content:center;}
+  .torcida.show{display:flex;}
+  .torcida button{font-size:24px; line-height:1; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:var(--r-full); padding:10px 18px; cursor:pointer; -webkit-tap-highlight-color:transparent;
+    transition:transform .08s ease;}
+  .torcida button:active{transform:scale(1.25);}
+
   .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
     background:rgba(0,0,0,.92); backdrop-filter:blur(8px); z-index:50;}
   .overlay.show{display:flex;}
@@ -80,6 +88,12 @@
     </div>
     <div class="stage" id="stage"></div>
     <div class="status" id="status"></div>
+    <div class="torcida" id="torcida">
+      <button type="button" data-r="0">🔥</button>
+      <button type="button" data-r="1">👏</button>
+      <button type="button" data-r="2">😱</button>
+      <button type="button" data-r="3">❤️</button>
+    </div>
   </div>
 
   <div class="overlay" id="overlay">
@@ -92,7 +106,7 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const els = { emoji:$('emoji'), name:$('name'), seq:$('seq'), stage:$('stage'), status:$('status'),
-                overlay:$('overlay'), cd:$('cd') };
+                overlay:$('overlay'), cd:$('cd'), torcida:$('torcida') };
 
   const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', MEMORIZE:'memorize', RECALL:'recall', REVEAL:'reveal',
                   BONUS_ARM:'bonus_arm', BONUS_HIT:'bonus_hit', ENDED:'ended' };
@@ -217,6 +231,22 @@
     }catch(_){}
   }
 
+  // ---- torcida: fire-and-forget crowd reactions (server throttles too) ----
+  let lastReact = 0;
+  els.torcida.addEventListener('pointerdown', (e) => {
+    const b = e.target.closest('button[data-r]');
+    if (!b) return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now - lastReact < 260) return;
+    lastReact = now;
+    vibe(10);
+    fetch('/batucada/react', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: me.id, r: Number(b.dataset.r) }),
+    }).catch(()=>{});
+  }, { passive:false });
+
   // ---- rendering ------------------------------------------------------------
 
   function showCountdown(show){
@@ -290,11 +320,20 @@
     if (!state.known){
       els.stage.innerHTML = centerHtml('🧠', 'Conectando…');
       els.status.textContent = '';
+      els.torcida.classList.remove('show');
       showCountdown(false);
       return;
     }
 
     showCountdown(state.phase === PHASE.COUNTDOWN);
+
+    // The torcida is open whenever tapping it can't hurt anyone's focus:
+    // never during the flash or the bonus, and never while you should be
+    // answering — only after your own answer is in.
+    const cheering = state.phase === PHASE.LOBBY || state.phase === PHASE.REVEAL
+      || state.phase === PHASE.ENDED
+      || (state.phase === PHASE.RECALL && (submitted || state.submitted));
+    els.torcida.classList.toggle('show', cheering);
 
     if (state.phase === PHASE.ENDED){
       const champ = state.yourRank === 1;

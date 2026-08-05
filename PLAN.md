@@ -504,3 +504,25 @@ whatever length is picked. Spec Revision 5.
 - [x] Verified: 78 unit tests, 175 contract, e2e driven through the real UI
   path — round count picked on the host panel (no env override) and the
   bonus firing automatically at the midpoint.
+
+### Revision 6: the crowd on the screen
+
+Asked-for: more fun and dynamism via audience interaction on the big screen,
+without breaking flow. Three features, spec Revision 6 — none touches
+MEMORIZE.
+
+- [x] `src/batucada.js`: incremental `submittedCount` per round (the live
+  pulse), per-player `streak`/`lastElapsedMs`, and a `spotlight`
+  (fastest correct + longest 2+ streak) computed entering REVEAL and
+  published only there; the bonus reveal spotlights the fastest reflex.
+- [x] `src/server.js`: `POST /batucada/react` — 4 emojis, 250ms per-player
+  throttle, blocked during memorize/bonus phases; deltas ride the existing
+  100ms SSE frame and are dropped when no screen is connected. Deliberately
+  server-level, not engine state.
+- [x] Screen: RECALL answer-pulse bar + count, floating-emoji layer (clamped
+  24/frame), REVEAL spotlight chips. Phone: fixed torcida bar shown only in
+  lobby/reveal/ended/recall-after-answering.
+- [x] Verified: 81 unit tests, 180 contract assertions (unknown id refused,
+  throttle, SSE delta observed on the wire), e2e asserting the pulse reads
+  "1 de 2 já responderam" between the two answers and a 👏 floats on the
+  screen after a phone cheers.

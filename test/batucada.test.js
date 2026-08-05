@@ -388,6 +388,76 @@ test('a new game re-arms the bonus', () => {
   assert.equal(g.bonusPlayed, false);
 });
 
+test('submittedCount pulses up as answers land and resets each round', () => {
+  const g = fresh({ totalRounds: 2 });
+  g.join('a');
+  g.join('b');
+  g.join('c');
+  g.start({ now: 0 });
+  g.tick(1000);
+  g.tick(g.memorizeEndsAt);
+  assert.equal(g.publicState(g.recallStartsAt).submittedCount, 0);
+
+  g.recall('a', [0], g.recallStartsAt + 10);
+  assert.equal(g.publicState(g.recallStartsAt + 10).submittedCount, 1);
+  g.recall('b', [3], g.recallStartsAt + 20);
+  assert.equal(g.publicState(g.recallStartsAt + 20).submittedCount, 2);
+
+  g.tick(g.recallEndsAt); // c timed out — graded, so everyone counts
+  assert.equal(g.publicState(g.recallEndsAt).submittedCount, 3);
+
+  g.tick(g.revealEndsAt); // round 2 wipes the pulse
+  assert.equal(g.publicState(g.revealEndsAt).submittedCount, 0);
+});
+
+test('the spotlight names the fastest correct answer and the longest streak, during REVEAL only', () => {
+  const g = fresh({ totalRounds: 3 });
+  g.join('a');
+  g.join('b');
+  g.start({ now: 0 });
+
+  // round 1: both clear, b faster
+  g.tick(1000);
+  g.tick(g.memorizeEndsAt);
+  g.recall('a', [0], g.recallStartsAt + 400);
+  g.recall('b', [0], g.recallStartsAt + 150);
+  g.tick(g.recallEndsAt);
+  let spot = g.publicState(g.recallEndsAt).spotlight;
+  assert.equal(spot.fastest.seq, g.players.get('b').seq);
+  assert.equal(spot.fastest.ms, 150);
+  assert.equal(spot.bestStreak, null, 'a 1-round streak is not news');
+
+  // round 2: only a clears — b's streak dies, a's reaches 2
+  g.tick(g.revealEndsAt);
+  g.tick(g.memorizeEndsAt);
+  g.recall('a', [0, 0], g.recallStartsAt + 500);
+  g.recall('b', [1, 1], g.recallStartsAt + 100);
+  g.tick(g.recallEndsAt);
+  spot = g.publicState(g.recallEndsAt).spotlight;
+  assert.equal(spot.fastest.seq, g.players.get('a').seq, 'fastest counts only correct answers');
+  assert.equal(spot.bestStreak.seq, g.players.get('a').seq);
+  assert.equal(spot.bestStreak.n, 2);
+  assert.equal(g.players.get('b').streak, 0);
+
+  // outside REVEAL there is no spotlight
+  g.tick(g.revealEndsAt);
+  assert.equal(g.publicState(g.revealEndsAt).spotlight, null);
+});
+
+test('the bonus reveal spotlights the fastest reflex', () => {
+  const g = freshWithBonus();
+  g.join('a');
+  g.join('b');
+  playIntoBonus(g);
+  g.tick(g.bonusArmEndsAt);
+  g.recall('a', [0], g.bonusHitStartsAt + 300);
+  g.recall('b', [0], g.bonusHitStartsAt + 120);
+  g.tick(g.bonusHitStartsAt + 400);
+  const spot = g.publicState(g.bonusHitStartsAt + 400).spotlight;
+  assert.equal(spot.fastest.seq, g.players.get('b').seq);
+  assert.equal(spot.fastest.ms, 120);
+});
+
 test('the host can pick the round count per game; reset restores the default', () => {
   const g = fresh({ totalRounds: 12 });
   g.join('p1');
