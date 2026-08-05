@@ -321,3 +321,19 @@ matters — "eu não to vendo a tela piscando". Three fixes, all client-visible:
   as glow (contrast carries further than brightness on a washed-out
   projector). A row of progress dots under the tiles fills as the sequence
   advances, so you always know how many symbols have gone by.
+
+## Revision 5: host-picked round count, surprise round always in the middle
+
+The slower pacing made a 12-round game genuinely long (~5 min), which is
+sometimes exactly right and sometimes too much for the slot. So the length
+became the host's call, and the bonus stopped being tied to a fixed round:
+
+- `/batucada/admin/start` accepts `{ totalRounds }`; the host panel offers
+  6/8/10/12 (default 8) next to the Start button, mirroring Tap Race's
+  duration selector. Clamped server-side to 1–30 (`Batucada.MIN_ROUNDS`/
+  `MAX_ROUNDS`) — a typo guard, not an anti-cheat, same as `Game`'s duration
+  clamp. `reset()` forgets the per-game pick.
+- `bonusAfterRound` default changed from `6` to `null` = **auto**: the
+  surprise round always plays, halfway through whatever length was picked
+  (`floor(totalRounds/2)`) — after round 3 of 6, round 4 of 8, round 6 of 12.
+  `0` still disables it and a positive value still pins it (tests, env).

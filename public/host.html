@@ -131,6 +131,16 @@
     <div class="panel">
       <div class="h1" style="font-size:20px;">🧠 Sequência <span class="tag">· companion game</span></div>
       <div class="row" style="margin-top:12px;">
+        <div><label>Rounds</label>
+          <select id="bRoundsSel">
+            <option value="6">6 rounds (~2 min)</option>
+            <option value="8" selected>8 rounds (~3 min)</option>
+            <option value="10">10 rounds (~4 min)</option>
+            <option value="12">12 rounds (~5 min)</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;">
         <button class="start" id="bStart">▶ Start (3 · 2 · 1 · decore)</button>
         <button class="reset" id="bReset">↺ Clear the room</button>
       </div>
@@ -203,16 +213,20 @@
   $('token').addEventListener('keydown',(e)=>{ if(e.key==='Enter') login(); });
 
   // Same session cookie, same login flow — one host controls both games.
-  async function postBatucada(path,label){
+  async function postBatucada(path,label,body){
     const authed = !$('authok').hidden;
     if(!authed && !(await login())) return;
     try{
-      const r=await fetch(path,{method:'POST'});
+      const opts = body
+        ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}
+        : {method:'POST'};
+      const r=await fetch(path,opts);
       if(r.status===401){ setAuthed(false); msg('Session expired — enter the password again.',false); return; }
       await r.json(); const m=$('bMsg'); m.textContent=label; m.className='msg ok';
     }catch(e){ const m=$('bMsg'); m.textContent='Network error.'; m.className='msg err'; }
   }
-  $('bStart').onclick=()=>postBatucada('/batucada/admin/start','Sequência started! 🧠');
+  $('bStart').onclick=()=>postBatucada('/batucada/admin/start','Sequência started! 🧠',
+    {totalRounds:Number($('bRoundsSel').value)});
   $('bReset').onclick=()=>postBatucada('/batucada/admin/reset','Sequência room cleared.');
 
   function connectBatucada(){

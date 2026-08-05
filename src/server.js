@@ -759,7 +759,8 @@ app.post('/admin/reset', async (req, res) => {
 // Same password, same session cookie as Tap Race — one host controls both games.
 app.post('/batucada/admin/start', async (req, res) => {
   if (!(await checkAdmin(req, res))) return;
-  const state = batucada.start({ now: Date.now() });
+  const totalRounds = Number(req.body?.totalRounds) || undefined;
+  const state = batucada.start({ totalRounds, now: Date.now() });
   broadcastBatucada();
   res.json(state);
 });

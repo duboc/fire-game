@@ -254,10 +254,18 @@ try {
     ok(noToken.status === 401, '/batucada/admin/start without a token is refused');
 
     const started = await (await fetch(B + '/batucada/admin/start', {
-      method: 'POST', headers: { 'x-admin-token': TOKEN },
+      method: 'POST', headers: { 'x-admin-token': TOKEN, 'content-type': 'application/json' },
+      body: JSON.stringify({ totalRounds: 6 }),
     })).json();
     ok(started.phase === 'countdown' && typeof started.startsAt === 'number',
       '/batucada/admin/start begins a countdown, same as Tap Race');
+    ok(started.totalRounds === 6, 'the host-picked round count sticks');
+
+    const restarted = await (await fetch(B + '/batucada/admin/start', {
+      method: 'POST', headers: { 'x-admin-token': TOKEN, 'content-type': 'application/json' },
+      body: JSON.stringify({ totalRounds: 1e9 }),
+    })).json();
+    ok(restarted.totalRounds <= 30, `an absurd round count is clamped (${restarted.totalRounds})`);
 
     // A recall for an unknown id self-heals exactly like /tap does.
     const healed = await (await fetch(B + '/batucada/recall', {

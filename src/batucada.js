@@ -50,11 +50,15 @@ export const DEFAULTS = Object.freeze({
   recallPerSymbolMs: 1200,
   revealMs: 2500,
 
-  // Mid-game bonus: a pure-reflex palate cleanser after this round (0
-  // disables it). The screen holds a suspense beat of unpredictable length,
-  // then lights ONE color — tap it on the phone, fastest tap scores most.
-  // Tapping during the suspense burns your start: locked out, zero points.
-  bonusAfterRound: 6,
+  // Mid-game bonus: a pure-reflex palate cleanser. The screen holds a
+  // suspense beat of unpredictable length, then lights ONE color — tap it on
+  // the phone, fastest tap scores most. Tapping during the suspense burns
+  // your start: locked out, zero points.
+  //
+  // null = auto: the bonus always plays, halfway through whatever round
+  // count the host picked (floor(totalRounds/2)). 0 disables it; a positive
+  // number pins it after that round.
+  bonusAfterRound: null,
   bonusArmMinMs: 2000, // suspense floor…
   bonusArmJitterMs: 3000, // …plus up to this much unpredictability
   bonusHitWindowMs: 2500, // how long the lit color accepts taps
@@ -77,10 +81,17 @@ export const DEFAULTS = Object.freeze({
  * benching anyone.
  */
 export class Batucada {
+  // Bounds for a host-picked round count. Same reasoning as Game's duration
+  // clamp: the host panel is authenticated, so this guards against a typo or
+  // a replayed request, not an attacker — an unclamped 999 parks the room in
+  // a two-hour game nobody asked for.
+  static MIN_ROUNDS = 1;
+  static MAX_ROUNDS = 30;
+
   /**
    * @param {object} [opts]
    * @param {number} [opts.countdownMs]
-   * @param {number} [opts.totalRounds]
+   * @param {number} [opts.totalRounds] default round count (overridable per start)
    * @param {number} [opts.symbolOnMs] round-1 flash duration
    * @param {number} [opts.symbolGapMs] round-1 gap duration
    * @param {number} [opts.symbolOnStepMs] flash speedup per round
@@ -96,7 +107,8 @@ export class Batucada {
    */
   constructor(opts = {}) {
     this.countdownMs = opts.countdownMs ?? DEFAULTS.countdownMs;
-    this.totalRounds = Math.max(1, opts.totalRounds ?? DEFAULTS.totalRounds);
+    this.defaultTotalRounds = Math.max(1, opts.totalRounds ?? DEFAULTS.totalRounds);
+    this.totalRounds = this.defaultTotalRounds;
     this.symbolOnMs = opts.symbolOnMs ?? DEFAULTS.symbolOnMs;
     this.symbolGapMs = opts.symbolGapMs ?? DEFAULTS.symbolGapMs;
     this.symbolOnStepMs = opts.symbolOnStepMs ?? DEFAULTS.symbolOnStepMs;
@@ -140,6 +152,7 @@ export class Batucada {
     // while the room is waiting for the flash.
     this.bonusPlayed = false;
     this.bonusReveal = false; // the REVEAL on screen is the bonus result, not a memory round's
+    this.bonusRound = 0; // resolved at start() from bonusAfterRound (null = mid-game auto)
     this.bonusColor = null;
     this.bonusArmEndsAt = null;
     this.bonusHitStartsAt = null;
@@ -234,9 +247,18 @@ export class Batucada {
 
   /**
    * Starts a new game: resets every player's score, re-enters COUNTDOWN.
-   * @param {object} [opts] { now }
+   * @param {object} [opts] { now, totalRounds } — totalRounds is the host's
+   *   per-game pick; anything non-numeric falls back to the default, anything
+   *   absurd is clamped.
    */
-  start({ now } = {}) {
+  start({ now, totalRounds } = {}) {
+    const asked = Number.isFinite(totalRounds) && totalRounds > 0 ? Math.floor(totalRounds) : this.defaultTotalRounds;
+    this.totalRounds = Math.min(Batucada.MAX_ROUNDS, Math.max(Batucada.MIN_ROUNDS, asked));
+    // The surprise round always plays, halfway through whatever length the
+    // host picked — unless it was explicitly pinned (tests, env) or disabled.
+    this.bonusRound = this.bonusAfterRound === null
+      ? Math.max(1, Math.floor(this.totalRounds / 2))
+      : this.bonusAfterRound;
     for (const p of this.players.values()) {
       p.cleared = 0;
       p.symbols = 0;
@@ -267,6 +289,7 @@ export class Batucada {
   reset({ now } = {}) {
     this.players.clear();
     if (!this._injectedNameFactory) this._nextName = makeNameFactory();
+    this.totalRounds = this.defaultTotalRounds; // a per-game pick dies with the game
     this.phase = PHASE.LOBBY;
     this.round = 0;
     this.sequence = [];
@@ -365,8 +388,8 @@ export class Batucada {
       this.revealEndsAt = now + this.revealMs;
     }
     if (this.phase === PHASE.REVEAL && now >= this.revealEndsAt) {
-      if (!this.bonusReveal && this.bonusAfterRound > 0 && !this.bonusPlayed
-          && this.round === this.bonusAfterRound && this.round < this.totalRounds) {
+      if (!this.bonusReveal && this.bonusRound > 0 && !this.bonusPlayed
+          && this.round === this.bonusRound && this.round < this.totalRounds) {
         this._startBonus(now);
       } else if (this.round >= this.totalRounds) {
         this.phase = PHASE.ENDED;

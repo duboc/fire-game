@@ -24,6 +24,7 @@ function fresh(opts = {}) {
     symbolGapStepMs: 0,
     minSymbolOnMs: 0, // the default perceptual floors would clamp these tiny test speeds
     minSymbolGapMs: 0,
+    bonusAfterRound: 0, // bonus off by default in tests — it has its own suite below
     recallBaseMs: 200,
     recallPerSymbolMs: 100,
     revealMs: 50,
@@ -385,6 +386,53 @@ test('a new game re-arms the bonus', () => {
   assert.equal(g.bonusPlayed, true);
   g.start({ now: 99000 });
   assert.equal(g.bonusPlayed, false);
+});
+
+test('the host can pick the round count per game; reset restores the default', () => {
+  const g = fresh({ totalRounds: 12 });
+  g.join('p1');
+  g.start({ now: 0, totalRounds: 6 });
+  assert.equal(g.totalRounds, 6);
+  assert.equal(g.publicState(0).totalRounds, 6);
+
+  // a nonsense ask falls back to the configured default, an absurd one clamps
+  g.start({ now: 0, totalRounds: NaN });
+  assert.equal(g.totalRounds, 12);
+  g.start({ now: 0, totalRounds: 999 });
+  assert.equal(g.totalRounds, 30);
+  g.start({ now: 0, totalRounds: -3 });
+  assert.equal(g.totalRounds, 12);
+
+  g.start({ now: 0, totalRounds: 6 });
+  g.reset({ now: 0 });
+  assert.equal(g.totalRounds, 12, 'reset forgets the per-game override');
+});
+
+test('unless pinned, the bonus lands mid-game whatever the round count', () => {
+  // bonusAfterRound omitted entirely -> auto (the default)
+  const g = new Batucada({
+    countdownMs: 1000,
+    memorizeLeadInMs: 0,
+    symbolOnMs: 100, symbolGapMs: 50, symbolOnStepMs: 0, symbolGapStepMs: 0,
+    minSymbolOnMs: 0, minSymbolGapMs: 0,
+    recallBaseMs: 200, recallPerSymbolMs: 100, revealMs: 50,
+    bonusArmMinMs: 100, bonusArmJitterMs: 0,
+    nameFactory: fixedNames(), rng: () => 0,
+  });
+  g.join('a');
+  g.start({ now: 0, totalRounds: 4 }); // auto: bonus after round floor(4/2) = 2
+
+  let now = 1000;
+  for (let round = 1; round <= 2; round++) {
+    g.tick(now);
+    assert.equal(g.round, round);
+    g.tick(g.memorizeEndsAt);
+    g.recall('a', [0].concat(Array(round - 1).fill(0)), g.recallStartsAt + 10);
+    g.tick(g.recallEndsAt);
+    now = g.revealEndsAt;
+    g.tick(now);
+  }
+  assert.equal(g.phase, PHASE.BONUS_ARM, 'a 4-round game gets its surprise after round 2');
 });
 
 test('reset clears the roster and returns to LOBBY', () => {

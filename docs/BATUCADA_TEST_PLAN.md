@@ -28,8 +28,9 @@ anyway — same habit as Tap Race.
 
 - [ ] Scan the QR on `/batucada/screen` (or open `/batucada` directly) from
   each phone. Each gets a name within ~1s, no login, no typing.
-- [ ] `/host` → **Start (3·2·1·decore)**. Screen counts down in sync with the
-  phones (no visible drift between devices).
+- [ ] `/host` → pick a round count (6/8/10/12) → **Start (3·2·1·decore)**.
+  Screen counts down in sync with the phones (no visible drift between
+  devices) and the round chip shows `N/<picked total>`.
 - [ ] Round 1 (screen only): one colored tile lights up. Phones show "Olhe
   para a tela" — confirm the phone does **not** also show the sequence.
 - [ ] Recall opens on phones: a 2×2 grid of 4 colors. Tap the one that lit up.
@@ -43,10 +44,10 @@ anyway — same habit as Tap Race.
   round**. Nobody is ever benched.
 - [ ] Between rounds the screen shows how many people cleared the round and a
   top-5 running standings (✓rounds · pts).
-- [ ] The game runs all 12 rounds (plus the bonus) regardless of misses, then confetti +
+- [ ] The game runs all picked rounds (plus the bonus) regardless of misses, then confetti +
   champion + podium. The champion's phone shows "Você é o campeão!"; everyone
   else sees their rank and score.
-- [ ] `/host` Sequência panel reflects the phase, round `N/10` and player
+- [ ] `/host` Sequência panel reflects the phase, round `N/total` and player
   count the whole time, without needing a page refresh.
 
 ## 2. Timing & feel (the actual point of this game)
@@ -63,7 +64,7 @@ anyway — same habit as Tap Race.
   fill as the sequence advances.
 - [ ] When everyone has answered, the round closes immediately instead of
   waiting out the window — no dead air between "last answer" and the reveal.
-- [ ] **Bonus round (after round 6)**: the screen holds an unpredictable
+- [ ] **Bonus round (mid-game — after round 3 of 6, 4 of 8, 6 of 12)**: the screen holds an unpredictable
   suspense beat, then ONE color lights. Tap it fast on the phone → "+N
   pontos". Deliberately tap during the suspense on one phone → "Queimou a
   largada!" and locked out of the flash. Wrong color → zero. The reveal is

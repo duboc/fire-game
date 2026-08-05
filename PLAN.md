@@ -486,3 +486,21 @@ the lit style was too subtle for a projector. See spec Revision 4.
   [1,1] sequence read correctly off the screen — the gap extinguishes
   between repeats), screenshot confirms the lit tile reads from across a
   room.
+
+### Revision 5: host-picked round count, surprise always mid-game
+
+Playtest verdict: pacing and flash are right, but a 12-round game is long —
+make the length the host's call, and guarantee the surprise round plays
+whatever length is picked. Spec Revision 5.
+
+- [x] `src/batucada.js`: `start({ totalRounds })` with a 1–30 clamp
+  (`MIN_ROUNDS`/`MAX_ROUNDS`, typo guard like `Game`'s duration clamp);
+  `reset()` restores the default; `bonusAfterRound: null` now means auto —
+  resolved at `start()` to `floor(totalRounds/2)`, so the bonus always
+  lands mid-game (0 still disables, positive still pins).
+- [x] `public/host.html`: Rounds selector (6/8/10/12, default 8) posted as
+  `{totalRounds}`; `scripts/contract-check.mjs` asserts the pick sticks and
+  the clamp holds (175 assertions).
+- [x] Verified: 78 unit tests, 175 contract, e2e driven through the real UI
+  path — round count picked on the host panel (no env override) and the
+  bonus firing automatically at the midpoint.
