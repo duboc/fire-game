@@ -4,12 +4,12 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#000000" />
-<title>Batucada — Tela</title>
+<title>Sequência — Tela</title>
 <!-- Roboto is self-hosted in theme.css; no external font request. -->
 <link rel="stylesheet" href="/theme.css" />
 <style>
   html,body{height:100%;}
-  body{overflow:hidden; background:radial-gradient(circle at 50% -8%, rgba(161,66,244,.18), transparent 55%), var(--bg);}
+  body{overflow:hidden; background:radial-gradient(circle at 50% -8%, rgba(66,133,244,.18), transparent 55%), var(--bg);}
   #confetti{position:fixed; inset:0; pointer-events:none; z-index:60;}
 
   .stage{position:absolute; inset:0; display:none; flex-direction:column; padding:4vh 5vw; align-items:center; justify-content:center; gap:2.4vh; text-align:center;}
@@ -27,7 +27,7 @@
   /* ===== LOBBY ===== */
   #lobby .big{display:flex; align-items:center; gap:1.4vw; font-family:var(--font-display); font-size:clamp(40px,6.5vw,104px); font-weight:700; letter-spacing:-.02em;}
   #lobby .sub{font-size:clamp(18px,2.2vw,32px); color:var(--ink-2); font-weight:500;}
-  .qr{background:#fff; padding:18px; border-radius:var(--r-lg); width:min(34vh,320px); height:min(34vh,320px); box-shadow:0 0 50px rgba(161,66,244,.25); border:1px solid rgba(161,66,244,.3);}
+  .qr{background:#fff; padding:18px; border-radius:var(--r-lg); width:min(34vh,320px); height:min(34vh,320px); box-shadow:0 0 50px rgba(66,133,244,.25); border:1px solid rgba(66,133,244,.3);}
   .qr svg{width:100%; height:100%; display:block;}
   .ready{font-size:clamp(22px,2.8vw,42px); font-weight:500; color:var(--ink);}
   .ready b{font-family:var(--font-mono); color:var(--g-green-700); font-weight:500; font-variant-numeric:tabular-nums;}
@@ -38,15 +38,12 @@
   .cdpop{animation:cdpop .8s cubic-bezier(.2,1.3,.4,1);}
   @keyframes cdpop{0%{transform:scale(.2);opacity:0}45%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
 
-  /* ===== instrument row (memorize / recall / reveal) ===== */
+  /* ===== color tiles (memorize / recall / reveal) — classic Simon Says ===== */
   .roundtag{font-family:var(--font-mono); font-size:clamp(22px,2.8vw,40px); color:var(--g-blue-700); font-weight:500;}
-  .instruments{display:flex; gap:2vw; flex-wrap:wrap; justify-content:center;}
-  .inst{width:min(16vw,180px); aspect-ratio:1/1; border-radius:var(--r-xl); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1vh;
-    font-family:var(--font-display); font-weight:700; color:#fff; opacity:.5; transform:scale(.94); transition:opacity .1s ease, transform .1s ease, filter .1s ease;
-    box-shadow:0 10px 30px rgba(0,0,0,.4);}
-  .inst .ico{font-size:clamp(30px,4vw,54px);}
-  .inst .lb{font-size:clamp(14px,1.6vw,22px);}
-  .inst.lit{opacity:1; transform:scale(1.08); filter:brightness(1.5); box-shadow:0 0 60px currentColor, 0 10px 30px rgba(0,0,0,.5);}
+  .tiles{display:flex; gap:2vw; flex-wrap:wrap; justify-content:center;}
+  .tile{width:min(16vw,180px); aspect-ratio:1/1; border-radius:var(--r-xl); opacity:.5; transform:scale(.94);
+    transition:opacity .1s ease, transform .1s ease, filter .1s ease; box-shadow:0 10px 30px rgba(0,0,0,.4);}
+  .tile.lit{opacity:1; transform:scale(1.08); filter:brightness(1.5); box-shadow:0 0 60px currentColor, 0 10px 30px rgba(0,0,0,.5);}
 
   .subtext{font-size:clamp(18px,2.2vw,30px); color:var(--ink-2); font-weight:500;}
   .alivebig{font-family:var(--font-mono); font-size:clamp(48px,7vw,110px); font-weight:700; color:var(--ink);}
@@ -55,7 +52,7 @@
   /* ===== ENDED ===== */
   .champlabel{font-size:clamp(22px,2.8vw,42px); font-weight:700; letter-spacing:.12em; color:var(--g-blue-700); text-transform:uppercase;}
   .champ{display:flex; align-items:center; gap:2vw; max-width:92vw; background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
-    border:1px solid rgba(161,66,244,.3); box-shadow:var(--e3), 0 0 44px rgba(161,66,244,.34); border-radius:var(--r-xl); padding:3vh 4vw; animation:cdpop .8s cubic-bezier(.2,1.3,.4,1);}
+    border:1px solid rgba(66,133,244,.3); box-shadow:var(--e3), var(--glow-strong); border-radius:var(--r-xl); padding:3vh 4vw; animation:cdpop .8s cubic-bezier(.2,1.3,.4,1);}
   .champ .em{font-size:min(24vh,20vw); flex:none;}
   .champ .info{text-align:left; min-width:0;}
   .champ .nm{font-family:var(--font-display); font-size:clamp(32px,4.6vw,84px); font-weight:700; line-height:1.06; color:var(--ink); text-wrap:balance; overflow-wrap:break-word;}
@@ -71,16 +68,16 @@
 </head>
 <body class="noise-bg">
   <canvas id="confetti"></canvas>
-  <div class="brand"><span class="ico">🥁</span> <span class="shimmer">Batucada</span></div>
+  <div class="brand"><span class="ico">🧠</span> <span class="shimmer">Sequência</span></div>
   <div class="chips" id="chips">
-    <div class="chip"><div class="k">Na roda</div><div class="v" id="cAlive">0</div></div>
+    <div class="chip"><div class="k">No jogo</div><div class="v" id="cAlive">0</div></div>
     <div class="chip timer" id="cTimerChip"><div class="k">Rodada</div><div class="v" id="cRound">—</div></div>
   </div>
 
   <!-- LOBBY -->
   <div class="stage show" id="lobby">
-    <div class="big"><span>🥁</span> <span class="shimmer">Batucada</span></div>
-    <div class="sub">Escaneie, decore o ritmo, repita na ordem certa.</div>
+    <div class="big"><span>🧠</span> <span class="shimmer">Sequência</span></div>
+    <div class="sub">Escaneie, decore a sequência, repita na ordem certa.</div>
     <div class="qr" id="qr"></div>
     <div class="ready"><span id="lobbyReady"></span></div>
   </div>
@@ -93,13 +90,13 @@
   <!-- MEMORIZE -->
   <div class="stage" id="memorize">
     <div class="roundtag">Rodada <span id="mRound">1</span> — decore!</div>
-    <div class="instruments" id="mInstruments"></div>
+    <div class="tiles" id="mTiles"></div>
   </div>
 
   <!-- RECALL -->
   <div class="stage" id="recall">
     <div class="roundtag">Reproduzam de memória!</div>
-    <div class="instruments" id="rInstruments"></div>
+    <div class="tiles" id="rTiles"></div>
     <div class="aivebig"></div>
     <div class="aivewrap"><div class="aliveDetail subtext" id="rDetail"></div></div>
   </div>
@@ -114,7 +111,7 @@
 
   <!-- ENDED -->
   <div class="stage" id="ended">
-    <div class="champlabel" id="champlabel">🏆 Campeão da Batucada 🏆</div>
+    <div class="champlabel" id="champlabel">🏆 Campeão 🏆</div>
     <div class="champ" id="champ"></div>
     <div class="podium" id="podium"></div>
     <div class="again">Aguardando o host… (uma nova rodada pode começar a qualquer momento)</div>
@@ -128,30 +125,23 @@
   const stages = { lobby:$('lobby'), countdown:$('countdown'), memorize:$('memorize'), recall:$('recall'), reveal:$('reveal'), ended:$('ended') };
   function showStage(name){ for (const k in stages) stages[k].classList.toggle('show', k===name); }
 
-  // Same six, same order as src/batucada.js's INSTRUMENTS.
-  const INSTRUMENTS = [
-    { key:'surdo',     label:'Surdo',      color:'#4285F4' },
-    { key:'pandeiro',  label:'Pandeiro',   color:'#FBBC04' },
-    { key:'cuica',     label:'Cuíca',      color:'#34A853' },
-    { key:'agogo',     label:'Agogô',      color:'#EA4335' },
-    { key:'tamborim',  label:'Tamborim',   color:'#A142F4' },
-    { key:'reco-reco', label:'Reco-reco',  color:'#00BCD4' },
-  ];
+  // Same four, same order as src/batucada.js's SYMBOLS — classic Simon Says,
+  // plain colors, nothing to read or decode beyond the color itself.
+  const TILE_COLORS = ['#4285F4', '#EA4335', '#FBBC04', '#34A853'];
 
-  function buildInstruments(container){
+  function buildTiles(container){
     container.innerHTML = '';
-    INSTRUMENTS.forEach((inst) => {
+    TILE_COLORS.forEach((color) => {
       const d = document.createElement('div');
-      d.className = 'inst';
-      d.style.background = inst.color;
-      d.style.color = inst.color;
-      d.innerHTML = '<span class="ico">🥁</span><span class="lb" style="color:#fff">'+inst.label+'</span>';
+      d.className = 'tile';
+      d.style.background = color;
+      d.style.color = color; // currentColor, used by the lit glow
       container.appendChild(d);
     });
     return [...container.children];
   }
-  const mTiles = buildInstruments($('mInstruments'));
-  const rTiles = buildInstruments($('rInstruments'));
+  const mTiles = buildTiles($('mTiles'));
+  const rTiles = buildTiles($('rTiles'));
 
   let clockOffset=0, bestRtt=Infinity;
   const estServerNow=()=>Date.now()+clockOffset;
@@ -267,7 +257,7 @@
     $('vTitle').textContent = 'Rodada '+s.round+' concluída';
     $('vAliveNum').textContent = fmt(s.aliveCount);
     $('vDetail').textContent = dropped>0
-      ? (dropped===1 ? '1 pessoa caiu da roda' : dropped+' pessoas caíram da roda')
+      ? (dropped===1 ? '1 pessoa saiu do jogo' : dropped+' pessoas saíram do jogo')
       : 'Todo mundo que tentou continua!';
   }
 

@@ -128,7 +128,7 @@
     </div>
 
     <div class="panel">
-      <div class="h1" style="font-size:20px;">🥁 Batucada <span class="tag">· companion game</span></div>
+      <div class="h1" style="font-size:20px;">🧠 Sequência <span class="tag">· companion game</span></div>
       <div class="row" style="margin-top:12px;">
         <button class="start" id="bStart">▶ Start (3 · 2 · 1 · decore)</button>
         <button class="reset" id="bReset">↺ Clear the room</button>
@@ -211,8 +211,8 @@
       await r.json(); const m=$('bMsg'); m.textContent=label; m.className='msg ok';
     }catch(e){ const m=$('bMsg'); m.textContent='Network error.'; m.className='msg err'; }
   }
-  $('bStart').onclick=()=>postBatucada('/batucada/admin/start','Batucada started! 🥁');
-  $('bReset').onclick=()=>postBatucada('/batucada/admin/reset','Batucada room cleared.');
+  $('bStart').onclick=()=>postBatucada('/batucada/admin/start','Sequência started! 🧠');
+  $('bReset').onclick=()=>postBatucada('/batucada/admin/reset','Sequência room cleared.');
 
   function connectBatucada(){
     const es=new EventSource('/batucada/events');

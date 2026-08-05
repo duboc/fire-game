@@ -7,8 +7,10 @@ paced: the room watches a sequence, then reproduces it from memory. Same live-ev
 shape (one Cloud Run instance, one big screen, phones as controllers, a host panel
 driving rounds), different core loop.
 
-Themed as a Brazilian percussion circle: the "colors" of the classic Simon Says
-are six instruments, shown visually only (no audio — see rationale below).
+Classic Simon Says: four colors light up in sequence, shown visually only (no
+audio — see rationale below). An earlier pass themed this as a Brazilian
+percussion circle (six named instruments instead of plain colors); see
+"Revision: plain colors" at the end of this document for why that was dropped.
 
 ## Why this and not classic cumulative Simon Says
 
@@ -20,12 +22,11 @@ length equals the round number. Difficulty still climbs — memorizing 8 fresh
 symbols cold is hard — but every round's duration is bounded by that round's
 length alone, not by the sum of every round before it.
 
-Visual-only (no per-instrument sound) was chosen over audio cues because: mobile
-autoplay restrictions make synced audio unreliable across hundreds of phones, the
-project's "self-hosted everything" stance means shipping six audio files, and a
-room full of phones playing percussion samples half a beat apart would be noise,
-not music. A highlighted/animated icon carries the same information without any
-of that.
+Visual-only (no per-color sound) was chosen over audio cues because: mobile
+autoplay restrictions make synced audio unreliable across hundreds of phones,
+the project's "self-hosted everything" stance means shipping audio files, and a
+room full of phones playing tones half a beat apart would be noise, not music.
+A highlighted/glowing tile carries the same information without any of that.
 
 ## Phases
 
@@ -61,9 +62,9 @@ something each phone computes on its own.
 
 | Name | Proposed value | Role |
 |---|---|---|
-| `instruments` | `['surdo', 'pandeiro', 'cuica', 'agogo', 'tamborim', 'reco-reco']` | alphabet; each symbol drawn uniformly at random |
-| `symbolOnMs` | `700` | how long one instrument stays highlighted |
-| `symbolGapMs` | `300` | dark gap between symbols |
+| `symbols` | `['blue', 'red', 'yellow', 'green']` | alphabet; each symbol drawn uniformly at random |
+| `symbolOnMs` | `900` | how long one tile stays lit |
+| `symbolGapMs` | `500` | dark gap between symbols — slower than a first pass at 700/300, deliberately calm rather than reflexive |
 | `recallBaseMs` | `1500` | fixed reaction/setup time added to every recall window |
 | `recallPerSymbolMs` | `1200` | added per symbol in the round |
 | `revealMs` | `2500` | how long REVEAL holds before the next round |
@@ -151,7 +152,7 @@ spectacle, the phone is the input device.
 
 - **MEMORIZE** — only the shared screen lights the sequence. The phone shows a
   passive "watch the screen" state, no input.
-- **RECALL** — the phone shows a grid of the six instruments; taps build a local
+- **RECALL** — the phone shows a grid of the four colors; taps build a local
   `sequence[]` and auto-submit once its length reaches the round's length.
 - **Eliminated** — the phone becomes a live spectator: it keeps polling
   `/state` and shows its own result ("out in round 6 — 4/6 correct") plus the
@@ -197,3 +198,30 @@ read. `names.js` is reused as-is for identity.
    untouched.
 2. An eliminated player becomes a **live spectator** through to `ENDED`, rather
    than getting a separate end-of-run screen.
+
+## Revision: plain colors instead of a percussion theme
+
+The first version themed the six symbols as Brazilian percussion instruments
+(Surdo, Pandeiro, Cuíca, Agogô, Tamborim, Reco-reco) with icons and Portuguese
+labels on every tile. Played back, the theme made the *mechanic* harder to
+read, not easier: recognizing and remembering an unfamiliar instrument name
+added a layer of work on top of the actual task, which is just to remember a
+position in a sequence. Classic Simon Says solved this decades ago by using
+nothing but color.
+
+Changed, additively (no route or file renames — only visuals and copy):
+
+- `src/batucada.js`: `INSTRUMENTS` → `SYMBOLS`, now four plain color keys
+  (`blue`, `red`, `yellow`, `green`) instead of six instrument names. Fewer
+  options is itself part of the simplification — a 2×2 grid reads instantly,
+  the way a 2×3 grid of icons with labels did not.
+- `DEFAULTS.symbolOnMs`/`symbolGapMs`: 700/300 → 900/500. Slower on purpose —
+  the whole point of this game next to Tap Race is cadence and attention, not
+  reflexes, and the faster cadence read as "hurry up" rather than "notice
+  this."
+- `public/batucada/phone.html` and `screen.html`: tiles are solid color
+  squares, no icon, no label. The user-facing name changed from "Batucada" to
+  "Sequência" throughout the UI — routes, file names, and the `Batucada`
+  class are unchanged internally, since renaming those would break nothing
+  for a player but would churn every reference in this document and the
+  server for no user-visible benefit.

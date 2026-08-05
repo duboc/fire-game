@@ -22,7 +22,7 @@ function fresh(opts = {}) {
     recallPerSymbolMs: 100,
     revealMs: 50,
     nameFactory: fixedNames(),
-    rng: () => 0, // every symbol is instrument index 0 unless a test overrides it
+    rng: () => 0, // every symbol is color index 0 unless a test overrides it
     ...opts,
   });
 }
@@ -197,11 +197,11 @@ test('reset clears the roster and returns to LOBBY', () => {
   assert.equal(g.players.size, 0);
 });
 
-test('default rng produces sequences of valid instrument indices', () => {
+test('default rng produces sequences of valid color indices', () => {
   const g = new Batucada({ countdownMs: 0, nameFactory: fixedNames() });
   g.join('p1');
   g.start({ now: 0 });
   g.tick(0); // countdown is 0ms: round 1 MEMORIZE starts immediately
   assert.equal(g.sequence.length, 1);
-  assert.ok(g.sequence[0] >= 0 && g.sequence[0] < g.instruments.length);
+  assert.ok(g.sequence[0] >= 0 && g.sequence[0] < g.symbols.length);
 });

@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#000000" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
-<title>Batucada</title>
+<title>Sequência</title>
 <!-- Roboto is self-hosted in theme.css; no external font request. -->
 <link rel="stylesheet" href="/theme.css" />
 <style>
@@ -48,15 +48,12 @@
   .dot{width:14px; height:14px; border-radius:50%; background:var(--surface-2); border:1px solid var(--line);}
   .dot.fill{background:var(--g-blue); box-shadow:0 0 10px rgba(66,133,244,.6);}
 
-  .grid{flex:1; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(3,1fr); gap:12px; min-height:0;}
-  .inst{border:none; border-radius:var(--r-lg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
-    font-family:var(--font-display); font-weight:700; color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  .grid{flex:1; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:14px; min-height:0;}
+  .inst{border:none; border-radius:var(--r-lg); cursor:pointer; -webkit-tap-highlight-color:transparent;
     transition:transform .06s ease, filter .12s ease; box-shadow:0 8px 20px rgba(0,0,0,.4);}
   .inst:active{transform:scale(.94);}
   .inst.flash{filter:brightness(1.6);}
   .inst.disabled{opacity:.3; pointer-events:none;}
-  .inst .ico{font-size:clamp(26px,7vw,38px);}
-  .inst .lb{font-size:clamp(13px,3.4vw,16px);}
 
   .status{text-align:center; min-height:22px; font-weight:500; color:var(--ink-2); font-size:14px;}
 
@@ -73,8 +70,8 @@
 </head>
 <body class="noise-bg">
   <div class="appbar">
-    <span class="ico">🥁</span>
-    <span class="title shimmer">Batucada</span>
+    <span class="ico">🧠</span>
+    <span class="title shimmer">Sequência</span>
   </div>
   <div class="wrap">
     <div class="id-card">
@@ -99,16 +96,10 @@
 
   const PHASE = { LOBBY:'lobby', COUNTDOWN:'countdown', MEMORIZE:'memorize', RECALL:'recall', REVEAL:'reveal', ENDED:'ended' };
 
-  // Same six, same order as src/batucada.js's INSTRUMENTS — the wire format is
-  // an index into this array, so the order must match exactly.
-  const INSTRUMENTS = [
-    { key:'surdo',     label:'Surdo',      color:'#4285F4' },
-    { key:'pandeiro',  label:'Pandeiro',   color:'#FBBC04' },
-    { key:'cuica',     label:'Cuíca',      color:'#34A853' },
-    { key:'agogo',     label:'Agogô',      color:'#EA4335' },
-    { key:'tamborim',  label:'Tamborim',   color:'#A142F4' },
-    { key:'reco-reco', label:'Reco-reco',  color:'#00BCD4' },
-  ];
+  // Same four, same order as src/batucada.js's SYMBOLS — the wire format is
+  // an index into this array, so the order must match exactly. Plain colors,
+  // classic Simon Says — no icon or label to read, just remember and repeat.
+  const COLORS = ['#4285F4', '#EA4335', '#FBBC04', '#34A853'];
 
   let me = { id: localStorage.getItem('batucadaId') || null };
   // Rough offset only — used for a cosmetic countdown/progress bar, never to
@@ -239,11 +230,10 @@
     mySeq = []; submitted = false;
     const grid = document.createElement('div');
     grid.className = 'grid';
-    INSTRUMENTS.forEach((inst, idx) => {
+    COLORS.forEach((color, idx) => {
       const b = document.createElement('button');
       b.className = 'inst';
-      b.style.background = inst.color;
-      b.innerHTML = '<span class="ico">🥁</span><span class="lb">'+inst.label+'</span>';
+      b.style.background = color;
       b.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         if (submitted || mySeq.length >= state.round) return;
@@ -276,7 +266,7 @@
 
   function render(){
     if (!state.known){
-      els.stage.innerHTML = centerHtml('🥁', 'Conectando…');
+      els.stage.innerHTML = centerHtml('🧠', 'Conectando…');
       els.status.textContent = '';
       showCountdown(false);
       return;
@@ -287,8 +277,8 @@
     if (state.phase === PHASE.ENDED){
       const champ = state.yourRank === 1;
       els.stage.innerHTML = centerHtml(
-        champ ? '🏆' : '🥁',
-        champ ? 'Você é o campeão da batucada!' : ('Você ficou em #' + (state.yourRank ?? '?')),
+        champ ? '🏆' : '🧠',
+        champ ? 'Você é o campeão!' : ('Você ficou em #' + (state.yourRank ?? '?')),
         state.roundsCleared + (state.roundsCleared === 1 ? ' rodada completa' : ' rodadas completas'),
       );
       els.status.textContent = '';
@@ -301,15 +291,15 @@
         'Você caiu na rodada ' + state.eliminatedRound,
         state.prefixMatched + '/' + state.eliminatedRound + ' certos — acompanhe a tela!',
       );
-      els.status.textContent = state.aliveCount + ' de ' + state.total + ' continuam na roda';
+      els.status.textContent = state.aliveCount + ' de ' + state.total + ' seguem no jogo';
       return;
     }
 
     if (state.phase === PHASE.LOBBY){
-      els.stage.innerHTML = centerHtml('🥁', 'Aguardando o host iniciar…');
+      els.stage.innerHTML = centerHtml('🧠', 'Aguardando o host iniciar…');
       els.status.textContent = '';
     } else if (state.phase === PHASE.COUNTDOWN){
-      els.stage.innerHTML = centerHtml('🥁', 'Prepare-se!');
+      els.stage.innerHTML = centerHtml('🧠', 'Prepare-se!');
       els.status.textContent = '';
     } else if (state.phase === PHASE.MEMORIZE){
       els.stage.innerHTML = centerHtml('<span class="pulse-ico">👀</span>', 'Olhe para a tela', 'Rodada ' + state.round);

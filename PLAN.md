@@ -378,3 +378,30 @@ replaced). Two things the spec left implicit, resolved here:
   unknown id, `/batucada/events` pushes a valid `publicState` SSE frame on
   connect, and `/batucada/admin/reset` clears the room. 173/173 assertions
   green (10 new).
+
+### Revision: plain colors instead of a percussion theme
+
+Deployed, then played by hand — and the percussion theme (six instruments,
+icons, Portuguese labels) obscured the actual mechanic instead of dressing it
+up. Simplified to classic Simon Says: four plain colors, no icon, no label,
+and a slower blink (900/500ms vs 700/300ms) so the pace reads as attentive
+rather than reflexive. Full rationale in `docs/BATUCADA_SPEC.md`, "Revision:
+plain colors instead of a percussion theme".
+
+- [x] `src/batucada.js`: `INSTRUMENTS`/`instruments` → `SYMBOLS`/`symbols`,
+  six instrument keys → four color keys, `DEFAULTS.symbolOnMs`/`symbolGapMs`
+  700/300 → 900/500. `test/batucada.test.js` updated to match; 10/10 still
+  green.
+- [x] `public/batucada/phone.html` + `screen.html`: instrument grid → plain
+  2×2 color-tile grid, all percussion copy and icons removed, user-facing
+  name "Batucada" → "Sequência" throughout. Routes, file paths and the
+  `Batucada` class name are unchanged — internal, invisible to a player, and
+  renaming them would only have churned this document and the server for no
+  visible benefit.
+- [x] `public/host.html`: panel branding updated to match.
+- [x] Re-verified: `npm test` 65/65, `npm run check:contract` 173/173,
+  Playwright end-to-end pass re-run against the new grid and copy — same
+  golden path (join → countdown → memorize → recall → elimination →
+  champion), screenshots confirm the 2×2 color grid reads cleanly.
+- [x] Re-deployed to `riojucu` (see README, "Deploy to Cloud Run") and
+  smoke-checked the live routes.

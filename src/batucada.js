@@ -10,16 +10,21 @@ export const PHASE = Object.freeze({
   ENDED: 'ended',
 });
 
-// Visual only — see docs/BATUCADA_SPEC.md for why (mobile autoplay, self-hosted
-// audio, and hundreds of phones playing samples half a beat apart is noise, not
-// music). Order matters: the wire format is indices into this array, and both
-// client pages must render the same index as the same instrument.
-export const INSTRUMENTS = Object.freeze(['surdo', 'pandeiro', 'cuica', 'agogo', 'tamborim', 'reco-reco']);
+// Plain colors, not a themed set of icons — classic Simon Says is instantly
+// recognizable, and a percussion theme (tried first; see docs/BATUCADA_SPEC.md)
+// added a layer of "what does this icon mean" on top of the actual task, which
+// is just to remember a sequence. Order matters: the wire format is indices
+// into this array, and both client pages must render the same index as the
+// same color.
+export const SYMBOLS = Object.freeze(['blue', 'red', 'yellow', 'green']);
 
 export const DEFAULTS = Object.freeze({
   countdownMs: 3000,
-  symbolOnMs: 700,
-  symbolGapMs: 300,
+  // Deliberately slower than a first pass at 700/300 — this is meant to read
+  // as calm and attentive, not reflexive, and playtesting found the faster
+  // cadence read as "trying to be quick" instead of "trying to remember".
+  symbolOnMs: 900,
+  symbolGapMs: 500,
   recallBaseMs: 1500,
   recallPerSymbolMs: 1200,
   revealMs: 2500,
@@ -45,7 +50,7 @@ export class Batucada {
    * @param {number} [opts.recallPerSymbolMs]
    * @param {number} [opts.revealMs]
    * @param {number} [opts.maxRounds] defensive cap on how long the segment can run
-   * @param {ReadonlyArray<string>} [opts.instruments]
+   * @param {ReadonlyArray<string>} [opts.symbols]
    * @param {(n: number) => number} [opts.rng] returns an integer in [0,n); injectable for tests
    * @param {() => {name,emoji,seq,label}} [opts.nameFactory] injectable for tests
    */
@@ -57,7 +62,7 @@ export class Batucada {
     this.recallPerSymbolMs = opts.recallPerSymbolMs ?? DEFAULTS.recallPerSymbolMs;
     this.revealMs = opts.revealMs ?? DEFAULTS.revealMs;
     this.maxRounds = opts.maxRounds ?? DEFAULTS.maxRounds;
-    this.instruments = opts.instruments ?? INSTRUMENTS;
+    this.symbols = opts.symbols ?? SYMBOLS;
     this._nextIndex = opts.rng ?? ((n) => Math.floor(Math.random() * n));
     // Kept so reset() can tell an injected factory (tests pin one) from the
     // default one, which it re-deals — same reasoning as Game.
@@ -244,7 +249,7 @@ export class Batucada {
   }
 
   _nextSequence(round) {
-    const n = this.instruments.length;
+    const n = this.symbols.length;
     const seq = [];
     for (let i = 0; i < round; i++) seq.push(this._nextIndex(n));
     return seq;
