@@ -417,3 +417,28 @@ screen until the action starts, then hands off:
 The blink is a soft opacity/scale pulse (1,1s), not a hard strobe — urgency
 without assault, and `prefers-reduced-motion` still kills all of it via the
 global rule in theme.css.
+
+## Bug fix: the bonus flash could vanish inside a single tick
+
+Found by code audit, not by play: `_advance()` checked `BONUS_ARM -> BONUS_HIT`
+and `BONUS_HIT -> REVEAL` as two independent, sequential `if`s in the same
+method. That is deliberate everywhere else in the file — it is what lets a
+zero-duration phase resolve within one call — but it has a precondition that
+quietly broke for this one pair: nothing can be submitted before a phase
+opens, *except* the bonus, where an "early" tap during the ARM suspense
+already counts as a submission.
+
+If every player jumped the gun during ARM, `_allSubmitted()` was already true
+the instant the code flipped to `BONUS_HIT` a few lines later in the *same*
+call — so the second `if` fired too, and the phase advanced straight to
+`REVEAL` without ever being returned from `_advance()` as `BONUS_HIT`. Since
+the server only broadcasts whatever `publicState()` looks like *after*
+`_advance()` returns, the color the room was supposed to react to was
+computed, graded against, and discarded, all inside one 100ms tick — the
+screen would jump from suspense straight to the reveal.
+
+Fixed by making the pair `if / else if`: at most one of the two transitions
+can fire per call, so `BONUS_HIT` is always observable — and therefore always
+broadcast — for at least one tick before it is allowed to close. Covered by a
+unit test that has every player burn their start and asserts the engine still
+passes through `BONUS_HIT` with the color published before reaching `REVEAL`.

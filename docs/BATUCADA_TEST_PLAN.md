@@ -107,6 +107,10 @@ anyway — same habit as Tap Race.
 - [ ] **Two games at once**: with Sequência mid-round, also start a Tap Race
   round from `/host`. Confirm the two don't interfere (separate counters,
   separate screens, one shared login).
+- [ ] **Everyone jumps the gun on the bonus** (all phones tap during the
+  "⚡ REFLEXO!" suspense, before any color lights): the screen must still
+  flash the color for a moment before the reveal — confirms the fix for a
+  bug where a room that answered too fast never saw the flash at all.
 
 ## 4. Regression: Tap Race still works
 

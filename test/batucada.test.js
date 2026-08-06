@@ -339,6 +339,27 @@ test('bonus scoring: fast correct tap earns speed-scaled points into symbols, ne
   assert.equal(g.round, 2);
 });
 
+test('the flash still gets its own tick even if everyone already burned during the suspense', () => {
+  // If ARM -> HIT -> REVEAL collapse into a single _advance() call, the color
+  // is never broadcast: the screen would jump straight from suspense to the
+  // reveal, having never shown what the room was supposed to react to.
+  const g = freshWithBonus();
+  g.join('a');
+  g.join('b');
+  playIntoBonus(g);
+
+  g.recall('a', [0], g.revealEndsAt + 10); // both jump the gun during ARM
+  g.recall('b', [0], g.revealEndsAt + 20);
+
+  g.tick(g.bonusArmEndsAt); // everyone is already "submitted" the instant HIT could open
+  assert.equal(g.phase, PHASE.BONUS_HIT, 'the flash phase must be observable for at least one tick');
+  assert.equal(g.publicState(g.bonusArmEndsAt).bonusColor, g.bonusColor,
+    'and the color must be published on that tick — the whole point of showing it');
+
+  g.tick(g.bonusArmEndsAt + 1); // now it's allowed to close
+  assert.equal(g.phase, PHASE.REVEAL);
+});
+
 test('tapping during the suspense burns the start — locked out with zero points', () => {
   const g = freshWithBonus();
   g.join('a');

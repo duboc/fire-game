@@ -564,3 +564,28 @@ MEMORIZE.
 - [x] Follow-up by feel: the phone's memorize card went back to a quiet
   "Olhe para a tela" — the big blinking cue belongs on the projector; the
   phone's only job in that moment is to point the eyes away from itself.
+
+### Bug hunt: the bonus flash could vanish inside a single tick
+
+Found by code audit of `_advance()`'s phase cascade, not by play. Full
+writeup in `docs/BATUCADA_SPEC.md`, "Bug fix: the bonus flash could vanish
+inside a single tick".
+
+- [x] Root cause: `BONUS_ARM -> BONUS_HIT` and `BONUS_HIT -> REVEAL` were
+  two sequential (not `else if`) checks in `_advance()`. That pattern is
+  correct everywhere else in the file because nothing can be submitted
+  before a phase opens — except the bonus, where an "early" tap during the
+  ARM suspense already counts as submitted. If every player jumped the gun,
+  `_allSubmitted()` was already true the instant the code flipped to
+  `BONUS_HIT`, so both transitions fired in the same `_advance()` call and
+  the color was never broadcast — the screen would jump straight from
+  suspense to the reveal.
+- [x] Fix: `if` / `else if` on that pair, so at most one transition fires
+  per tick — `BONUS_HIT` is now always observable (and therefore always
+  broadcast) for at least one tick before it can close.
+- [x] Test-first: added a failing test (`the flash still gets its own tick
+  even if everyone already burned during the suspense`) that reproduced it
+  deterministically, then fixed. 28/28 engine tests, 83/83 overall, 180/180
+  contract assertions, full Playwright e2e re-run green. Added an edge case
+  to `docs/BATUCADA_TEST_PLAN.md` (§3) for manual confirmation on a live
+  room.

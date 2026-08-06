@@ -393,12 +393,19 @@ export class Batucada {
       this.bonusReveal = false;
       this.revealEndsAt = now + this.revealMs;
     }
+    // else-if, deliberately: unlike RECALL (nothing can be submitted before it
+    // opens), a burned "early" tap during BONUS_ARM already counts as
+    // submitted. Sequential ifs would let _allSubmitted() be true the instant
+    // BONUS_HIT is entered if everyone jumped the gun, collapsing ARM -> HIT
+    // -> REVEAL into one tick — the color would light and vanish inside a
+    // single _advance() call, never once reaching a broadcast. The else-if
+    // guarantees BONUS_HIT is observable for at least one tick before it can
+    // close, so the room always sees what it was supposed to react to.
     if (this.phase === PHASE.BONUS_ARM && now >= this.bonusArmEndsAt) {
       this.phase = PHASE.BONUS_HIT;
       this.bonusHitStartsAt = now;
       this.bonusHitEndsAt = now + this.bonusHitWindowMs;
-    }
-    if (this.phase === PHASE.BONUS_HIT && (now >= this.bonusHitEndsAt || this._allSubmitted())) {
+    } else if (this.phase === PHASE.BONUS_HIT && (now >= this.bonusHitEndsAt || this._allSubmitted())) {
       for (const p of this.players.values()) {
         if (!p.submitted) {
           p.submitted = true;
