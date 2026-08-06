@@ -12,7 +12,7 @@ plan is what those can't cover: real phones, real network, real projector,
 one person's judgment about whether it *feels* right.
 
 **Live URL**: `https://tap-race-a4er43fhfq-uc.a.run.app` (revision
-`tap-race-00027-8rj`). Devices needed: 1 laptop (host + screen, or two
+`tap-race-00028-zzp`). Devices needed: 1 laptop (host + screen, or two
 machines), 2+ phones on real mobile data or venue wifi (not the same LAN as
 the laptop, to catch real latency).
 
