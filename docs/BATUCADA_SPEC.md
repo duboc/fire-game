@@ -418,55 +418,20 @@ The blink is a soft opacity/scale pulse (1,1s), not a hard strobe — urgency
 without assault, and `prefers-reduced-motion` still kills all of it via the
 global rule in theme.css.
 
-## Bug fix: the bonus flash could vanish inside a single tick
+## Bugs found and fixed
 
-Found by code audit, not by play: `_advance()` checked `BONUS_ARM -> BONUS_HIT`
-and `BONUS_HIT -> REVEAL` as two independent, sequential `if`s in the same
-method. That is deliberate everywhere else in the file — it is what lets a
-zero-duration phase resolve within one call — but it has a precondition that
-quietly broke for this one pair: nothing can be submitted before a phase
-opens, *except* the bonus, where an "early" tap during the ARM suspense
-already counts as a submission.
+Two bugs surfaced after the feature set above stabilized — one from a code
+audit, one from live testing. Full root-cause writeups, code excerpts, and
+verification evidence (including the analytical clock-bias simulation) live
+in **`docs/BATUCADA_BUGS.md`**, not duplicated here. Summary:
 
-If every player jumped the gun during ARM, `_allSubmitted()` was already true
-the instant the code flipped to `BONUS_HIT` a few lines later in the *same*
-call — so the second `if` fired too, and the phase advanced straight to
-`REVEAL` without ever being returned from `_advance()` as `BONUS_HIT`. Since
-the server only broadcasts whatever `publicState()` looks like *after*
-`_advance()` returns, the color the room was supposed to react to was
-computed, graded against, and discarded, all inside one 100ms tick — the
-screen would jump from suspense straight to the reveal.
-
-Fixed by making the pair `if / else if`: at most one of the two transitions
-can fire per call, so `BONUS_HIT` is always observable — and therefore always
-broadcast — for at least one tick before it is allowed to close. Covered by a
-unit test that has every player burn their start and asserts the engine still
-passes through `BONUS_HIT` with the color published before reaching `REVEAL`.
-
-## Bug fix: the phone's clock estimate was biased by each phone's own latency
-
-Reported from live testing: the countdown and other shared moments appeared
-to run at "different times for different users." Root cause was in
-`public/batucada/phone.html`: its clock offset was computed naively as
-`serverNow - Date.now()`, with a comment arguing RTT compensation "buys
-nothing" here because grading is gated server-side, not by the phone's guess
-of the time. That reasoning covered *fairness* but missed *feel* — the
-countdown overlay and the recall progress bar are rendered from that same
-estimate, and a naive offset is wrong by almost exactly half the phone's own
-round-trip time, in the direction of thinking the server is *behind*. That
-error scales with each phone's own latency, so two phones on different
-networks compute two different "now"s for the same real instant — the
-countdown reaches "GO!" measurably later on whoever has worse wifi.
-
-Verified analytically before shipping: simulating a 20ms-RTT phone against a
-450ms-RTT phone, the naive formula leaves the fast phone 10ms off and the
-slow phone **225ms off** — a 215ms gap between two phones looking at the same
-countdown. The fix ports the exact NTP-style, RTT-compensated `syncClock`
-algorithm already used in `public/index.html` and in this game's own
-`screen.html` (keep the least-delayed sample, correct for one-way delay via
-`serverNow + rtt/2 - t1`, discard the running estimate if the device clock
-itself jumps). Same simulation with the fix: both phones converge to 0ms
-error, independent of latency. `estServerNow()` still never gates
-scoring — grading is and remains keyed off the server's own clock at the
-moment `/batucada/recall` arrives — this only makes the *shared* moments
-(the 3·2·1 countdown, the recall timer bar) actually look shared.
+- **The bonus flash could vanish inside a single tick.** `BONUS_ARM ->
+  BONUS_HIT -> REVEAL` could collapse into one `_advance()` call if every
+  player jumped the gun during the suspense, so the color was never
+  broadcast. Fixed with an `if`/`else if` guard so `BONUS_HIT` is always
+  observable for at least one tick. Commit `c6e11d4`.
+- **The phone's clock estimate was biased by each phone's own latency.** A
+  naive `serverNow - Date.now()` made the shared countdown and recall timer
+  land at different real instants depending on each phone's network quality.
+  Fixed by porting the RTT-compensated `syncClock` already used in
+  `index.html` and this game's own `screen.html`. Commit `e0c19f6`.
