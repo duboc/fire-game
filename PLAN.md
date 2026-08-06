@@ -589,3 +589,28 @@ inside a single tick".
   contract assertions, full Playwright e2e re-run green. Added an edge case
   to `docs/BATUCADA_TEST_PLAN.md` (§3) for manual confirmation on a live
   room.
+
+### Bug fix: phone clock estimate biased by each phone's own latency
+
+Reported from live testing: "a tela apareceu em tempos diferentes com
+tempos distintos pra cada usuário" — the countdown felt out of sync across
+phones. Full writeup in `docs/BATUCADA_SPEC.md`, "Bug fix: the phone's clock
+estimate was biased by each phone's own latency".
+
+- [x] Root cause: `public/batucada/phone.html` computed its clock offset as
+  a naive `serverNow - Date.now()`, dismissed as fine at the time because
+  grading is gated server-side, not client-side. That covered fairness but
+  not feel — the countdown overlay and recall bar render off that same
+  estimate, and the naive formula is wrong by ~half the phone's own
+  round-trip time, growing with each phone's *own* latency. Two phones on
+  different networks land on two different "now"s for the same instant.
+- [x] Fix: ported the exact NTP-style, RTT-compensated `syncClock` already
+  proven in `public/index.html` and in this game's own `screen.html` —
+  keep the least-delayed sample, correct for one-way delay via
+  `serverNow + rtt/2 - t1`.
+- [x] Verified analytically (a live-browser A/B race proved too noisy over a
+  3s countdown to be conclusive on its own): simulating a 20ms-RTT phone
+  against a 450ms-RTT phone, the naive formula leaves them 10ms and **225ms**
+  off respectively — a 215ms gap on the same shared countdown. With the fix
+  both converge to 0ms error regardless of latency. Full Playwright e2e
+  re-run green; engine untouched (client-only change).

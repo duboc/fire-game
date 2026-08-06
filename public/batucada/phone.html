@@ -124,11 +124,28 @@
   const COLORS = ['#4285F4', '#EA4335', '#FBBC04', '#34A853'];
 
   let me = { id: localStorage.getItem('batucadaId') || null };
-  // Rough offset only — used for a cosmetic countdown/progress bar, never to
-  // gate scoring (grading happens server-side off the /recall POST's own
-  // arrival time). Full RTT compensation (see index.html) buys nothing here.
+  // NTP-style, RTT-compensated — same algorithm as index.html. A naive
+  // `serverNow - Date.now()` is wrong by roughly this phone's one-way
+  // latency, and that error is *different per phone* (whoever has worse
+  // wifi sees the countdown and the recall bar visibly lag behind everyone
+  // else's). Grading itself still happens server-side off the /recall POST's
+  // own arrival time — this is purely so the shared countdown moment and the
+  // recall bar actually look shared across every phone in the room.
   let clockOffset = 0;
+  let bestRtt = Infinity;
   const estServerNow = () => Date.now() + clockOffset;
+
+  function syncClock(serverNow, t0, t1){
+    if (typeof serverNow !== 'number') return;
+    const rtt = t1 - t0;
+    if (rtt < 0 || rtt > 5000) return; // nonsense sample (suspended tab, dead link)
+    // If the device clock itself jumped (NTP correction, user edit), every past
+    // sample is void — start the search over rather than trusting a stale min.
+    if (Math.abs((serverNow - t1) - clockOffset) > 5000) bestRtt = Infinity;
+    if (rtt > bestRtt) return;
+    bestRtt = rtt;
+    clockOffset = serverNow + rtt / 2 - t1;
+  }
 
   let state = { phase: PHASE.LOBBY, known:false, total:0, round:0, totalRounds:10 };
   let myRoundId = null; // a whole new game (start() bumps it)
@@ -146,7 +163,7 @@
     try{
       const r = await fetch(url, Object.assign({ signal: ctl.signal }, opts));
       const s = await r.json();
-      if (typeof s.serverNow === 'number') clockOffset = s.serverNow - Date.now();
+      syncClock(s && s.serverNow, t0, Date.now());
       return s;
     } finally { clearTimeout(timer); }
   }

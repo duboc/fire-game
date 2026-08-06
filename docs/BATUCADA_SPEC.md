@@ -442,3 +442,31 @@ can fire per call, so `BONUS_HIT` is always observable — and therefore always
 broadcast — for at least one tick before it is allowed to close. Covered by a
 unit test that has every player burn their start and asserts the engine still
 passes through `BONUS_HIT` with the color published before reaching `REVEAL`.
+
+## Bug fix: the phone's clock estimate was biased by each phone's own latency
+
+Reported from live testing: the countdown and other shared moments appeared
+to run at "different times for different users." Root cause was in
+`public/batucada/phone.html`: its clock offset was computed naively as
+`serverNow - Date.now()`, with a comment arguing RTT compensation "buys
+nothing" here because grading is gated server-side, not by the phone's guess
+of the time. That reasoning covered *fairness* but missed *feel* — the
+countdown overlay and the recall progress bar are rendered from that same
+estimate, and a naive offset is wrong by almost exactly half the phone's own
+round-trip time, in the direction of thinking the server is *behind*. That
+error scales with each phone's own latency, so two phones on different
+networks compute two different "now"s for the same real instant — the
+countdown reaches "GO!" measurably later on whoever has worse wifi.
+
+Verified analytically before shipping: simulating a 20ms-RTT phone against a
+450ms-RTT phone, the naive formula leaves the fast phone 10ms off and the
+slow phone **225ms off** — a 215ms gap between two phones looking at the same
+countdown. The fix ports the exact NTP-style, RTT-compensated `syncClock`
+algorithm already used in `public/index.html` and in this game's own
+`screen.html` (keep the least-delayed sample, correct for one-way delay via
+`serverNow + rtt/2 - t1`, discard the running estimate if the device clock
+itself jumps). Same simulation with the fix: both phones converge to 0ms
+error, independent of latency. `estServerNow()` still never gates
+scoring — grading is and remains keyed off the server's own clock at the
+moment `/batucada/recall` arrives — this only makes the *shared* moments
+(the 3·2·1 countdown, the recall timer bar) actually look shared.
