@@ -316,6 +316,7 @@ precompress('theme.css', 'text/css; charset=utf-8', ['/theme.css']);
 precompress('batucada/phone.html', HTML, ['/batucada', '/batucada/', '/batucada/phone.html']);
 precompress('batucada/screen.html', HTML, ['/batucada/screen', '/batucada/screen.html']);
 precompress('vote/search.js', 'text/javascript; charset=utf-8', ['/vote/search.js']);
+precompress('vote/theme.css', 'text/css; charset=utf-8', ['/vote/theme.css']);
 precompress('vote/phone.html', HTML, ['/vote', '/vote/', '/vote/phone.html']);
 precompress('vote/screen.html', HTML, ['/vote/screen', '/vote/screen.html']);
 precompress('vote/admin.html', HTML, ['/vote/admin', '/vote/admin.html']);

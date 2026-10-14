@@ -4,14 +4,15 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Live Vote · admin</title>
-<link rel="stylesheet" href="/theme.css" />
+<link rel="stylesheet" href="/vote/theme.css" />
 <style>
   /* Views toggle with the hidden attribute; keep it stronger than any display: rule. */
   [hidden]{display:none !important;}
 
   body{min-height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
-  button{font:inherit; color:inherit; cursor:pointer; min-height:44px; padding:0 14px; border-radius:var(--r-sm);
-    border:1px solid var(--line); background:var(--surface-2);}
+  button{font:inherit; color:var(--g-blue-700); cursor:pointer; min-height:40px; padding:0 16px; border-radius:var(--r-full);
+    border:1px solid var(--line); background:var(--surface); font-weight:500;}
+  button:hover:not(:disabled){background:#F6FAFE;}
   button:disabled{opacity:.45; cursor:not-allowed;}
   button.primary{background:var(--primary); border-color:transparent; color:#fff; font-weight:600;}
   button[aria-pressed="true"]{background:var(--primary-dim); border-color:var(--primary); color:var(--g-blue-700);}
@@ -33,22 +34,23 @@
   .box{display:flex; flex-direction:column; gap:12px; padding:28px; width:min(100%, 420px);}
 
   .bar{position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; padding:12px 16px;
-    background:rgba(0,0,0,.88); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid var(--line);}
+    background:rgba(255,255,255,.94); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid var(--line);}
   .bar h1{font-size:20px; margin-right:auto;}
+  .bar h1 .gwm{font-size:16px; margin-left:8px;}
   .grid{display:grid; grid-template-columns:1fr; gap:16px; padding:16px; max-width:1400px; margin:0 auto;}
   @media (min-width:960px){ .grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); align-items:start;} }
   .col{display:flex; flex-direction:column; gap:16px; min-width:0;}
   .gcard{padding:16px; min-width:0;}
 
   /* control board */
-  .board-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.06);}
+  .board-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; padding:10px 0; border-bottom:1px solid var(--line);}
   .board-row input.sel{width:22px; height:22px; min-height:0; accent-color:var(--primary);}
   .board-row .t{flex:1 1 110px; min-width:0; font-weight:600; overflow-wrap:anywhere;}
   .board-row .acts{display:flex; flex-wrap:wrap; gap:6px; margin-left:auto;}
   .board-row .acts button{padding:0 10px;}
   .board-row .ph{padding:2px 10px; border-radius:var(--r-full); font-size:12px; text-transform:uppercase; letter-spacing:.06em; background:var(--surface-2); color:var(--ink-2);}
-  .board-row.open .ph{background:rgba(52,168,83,.18); color:var(--g-green-700);}
-  .board-row.closed .ph{background:rgba(234,67,53,.14); color:var(--g-red-700);}
+  .board-row.open .ph{background:#E6F4EA; color:#137333;}
+  .board-row.closed .ph{background:#FCE8E6; color:var(--g-red-700);}
   .board-row .tm{min-width:48px; color:var(--g-blue-700);}
   .board-row .bc{min-width:76px; color:var(--ink-2); font-size:14px;}
   .openbar{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:14px;}
@@ -58,12 +60,12 @@
   .stagebar{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; color:var(--ink-2);}
 
   /* fraud */
-  .flag{display:grid; grid-template-columns:1fr auto; gap:4px 12px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.06);}
+  .flag{display:grid; grid-template-columns:1fr auto; gap:4px 12px; padding:10px 0; border-bottom:1px solid var(--line);}
   .flag .cat{grid-column:1; font-size:12px; color:var(--g-yellow-700); text-transform:uppercase; letter-spacing:.06em;}
   .flag .why{grid-column:1; font-weight:500;}
   .flag .names{grid-column:1; font-size:14px; color:var(--ink-2);}
   .flag .acts{grid-column:2; grid-row:1 / span 3; align-self:center; display:flex; flex-direction:column; gap:6px;}
-  .flag button.void,.flag button.void-new{border-color:rgba(234,67,53,.5); color:var(--g-red-700);}
+  .flag button.void,.flag button.void-new{border-color:#F6AEA9; color:var(--g-red-700);}
   .flag.voided{opacity:.6;}
   .flag.voided button.void{border-color:var(--line); color:var(--ink);}
 
@@ -73,7 +75,7 @@
   #resFilter{width:100%; margin-bottom:8px;}
   #resTable{width:100%; border-collapse:collapse; font-size:15px;}
   #resTable th{text-align:left; color:var(--ink-3); font-weight:500; padding:6px 8px;}
-  #resTable td{padding:6px 8px; border-top:1px solid rgba(255,255,255,.05); overflow-wrap:anywhere;}
+  #resTable td{padding:6px 8px; border-top:1px solid var(--line); overflow-wrap:anywhere;}
   #resTable td:first-child,#resTable th:first-child{width:3.5em;}
   #resTable td:last-child,#resTable th:last-child{width:4.5em; text-align:right;}
   #resTable tbody{display:block; max-height:420px; overflow:auto;}
@@ -102,7 +104,7 @@
 </div>
 <div id="app" hidden>
   <header class="bar">
-    <h1>Live Vote</h1><span id="devices" class="pill"></span>
+    <h1>Live Vote <span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span></h1><span id="devices" class="pill"></span>
     <button id="entryBtn"></button>
     <a href="/vote" target="_blank">Phone page</a><a href="/vote/screen" target="_blank">Big screen</a>
   </header>
