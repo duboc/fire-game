@@ -1,5 +1,5 @@
 // Boot-time setup for Live Vote, so the app works the moment it starts. The
-// admin replaces both from /vote/admin. Accents, apostrophes, multi-part and
+// admin can change both from /vote/admin. Accents, apostrophes, multi-part and
 // repeated first names are deliberate: they are what the search has to handle.
 export const SEED_NAMES = Object.freeze([
   'Ana Souza', 'João Pedro Silva', "Lucas D'Ávila", 'Mariana Costa', 'Bruno Lima',
@@ -28,10 +28,13 @@ export const SEED_NAMES = Object.freeze([
   'Sana Qureshi', 'Elif Demir', 'Nadia Benali', 'Oscar Lindqvist', 'Ruby Thompson',
 ]);
 
+// The event's five award categories — what every boot (restart, redeploy)
+// starts with. The host can still rename, add, remove or change N from
+// /vote/admin; those edits last until the next restart.
 export const SEED_CATEGORIES = Object.freeze([
-  { title: 'MVP of the Year', picks: 3 },
-  { title: 'Most Helpful', picks: 3 },
-  { title: 'Best Leader', picks: 3 },
-  { title: 'Most Creative', picks: 3 },
-  { title: 'Rising Star', picks: 3 },
+  { title: 'CUSTOMER FOCUS', picks: 3 },
+  { title: 'COLLABORATOR CROSS-REGIONAL', picks: 3 },
+  { title: 'COMPETITIVENESS CHAMPION', picks: 3 },
+  { title: 'TOP "SCALER" FOR THE BUSINESS', picks: 3 },
+  { title: 'NEW WAYS OF GROWTH (Catch the Opportunity)', picks: 3 },
 ]);

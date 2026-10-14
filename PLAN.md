@@ -654,4 +654,10 @@ untouched.
 - [x] Big-screen effects: +1 bubbles, new-leader moment, counting numbers, final countdown (10 s urgent timer, 3-2-1); `check:vote` covers each.
 - [x] `VOTE_NAMES`: the real list from a git-ignored `vote-names.txt`, passed by `deploy.sh` (`scripts/deploy-env.mjs` validates first); a bad list stops the boot.
 - [x] `scripts/vote-load.mjs` (`npm run load:vote`): 300 phones locally — 0 failures, counts match.
-- [ ] PR → merge → deploy `live-vote` with the 119 names → 300-phone load test in production → fresh revision.
+- [x] PR → merge → deploy `live-vote` with the 119 names → 300-phone load test in production → fresh revision.
+
+## Live Vote: the event's five categories as the built-in default
+
+- [x] `src/vote-seed.js`: CUSTOMER FOCUS · COLLABORATOR CROSS-REGIONAL · COMPETITIVENESS CHAMPION · TOP "SCALER" FOR THE BUSINESS · NEW WAYS OF GROWTH (Catch the Opportunity), pick 3 each; still editable from the admin page.
+- [x] Big-screen panel titles wrap to two lines instead of being cut off; `check:look` asserts every title shows in full.
+- [ ] PR → merge → deploy `live-vote` → verify the five categories in production.

@@ -27,7 +27,11 @@
   .panel{position:relative; display:flex; flex-direction:column; min-height:0; min-width:0; padding:2vh 2.2vh;
     border-radius:var(--r-lg); background:var(--surface); border:1px solid var(--line); box-shadow:var(--e2); overflow:hidden;}
   .panel header{display:flex; align-items:baseline; gap:1.5vh;}
-  .ptitle{flex:1; min-width:0; margin:0; font:700 3.2vh/1.15 var(--font-display); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  /* Up to two lines: event category titles run long ("NEW WAYS OF GROWTH (Catch
+     the Opportunity)") and must never be cut off on the big screen. */
+  .ptitle{flex:1; min-width:0; margin:0; font:700 3.2vh/1.15 var(--font-display); overflow-wrap:anywhere;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  #stage.n5 .ptitle,#stage.n6 .ptitle{font-size:2.6vh;}
   #stage.n1 .ptitle{font-size:4.5vh;}
   .ptimer{flex:none; font-size:3.2vh; color:var(--g-blue-700);}
   #stage.n1 .ptimer{font-size:4.5vh;}

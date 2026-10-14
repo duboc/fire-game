@@ -27,7 +27,7 @@ password and session cookie.
 | Anti-fraud | **Room-locked, no codes** — see "Anti-fraud". |
 | Identity | Anonymous. No login, no personal data. |
 | Language | English UI. |
-| Seed | 120 sample names and 5 sample categories baked in, so the app works the moment it boots. |
+| Seed | The event's 5 categories (CUSTOMER FOCUS, COLLABORATOR CROSS-REGIONAL, COMPETITIVENESS CHAMPION, TOP "SCALER" FOR THE BUSINESS, NEW WAYS OF GROWTH (Catch the Opportunity)), pick 3 each, are built in, so every boot starts with them; the admin can still edit them. Names: the event's list from `VOTE_NAMES` (a git-ignored file at deploy), else 120 sample names. |
 
 ## Pages and routes
 
