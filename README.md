@@ -37,6 +37,8 @@ npm run check:browser   # real Chromium: host login, a full round, the dashboard
 npm run check:load      # 5.000-player load run (spawns its own server; ~40s)
 npm run check:vote      # Live Vote: HTTP contract + real-Chromium phone, screen and admin (~2 min)
 npm run check:look      # Live Vote screenshots + a WCAG contrast audit of every visible text (~30 s)
+VOTE_ADMIN_PASSWORD=… TARGET=https://… DEVICES=300 OPEN=2 CLEANUP=1 npm run load:vote
+                        # N simulated phones against a running Live Vote (local or deployed)
 ```
 
 `check:load` also does the A/B behind the grace window — `LOAD_SPREAD=0
@@ -83,6 +85,12 @@ entry window.
 
 Votes and setup live in memory, like Tap Race: a restart or deploy wipes them.
 The admin page keeps the last saved setup in the browser and offers to restore it.
+
+**The event's name list** stays out of this public repo: put one name per line in
+`vote-names.txt` (git-ignored) and `./deploy.sh` passes it to the service as
+`VOTE_NAMES` — after the same validation the server runs, so a duplicate stops
+the deploy instead of the boot. Without the file, the built-in sample list is
+used (tests and demos rely on it).
 
 ## Deploy to Cloud Run (single instance)
 
@@ -266,6 +274,7 @@ but it means a deploy that sets it disables the built-in one.
 | `PERSIST` | `off` | `on` to write results to Firestore (needs ADC + `@google-cloud/firestore`) |
 | `FIRESTORE_COLLECTION` | `tap_race_rounds` | Where round results are stored |
 | `APPS` | *(all)* | `vote` serves Live Vote alone (the `live-vote` service). Anything else serves every app. |
+| `VOTE_NAMES` | *(sample list)* | The Live Vote name list, one per line. Set by `deploy.sh` from the git-ignored `vote-names.txt`. A list the engine rejects stops the boot. |
 | `VOTE_CODE_MS` | `30000` | Live Vote room-code rotation. Test harnesses only. |
 | `VOTE_MIN_DURATION_MS` | `30000` | Shortest Live Vote timer the admin may set. Test harnesses only. |
 
