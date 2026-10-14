@@ -8,6 +8,9 @@ import QRCode from 'qrcode';
 
 import { Game, PHASE } from './game.js';
 import { Batucada } from './batucada.js';
+import { Vote } from './vote.js';
+import { VoteGuard, clientIp, sameOrigin } from './vote-guard.js';
+import { SEED_NAMES, SEED_CATEGORIES } from './vote-seed.js';
 import { persistResults, persistence } from './persist.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -195,6 +198,25 @@ const batucada = new Batucada({
   bonusHitWindowMs: numEnv('SEQ_BONUS_HIT_WINDOW_MS'),
 });
 
+// A third app in the same process — see docs/VOTE_SPEC.md. Same tick, same
+// admin session; an admin-only SSE stream for the screen, and a shared,
+// precompressed buffer that every phone polls (phones can't each hold a
+// stream under Cloud Run's 1.000-connection cap). VOTE_CODE_MS and
+// VOTE_MIN_DURATION_MS exist for the test harnesses only — an expired-code or
+// deadline check should not take a minute.
+// listVersionBase: list versions must never repeat across a restart — a phone
+// that slept through one would otherwise send ids from the old list.
+const vote = new Vote({
+  names: SEED_NAMES,
+  categories: SEED_CATEGORIES,
+  minDurationMs: numEnv('VOTE_MIN_DURATION_MS'),
+  listVersionBase: Date.now(),
+});
+const voteGuard = new VoteGuard({ epochMs: numEnv('VOTE_CODE_MS') });
+// Restarts reuse listVersion/roundId numbers from 1; this tells a phone (and
+// its HTTP cache) that a "v2" from before a restart is not this "v2".
+const VOTE_BOOT = randomBytes(6).toString('hex');
+
 const app = express();
 app.disable('x-powered-by');
 
@@ -229,6 +251,10 @@ app.use((_req, _res, next) => {
   reqCount += 1;
   next();
 });
+// 300 names × 60 chars is ~18 KB — over the 8 KB every other route lives
+// under. body-parser skips a body that's already been parsed, so this
+// route-scoped parser simply wins for this one path.
+app.use('/vote/admin/config', express.json({ limit: '64kb' }));
 app.use(express.json({ limit: '8kb' }));
 
 // ---------------------------------------------------------------------------
@@ -289,6 +315,10 @@ precompress('dashboard.html', HTML, ['/dashboard', '/dashboard.html']);
 precompress('theme.css', 'text/css; charset=utf-8', ['/theme.css']);
 precompress('batucada/phone.html', HTML, ['/batucada', '/batucada/', '/batucada/phone.html']);
 precompress('batucada/screen.html', HTML, ['/batucada/screen', '/batucada/screen.html']);
+precompress('vote/search.js', 'text/javascript; charset=utf-8', ['/vote/search.js']);
+precompress('vote/phone.html', HTML, ['/vote', '/vote/', '/vote/phone.html']);
+precompress('vote/screen.html', HTML, ['/vote/screen', '/vote/screen.html']);
+precompress('vote/admin.html', HTML, ['/vote/admin', '/vote/admin.html']);
 
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
@@ -516,13 +546,17 @@ function broadcast() {
 }
 
 // Authoritative loop: advance phase machine + refresh rank snapshot + push.
-// Drives Batucada too — one clock for both games rather than a second timer
-// that can drift against this one.
+// Drives Batucada and Live Vote too — one clock for every app rather than
+// timers that can drift against each other.
 const tickTimer = setInterval(() => {
   game.tick(Date.now());
   broadcast();
   batucada.tick(Date.now());
   broadcastBatucada();
+  const now = Date.now();
+  vote.tick(now);
+  voteDetect(now);
+  broadcastVote(now);
 }, TICK_MS);
 
 // A timer that should fire every LAG_SAMPLE_MS; whatever it overshoots by is
@@ -827,6 +861,226 @@ app.post('/batucada/admin/reset', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Live Vote  (companion app — see docs/VOTE_SPEC.md)
+// ---------------------------------------------------------------------------
+const VOTER_COOKIE = 'tv_voter';
+const voteSseClients = new Set();
+let voteScreenDirty = false; // a screen-visible change outside the engine: devices, entry
+let voteSentVersion = -1;
+let voteSentEpoch = -1;
+let voteSentFlags = -1;
+let voteLastFrameAt = 0;
+let voteLastDetectAt = 0;
+
+const isTls = (req) => req.secure || req.get('x-forwarded-proto') === 'https';
+const voterOf = (req) => voteGuard.verify(readCookie(req, VOTER_COOKIE));
+
+function voteSameOrigin(req, res) {
+  if (sameOrigin(req.headers)) return true;
+  res.status(403).json({ ok: false, reason: 'cross_site' });
+  return false;
+}
+
+// Phones come back at ≤ 400 req/s in total: 3 s up to ~1.200 devices, then
+// backing off to 6 s.
+const votePollMs = () => Math.min(6000, Math.max(3000, Math.round((voteGuard.devices.size / 400) * 1000)));
+
+// The /metrics trick (above): serialise and gzip once per change, so a
+// request just writes a buffer however many phones are polling.
+function jsonEntry(obj) {
+  const raw = Buffer.from(JSON.stringify(obj));
+  return { raw, gzip: zlib.gzipSync(raw) };
+}
+
+function sendEntry(req, res, entry) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Vary', 'Accept-Encoding');
+  let body = entry.raw;
+  if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+    res.setHeader('Content-Encoding', 'gzip');
+    body = entry.gzip;
+  }
+  res.setHeader('Content-Length', body.length);
+  res.end(body);
+}
+
+let voteLiveCache = null;
+function voteLiveEntry() {
+  const pollMs = votePollMs();
+  const key = `${vote.phoneVersion}|${pollMs}|${voteGuard.entryOpen}`;
+  if (voteLiveCache?.key !== key) {
+    voteLiveCache = { key, entry: jsonEntry({ ...vote.phoneState(), boot: VOTE_BOOT, entryOpen: voteGuard.entryOpen, pollMs }) };
+  }
+  return voteLiveCache.entry;
+}
+
+let voteCandidatesCache = null;
+function voteCandidatesEntry() {
+  if (voteCandidatesCache?.v !== vote.listVersion) {
+    voteCandidatesCache = { v: vote.listVersion, entry: jsonEntry({ listVersion: vote.listVersion, candidates: vote.candidates }) };
+  }
+  return voteCandidatesCache.entry;
+}
+
+app.post('/vote/enter', (req, res) => {
+  if (!voteSameOrigin(req, res)) return;
+  const r = voteGuard.enter({
+    code: req.body?.code,
+    existing: readCookie(req, VOTER_COOKIE),
+    ip: clientIp(req.get('x-forwarded-for'), req.socket.remoteAddress),
+    ua: req.get('user-agent'),
+    now: Date.now(),
+  });
+  if (!r.ok) return res.status(r.reason === 'throttled' ? 429 : 403).json({ ok: false, reason: r.reason });
+  if (!r.already) {
+    res.setHeader('Set-Cookie', voteGuard.cookieHeader(r.cookie, isTls(req)));
+    voteScreenDirty = true; // the device count is on the admin page
+  }
+  res.json({ ok: true });
+});
+
+app.get('/vote/candidates', (req, res) => {
+  const etag = `"vl${VOTE_BOOT}-${vote.listVersion}"`;
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('ETag', etag);
+  if (etagMatches(req.headers['if-none-match'], etag)) return res.status(304).end();
+  sendEntry(req, res, voteCandidatesEntry());
+});
+
+// Shared by every phone and up to a change old by design — so the clock rides
+// in a header read at request time, exactly as /metrics does.
+app.get('/vote/live', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Server-Now', String(Date.now()));
+  sendEntry(req, res, voteLiveEntry());
+});
+
+app.get('/vote/me', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const id = voterOf(req);
+  const view = id ? vote.voterView(id) : { ballots: {}, voided: [] };
+  res.json({ entered: !!id, entryOpen: voteGuard.entryOpen, ...view });
+});
+
+const BALLOT_STATUS = { closed: 409, stale_list: 409, stale_round: 409, voided: 403 };
+
+app.post('/vote/ballot', (req, res) => {
+  if (!voteSameOrigin(req, res)) return;
+  const now = Date.now();
+  res.setHeader('X-Server-Now', String(now));
+  const voterId = voterOf(req);
+  if (!voterId) return res.status(401).json({ ok: false, reason: 'not_entered' });
+  const b = req.body || {};
+  const live = { ...vote.phoneState(), boot: VOTE_BOOT };
+  const cat = vote.categories.find((c) => c.id === b.categoryId);
+  if (!cat) return res.status(400).json({ ok: false, reason: 'unknown_category', live });
+  // The limiter keys on the server's own category id and round, never on body
+  // values: those a script could vary to mint unbounded keys (memory on the
+  // one instance) or to sidestep the 1/s limit.
+  const gate = voteGuard.allowSubmit(voterId, cat.id, cat.roundId, now);
+  if (!gate.ok) return res.status(429).json({ ok: false, reason: gate.reason });
+  const r = vote.submit(voterId, { categoryId: b.categoryId, roundId: b.roundId, listVersion: b.listVersion, picks: b.picks }, now);
+  if (!r.ok) return res.status(BALLOT_STATUS[r.reason] ?? 400).json({ ok: false, reason: r.reason, live });
+  if (r.changed) voteGuard.noteSubmit(b.categoryId, voterId, r.added, r.ballot, now);
+  res.json({ ok: true, ballot: r.ballot, live });
+});
+
+function voteFrame(now) {
+  return JSON.stringify({
+    ...vote.screenState(),
+    now,
+    code: voteGuard.roomCode(now),
+    codeRotatesAt: voteGuard.codeRotatesAt(now),
+    codeMs: voteGuard.o.epochMs,
+    entryOpen: voteGuard.entryOpen,
+    devices: voteGuard.devices.size,
+    flags: voteGuard.listFlags(vote.categories),
+  });
+}
+
+// Admin-only: every frame carries the live room code and every count. If it
+// were public, anyone anywhere could read the code and the room lock would be
+// decoration.
+app.get('/vote/events', (req, res) => {
+  if (!sessionOk(readCookie(req, ADMIN_COOKIE))) return res.status(401).json({ error: 'admin session required' });
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('retry: 2000\n\n');
+  res.write(`data: ${voteFrame(Date.now())}\n\n`);
+  voteSseClients.add(res);
+  req.on('close', () => voteSseClients.delete(res));
+});
+
+// Called every tick; sends only when something changed (≤ 10 frames/s), with a
+// comment every 15 s so an idle stream isn't reaped by a proxy.
+function broadcastVote(now) {
+  const epoch = Math.floor(now / voteGuard.o.epochMs);
+  const changed =
+    vote.version !== voteSentVersion || epoch !== voteSentEpoch ||
+    voteGuard.flagsVersion !== voteSentFlags || voteScreenDirty;
+  if (changed) {
+    voteSentVersion = vote.version;
+    voteSentEpoch = epoch;
+    voteSentFlags = voteGuard.flagsVersion;
+    voteScreenDirty = false;
+  }
+  if (voteSseClients.size === 0) return;
+  let payload = null;
+  if (changed) payload = `data: ${voteFrame(now)}\n\n`;
+  else if (now - voteLastFrameAt >= 15000) payload = ': keepalive\n\n';
+  if (!payload) return;
+  voteLastFrameAt = now;
+  for (const res of voteSseClients) {
+    try { res.write(payload); } catch { voteSseClients.delete(res); }
+  }
+}
+
+// 1 Hz. Members newly caught by a flag the admin already voided are voided too.
+function voteDetect(now) {
+  if (now - voteLastDetectAt < 1000) return;
+  voteLastDetectAt = now;
+  for (const { categoryId, voterIds } of voteGuard.detect(vote.categories, now)) vote.void(categoryId, voterIds);
+}
+
+// Same password, same session cookie as /host. Engine/guard validation errors
+// come back as 400 {ok:false, errors}.
+async function voteAdmin(req, res, fn) {
+  if (!(await checkAdmin(req, res))) return;
+  const r = fn(req.body || {}, Date.now());
+  if (r && r.ok === false) return res.status(400).json(r);
+  res.json(r ?? { ok: true });
+}
+
+app.post('/vote/admin/config', (req, res) => voteAdmin(req, res, (b) => vote.configure({ names: b.names, categories: b.categories })));
+app.post('/vote/admin/open', (req, res) => voteAdmin(req, res, (b, now) => vote.open(b.categoryIds, b.durationMs, now)));
+app.post('/vote/admin/close', (req, res) => voteAdmin(req, res, (b, now) => vote.close(b.categoryIds, now)));
+app.post('/vote/admin/reset', (req, res) => voteAdmin(req, res, (b) => vote.reset(b.categoryIds)));
+app.post('/vote/admin/stage', (req, res) => voteAdmin(req, res, (b) => vote.setStage(b)));
+app.post('/vote/admin/entry', (req, res) =>
+  voteAdmin(req, res, (b) => {
+    voteGuard.setEntry(b.open);
+    voteScreenDirty = true;
+    return { ok: true, entryOpen: voteGuard.entryOpen };
+  }),
+);
+app.post('/vote/admin/void', (req, res) =>
+  voteAdmin(req, res, (b) => {
+    const id = String(b.flagId ?? '');
+    const flag = voteGuard.flags.get(id);
+    if (!flag) return { ok: false, errors: ['Unknown flag.'] };
+    const affected = b.restore
+      ? vote.restore(flag.categoryId, voteGuard.restorable(id))
+      : vote.void(flag.categoryId, flag.voterIds);
+    voteGuard.markVoided(id, !b.restore);
+    return { ok: true, affected };
+  }),
+);
+
+// ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
 
@@ -885,6 +1139,7 @@ app.use((err, req, res, _next) => {
 const server = app.listen(PORT, () => {
   console.log(`🔥 Tap Race on :${PORT}  | phone:/  screen:/screen  host:/host`);
   console.log(`   batucada   : phone:/batucada  screen:/batucada/screen`);
+  console.log(`   live vote  : phone:/vote  screen:/vote/screen  admin:/vote/admin`);
   console.log(`   admin auth : ${ADMIN_TOKEN === null ? 'built-in password' : 'ADMIN_TOKEN override'}`);
   console.log(`   persistence: ${persistence.isEnabled() ? 'firestore' : 'off (in-memory only)'}`);
 });
@@ -920,10 +1175,11 @@ function shutdown(signal) {
   clearInterval(tickTimer);
   for (const res of sseClients) { try { res.end(); } catch { /* ignore */ } }
   for (const res of batucadaSseClients) { try { res.end(); } catch { /* ignore */ } }
+  for (const res of voteSseClients) { try { res.end(); } catch { /* ignore */ } }
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 2000).unref();
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-export { app, game, PHASE, batucada };
+export { app, game, PHASE, batucada, vote, voteGuard };

@@ -614,3 +614,18 @@ estimate was biased by each phone's own latency".
   off respectively — a 215ms gap on the same shared countdown. With the fix
   both converge to 0ms error regardless of latency. Full Playwright e2e
   re-run green; engine untouched (client-only change).
+
+## Live Vote — a real-time voting companion
+
+Executes `docs/VOTE_SPEC.md` via the step-by-step plan in `docs/VOTE_PLAN.md`.
+Ships next to Tap Race and Sequência, in the same process: one 100ms tick, one
+admin session, additive routes only.
+
+- [x] Task 1 — `public/vote/search.js` + `test/vote-search.test.js`: folding, ranked tiers, highlights, suggestions, remap by name, ranking.
+- [x] Task 2 — `src/vote.js` + `src/vote-seed.js` + `test/vote.test.js`: categories, exactly-N ballots, deadlines, void/restore, stage.
+- [x] Task 3 — `src/vote-guard.js` + `test/vote-guard.test.js`: rotating room code, device cookie, throttles, limits, cluster/burst flags.
+- [x] Task 4 — `src/server.js` wiring + `scripts/vote-check.mjs` HTTP contract + `npm run check:vote`.
+- [x] Task 5 — `public/vote/phone.html` (`/vote`) + phone browser checks.
+- [x] Task 6 — `public/vote/screen.html` (`/vote/screen`) + screen browser checks.
+- [x] Task 7 — `public/vote/admin.html` (`/vote/admin`) + admin browser checks.
+- [x] Task 8 — README, full regression (`npm test`, `check:contract`, `check:browser`, `check:vote`), screenshot review.
