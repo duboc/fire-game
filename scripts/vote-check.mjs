@@ -706,7 +706,33 @@ async function adminChecks() {
   }
 }
 
+// APPS=vote: the `live-vote` service serves Live Vote alone.
+async function voteOnlyChecks() {
+  const S = startServer(8151, { APPS: 'vote' });
+  try {
+    await S.ready;
+    console.log('\n== vote-only service (APPS=vote) ==');
+    const root = await fetch(S.base + '/', { redirect: 'manual' });
+    ok(root.status === 302 && root.headers.get('location') === '/vote', '/ redirects to /vote');
+    const blocked = ['/screen', '/host', '/dashboard', '/batucada', '/batucada/screen', '/index.html', '/theme.css', '/state', '/config', '/metrics', '/events', '/batucada/state', '/batucada/events'];
+    const codes = await Promise.all(blocked.map(async (p) => [p, (await fetch(S.base + p)).status]));
+    const leaked = codes.filter(([, c]) => c !== 404);
+    ok(leaked.length === 0, `Tap Race / Sequência pages and APIs are 404${leaked.length ? ': ' + leaked.map(([p, c]) => `${p}=${c}`).join(' ') : ''}`);
+    const posts = await Promise.all(['/join', '/tap', '/admin/start', '/admin/reset', '/batucada/join', '/batucada/admin/start'].map(async (p) => [p, (await fetch(S.base + p, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-token': TOKEN }, body: '{}' })).status]));
+    const leakedPosts = posts.filter(([, c]) => c !== 404);
+    ok(leakedPosts.length === 0, `game write routes are 404, even with the admin token${leakedPosts.length ? ': ' + leakedPosts.map(([p, c]) => `${p}=${c}`).join(' ') : ''}`);
+    const needed = ['/vote', '/vote/screen', '/vote/admin', '/vote/theme.css', '/vote/search.js', '/vote/live', '/vote/candidates', '/fonts/roboto-400.woff2', '/qr.svg?data=x', '/livez'];
+    const got = await Promise.all(needed.map(async (p) => [p, (await fetch(S.base + p)).status]));
+    const missing = got.filter(([, c]) => c !== 200);
+    ok(missing.length === 0, `everything the vote app needs answers 200${missing.length ? ': ' + missing.map(([p, c]) => `${p}=${c}`).join(' ') : ''}`);
+    const admin = await adminClient(S.base);
+    const f = await frame(admin);
+    ok(f.status === 200 && f.categories.length === 5, 'admin login + the live stream work');
+  } finally { S.child.kill(); }
+}
+
 await apiChecks();
+await voteOnlyChecks();
 await phoneChecks();
 await screenChecks();
 await adminChecks();

@@ -19,6 +19,9 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PORT = Number(process.env.PORT) || 8080;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || null;
 const TICK_MS = Number(process.env.TICK_MS) || 100;
+// APPS=vote serves Live Vote alone (the `live-vote` Cloud Run service);
+// unset or anything else serves every app, exactly as before.
+const VOTE_ONLY = (process.env.APPS || '').trim().toLowerCase() === 'vote';
 const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.GOOGLE_CLOUD_PROJECT;
 
 // The event password, as a scrypt hash. The plaintext is deliberately not in this
@@ -251,6 +254,18 @@ app.use((_req, _res, next) => {
   reqCount += 1;
   next();
 });
+
+// Vote-only service: an allow-list, not a block-list, so a route added to Tap
+// Race or Sequência later can never leak into it by accident. Login and the
+// session check are shared with the vote screen and admin.
+if (VOTE_ONLY) {
+  const allowed = [/^\/vote(\/|$)/, /^\/fonts\//, /^\/qr\.svg$/, /^\/admin\/(login|logout|session)$/, /^\/(livez|healthz)$/];
+  app.use((req, res, next) => {
+    if (req.path === '/') return res.redirect(302, '/vote');
+    if (allowed.some((re) => re.test(req.path))) return next();
+    res.status(404).json({ error: 'not found' });
+  });
+}
 // 300 names × 60 chars is ~18 KB — over the 8 KB every other route lives
 // under. body-parser skips a body that's already been parsed, so this
 // route-scoped parser simply wins for this one path.
@@ -550,10 +565,12 @@ function broadcast() {
 // Drives Batucada and Live Vote too — one clock for every app rather than
 // timers that can drift against each other.
 const tickTimer = setInterval(() => {
-  game.tick(Date.now());
-  broadcast();
-  batucada.tick(Date.now());
-  broadcastBatucada();
+  if (!VOTE_ONLY) {
+    game.tick(Date.now());
+    broadcast();
+    batucada.tick(Date.now());
+    broadcastBatucada();
+  }
   const now = Date.now();
   vote.tick(now);
   voteDetect(now);
@@ -1138,9 +1155,13 @@ app.use((err, req, res, _next) => {
 
 // ---------------------------------------------------------------------------
 const server = app.listen(PORT, () => {
-  console.log(`🔥 Tap Race on :${PORT}  | phone:/  screen:/screen  host:/host`);
-  console.log(`   batucada   : phone:/batucada  screen:/batucada/screen`);
-  console.log(`   live vote  : phone:/vote  screen:/vote/screen  admin:/vote/admin`);
+  if (VOTE_ONLY) {
+    console.log(`🗳️  Live Vote only (APPS=vote) on :${PORT}  | phone:/vote  screen:/vote/screen  admin:/vote/admin`);
+  } else {
+    console.log(`🔥 Tap Race on :${PORT}  | phone:/  screen:/screen  host:/host`);
+    console.log(`   batucada   : phone:/batucada  screen:/batucada/screen`);
+    console.log(`   live vote  : phone:/vote  screen:/vote/screen  admin:/vote/admin`);
+  }
   console.log(`   admin auth : ${ADMIN_TOKEN === null ? 'built-in password' : 'ADMIN_TOKEN override'}`);
   console.log(`   persistence: ${persistence.isEnabled() ? 'firestore' : 'off (in-memory only)'}`);
 });
