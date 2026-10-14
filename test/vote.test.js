@@ -12,6 +12,16 @@ function fresh() {
 // A valid ballot for category `cat` of vote `v`.
 const ballot = (v, cat, picks) => ({ categoryId: cat.id, roundId: cat.roundId, listVersion: v.listVersion, picks });
 
+test('the default categories are the event’s five, pick 3 each', () => {
+  assert.deepEqual(SEED_CATEGORIES.map((c) => [c.title, c.picks]), [
+    ['CUSTOMER FOCUS', 3],
+    ['COLLABORATOR CROSS-REGIONAL', 3],
+    ['COMPETITIVENESS CHAMPION', 3],
+    ['TOP "SCALER" FOR THE BUSINESS', 3],
+    ['NEW WAYS OF GROWTH (Catch the Opportunity)', 3],
+  ]);
+});
+
 test('the baked-in seed is valid: 120 names, 5 categories of 3 picks', () => {
   const v = new Vote({ names: SEED_NAMES, categories: SEED_CATEGORIES });
   assert.equal(v.candidates.length, 120);

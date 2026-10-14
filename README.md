@@ -86,6 +86,12 @@ entry window.
 Votes and setup live in memory, like Tap Race: a restart or deploy wipes them.
 The admin page keeps the last saved setup in the browser and offers to restore it.
 
+**The five award categories** (CUSTOMER FOCUS · COLLABORATOR CROSS-REGIONAL ·
+COMPETITIVENESS CHAMPION · TOP "SCALER" FOR THE BUSINESS · NEW WAYS OF GROWTH
+(Catch the Opportunity), pick 3 each) are built in (`src/vote-seed.js`), so every
+restart or redeploy starts with them. The admin can still rename, add, remove or
+change N; those edits last until the next restart.
+
 **The event's name list** stays out of this public repo: put one name per line in
 `vote-names.txt` (git-ignored) and `./deploy.sh` passes it to the service as
 `VOTE_NAMES` — after the same validation the server runs, so a duplicate stops

@@ -130,7 +130,8 @@ try {
 
   console.log('\n== Live Vote ==');
   const live = await (await fetch(B + '/vote/live')).json();
-  const [c1, c2] = live.categories;
+  const c1 = live.categories[0];
+  const c2 = live.categories.reduce((a, b) => (b.title.length > a.title.length ? b : a)); // the longest title, side by side
   const vscreenCtx = await loggedIn(SCREEN);
   const vscreen = await vscreenCtx.newPage();
   await vscreen.goto(B + '/vote/screen');
@@ -156,6 +157,9 @@ try {
   await capture(vphone, 'vote-phone-submitted');
   await sleep(1200);
   await capture(vscreen, 'vote-screen-live');
+  const cut = await vscreen.evaluate(() => [...document.querySelectorAll('#stage .ptitle')]
+    .filter((el) => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent));
+  ok(cut.length === 0, `vote-screen-live: every panel title shows in full${cut.length ? ' — cut: ' + cut.join(' | ') : ''}`);
   const vadmin = await (await loggedIn(DESK)).newPage();
   await vadmin.goto(B + '/vote/admin');
   await vadmin.waitForSelector('#app:not([hidden])');
