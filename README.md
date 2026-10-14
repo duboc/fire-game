@@ -61,14 +61,16 @@ each on its own timer (3 min by default). Counts appear only on the big screen.
 
 Anti-fraud, in layers:
 - **Room code** — `HMAC(secret, 30 s epoch)`, valid 30–60 s, so a forwarded link
-  dies within a minute. Wrong codes are throttled per IP; right ones never are.
+  dies within a minute. Wrong codes are throttled per IP at 600/min (far above
+  what a venue produces); recently expired codes say "expired" and don't count.
 - **Device cookie** — signed, HttpOnly, `SameSite=Strict`; one ballot per device
   per category. The secret is random per boot, so a restart means a rescan.
 - **Limits** — 1 submit/s and 30 per round per device and category; same-origin
   check on every write.
 - **Entry lock** — once the room is in, close entry from the admin page.
 - **Flags, not blocks** — identical-ballot clusters (same IP + browser + entry
-  window) and sudden bursts are flagged for the host to Void or Restore.
+  window) and sudden bursts are flagged for the host to Void or Restore. A
+  voided burst never spreads by itself — newcomers show as "Void N new".
 
 Still gets through, by design: one person with several devices (or a private tab
 and a fresh scan) gets several ballots. Client IP for flags is the rightmost

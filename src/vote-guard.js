@@ -7,9 +7,13 @@ export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const GUARD_DEFAULTS = Object.freeze({
   epochMs: 30_000, // the room code rotates this often; accepted for 2 epochs
   codeLength: 5,
-  failLimit: 20, // wrong codes per IP per window before a block
+  // Wrong codes per IP per window before a block. A whole venue shares one NAT
+  // address, so this sits far above anything a room produces — and guessing
+  // one of 2 live codes in 31^5 at 600/min still takes weeks per IP.
+  failLimit: 600,
   failWindowMs: 60_000,
   failBlockMs: 60_000,
+  expiredEpochs: 10, // codes this many epochs old answer "expired" and never count as failures
   minSubmitGapMs: 1000, // per device per category
   maxSubmitsPerRound: 30,
   maxDevices: 20_000, // memory bound against a script minting devices
@@ -46,6 +50,9 @@ export class VoteGuard {
     this.recent = new Map(); // categoryId -> [{at, voterId, added, picks}]
     this.flags = new Map(); // flagId -> flag
     this.flagsVersion = 0;
+    // categoryId -> {roundId, rev, noted, members: Map<group, Set<voterId>>, dirty: Set<group>}
+    // — lets the 1 Hz scan look only at groups that gained a ballot.
+    this.clusters = new Map();
   }
 
   // ---- room code -----------------------------------------------------------
@@ -72,6 +79,15 @@ export class VoteGuard {
     const epoch = Math.floor(now / this.o.epochMs);
     const given = Buffer.from(c);
     return [epoch, epoch - 1].some((e) => timingSafeEqual(given, Buffer.from(this.codeFor(e))));
+  }
+
+  /** A real code from the last few minutes — a stale photo or a slow typist, not a guess. */
+  isExpiredCode(code, now) {
+    const c = String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (c.length !== this.o.codeLength) return false;
+    const epoch = Math.floor(now / this.o.epochMs);
+    for (let e = epoch - 2; e >= epoch - this.o.expiredEpochs; e--) if (c === this.codeFor(e)) return true;
+    return false;
   }
 
   isBlocked(ip, now) {
@@ -105,13 +121,18 @@ export class VoteGuard {
     if (already) return { ok: true, voterId: already, cookie: existing, already: true };
     if (this.isBlocked(ip, now)) return { ok: false, reason: 'throttled' };
     if (!this.checkCode(code, now)) {
+      if (this.isExpiredCode(code, now)) return { ok: false, reason: 'expired' };
       this.recordFailure(ip, now);
       return { ok: false, reason: 'bad_code' };
     }
     if (!this.entryOpen) return { ok: false, reason: 'entry_closed' };
     if (this.devices.size >= this.o.maxDevices) return { ok: false, reason: 'full' };
     const voterId = randomUUID();
-    this.devices.set(voterId, { ip: String(ip ?? ''), ua: String(ua ?? '').slice(0, 300), enteredAt: now });
+    const dev = { ip: String(ip ?? ''), ua: String(ua ?? '').slice(0, 300), enteredAt: now };
+    // The cluster group (network + browser + entry window), hashed once here
+    // so the 1 Hz scan joins a 12-char key instead of rebuilding ~200 chars.
+    dev.group = shortHash(`${dev.ip}|${dev.ua}|${Math.floor(now / this.o.epochMs)}`);
+    this.devices.set(voterId, dev);
     return { ok: true, voterId, cookie: this.sign(voterId), already: false };
   }
 
@@ -160,12 +181,73 @@ export class VoteGuard {
     return { ok: true };
   }
 
-  /** Called after a ballot actually changed — feeds burst detection. */
+  /**
+   * Called after a ballot actually changed. Everything the 1 Hz scan needs is
+   * updated here, incrementally, so the scan's cost tracks new ballots rather
+   * than the size of the room (SCALE.md finding 7).
+   */
   noteSubmit(categoryId, voterId, added, picks, now) {
-    const list = this.recent.get(categoryId) ?? [];
-    list.push({ at: now, voterId, added, picks });
-    while (list.length && now - list[0].at > this.o.burstWindowMs) list.shift();
-    this.recent.set(categoryId, list);
+    const w = this._window(categoryId);
+    w.list.push({ at: now, voterId, added, picks });
+    for (const p of added) w.gains.set(p, (w.gains.get(p) ?? 0) + 1);
+    for (const p of picks) w.share.set(p, (w.share.get(p) ?? 0) + 1);
+    this._expire(w, now);
+    const st = this.clusters.get(categoryId);
+    if (st) {
+      st.noted += 1;
+      this._place(st, voterId, picks);
+    }
+  }
+
+  // ---- burst window: running counts over the last burstWindowMs -------------
+
+  _window(categoryId) {
+    let w = this.recent.get(categoryId);
+    if (!w) this.recent.set(categoryId, (w = { list: [], head: 0, gains: new Map(), share: new Map() }));
+    return w;
+  }
+
+  _expire(w, now) {
+    while (w.head < w.list.length && now - w.list[w.head].at > this.o.burstWindowMs) {
+      const e = w.list[w.head++];
+      for (const p of e.added) w.gains.set(p, w.gains.get(p) - 1);
+      for (const p of e.picks) w.share.set(p, w.share.get(p) - 1);
+    }
+    if (w.head > 1024 && w.head * 2 > w.list.length) {
+      w.list = w.list.slice(w.head);
+      w.head = 0;
+    }
+  }
+
+  // ---- cluster buckets: (device group, exact ballot) -> voters ---------------
+
+  // Move a voter into the bucket for their group + current ballot. Leaving a
+  // bucket never needs a re-check (shrinking can't raise a flag); joining one does.
+  _place(st, voterId, picks) {
+    const group = this.devices.get(voterId)?.group;
+    if (!group) return;
+    const key = `${group}|${picks.join(',')}`;
+    const old = st.keyOf.get(voterId);
+    if (old === key) return;
+    if (old) st.buckets.get(old)?.voterIds.delete(voterId);
+    let b = st.buckets.get(key);
+    if (!b) st.buckets.set(key, (b = { voterIds: new Set(), picks }));
+    b.voterIds.add(voterId);
+    st.keyOf.set(voterId, key);
+    st.dirty.add(key);
+  }
+
+  // The category's cluster state, rebuilt from its ballots whenever it is out
+  // of step: a new round, or ballots that changed without a noteSubmit (every
+  // change bumps cat.rev; every noted one bumps st.noted).
+  _clusterState(cat) {
+    let st = this.clusters.get(cat.id);
+    if (!st || st.roundId !== cat.roundId || st.rev + st.noted !== cat.rev) {
+      st = { roundId: cat.roundId, rev: cat.rev, noted: 0, buckets: new Map(), keyOf: new Map(), dirty: new Set() };
+      for (const [voterId, picks] of cat.ballots) this._place(st, voterId, picks);
+      this.clusters.set(cat.id, st);
+    }
+    return st;
   }
 
   // ---- flags ---------------------------------------------------------------
@@ -179,63 +261,63 @@ export class VoteGuard {
     const autoVoid = [];
     for (const cat of categories) {
       // Clusters: identical ballots from one (IP, user-agent, entry window).
-      const groups = new Map();
-      for (const [voterId, picks] of cat.ballots) {
-        const d = this.devices.get(voterId);
-        if (!d) continue;
-        const key = `${d.ip}|${d.ua}|${Math.floor(d.enteredAt / this.o.epochMs)}|${picks.join(',')}`;
-        let g = groups.get(key);
-        if (!g) groups.set(key, (g = { voterIds: [], picks }));
-        g.voterIds.push(voterId);
-      }
-      for (const [key, g] of groups) {
-        if (g.voterIds.length < this.o.clusterMin) continue;
+      // Only buckets that gained a voter since the last scan are looked at.
+      const st = this._clusterState(cat);
+      for (const key of st.dirty) {
+        const b = st.buckets.get(key);
+        if (!b || b.voterIds.size < this.o.clusterMin) continue;
         const id = `cl:${cat.id}:${cat.roundId}:${shortHash(key)}`;
+        // A cluster is one narrow group — same network, browser, entry window
+        // AND identical ballot — so a newcomer to a voided one is that group.
         const fresh = this._upsert(id, {
           kind: 'cluster',
           categoryId: cat.id,
           roundId: cat.roundId,
-          candidateIds: g.picks,
+          candidateIds: b.picks,
           weak: cat.picks === 1,
           at: now,
-        }, g.voterIds);
+        }, [...b.voterIds], true);
         if (fresh.length) autoVoid.push({ categoryId: cat.id, voterIds: fresh });
       }
+      st.dirty.clear();
 
       // Bursts: one candidate gaining fast while dominating recent ballots.
-      const win = (this.recent.get(cat.id) ?? []).filter((e) => now - e.at <= this.o.burstWindowMs);
-      this.recent.set(cat.id, win);
-      if (!win.length) continue;
-      const gains = new Map();
-      const share = new Map();
-      for (const e of win) {
-        for (const p of e.added) gains.set(p, [...(gains.get(p) ?? []), e.voterId]);
-        for (const p of e.picks) share.set(p, (share.get(p) ?? 0) + 1);
-      }
-      for (const [p, voters] of gains) {
-        if (voters.length < this.o.burstMinVotes || share.get(p) / win.length < this.o.burstShare) continue;
+      // Running counts make the check O(candidates); the window is only walked
+      // to collect voters when a burst is actually on.
+      const w = this.recent.get(cat.id);
+      if (!w) continue;
+      this._expire(w, now);
+      const size = w.list.length - w.head;
+      if (!size) continue;
+      for (const [p, gained] of w.gains) {
+        if (gained < this.o.burstMinVotes || w.share.get(p) / size < this.o.burstShare) continue;
+        const voters = [];
+        for (let i = w.head; i < w.list.length; i++) if (w.list[i].added.includes(p)) voters.push(w.list[i].voterId);
         const id = `bu:${cat.id}:${cat.roundId}:${p}`;
-        const fresh = this._upsert(id, {
+        // Never auto-voided: a burst is keyed by candidate alone, so later
+        // voters for a popular name are not "the same group". The admin sees
+        // them as newSinceVoid and decides.
+        this._upsert(id, {
           kind: 'burst',
           categoryId: cat.id,
           roundId: cat.roundId,
           candidateIds: [p],
           gained: voters.length,
-          sharePct: Math.round((share.get(p) / win.length) * 100),
+          sharePct: Math.round((w.share.get(p) / size) * 100),
           at: now,
-        }, voters);
-        if (fresh.length) autoVoid.push({ categoryId: cat.id, voterIds: fresh });
+        }, voters, false);
       }
     }
     return autoVoid;
   }
 
   // Create or grow a flag. Members only ever accumulate, so voiding a flag
-  // and the group later shifting can never quietly un-void someone.
-  _upsert(id, info, voterIds) {
+  // and the group later shifting can never quietly un-void someone. Returns
+  // the newcomers to void when `autoVoid` and the flag is already voided.
+  _upsert(id, info, voterIds, autoVoid) {
     let f = this.flags.get(id);
     if (!f) {
-      f = { id, voided: false, voterIds: [], ...info };
+      f = { id, voided: false, voidedMembers: 0, voterIds: [], ...info };
       this.flags.set(id, f);
       this.flagsVersion += 1;
     }
@@ -246,7 +328,9 @@ export class VoteGuard {
       Object.assign(f, info);
       this.flagsVersion += 1;
     }
-    return f.voided ? fresh : [];
+    if (!f.voided || !autoVoid) return [];
+    f.voidedMembers += fresh.length;
+    return fresh;
   }
 
   /**
@@ -269,6 +353,7 @@ export class VoteGuard {
     const f = this.flags.get(flagId);
     if (!f) return false;
     f.voided = !!voided;
+    f.voidedMembers = f.voided ? f.voterIds.length : 0;
     this.flagsVersion += 1;
     return true;
   }
@@ -279,8 +364,8 @@ export class VoteGuard {
     const out = [];
     for (const f of this.flags.values()) {
       if (current.get(f.categoryId) !== f.roundId) continue;
-      const { voterIds, ...rest } = f;
-      out.push({ ...rest, devices: voterIds.length });
+      const { voterIds, voidedMembers, ...rest } = f;
+      out.push({ ...rest, devices: voterIds.length, newSinceVoid: f.voided ? voterIds.length - voidedMembers : 0 });
     }
     return out.sort((a, b) => b.at - a.at);
   }

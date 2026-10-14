@@ -244,3 +244,32 @@ test('versions: votes bump version only; phases and config bump phoneVersion too
   assert.equal(v.phoneVersion, p1);
   assert.equal(v.version, s1 + 1);
 });
+
+// ---- final-review fixes -----------------------------------------------------
+
+test('listVersionBase makes list versions unique per boot (a restart never reuses one)', () => {
+  const a = new Vote({ names: NAMES, categories: CATS, listVersionBase: 1_700_000_000_000 });
+  assert.equal(a.listVersion, 1_700_000_000_001);
+  a.configure({ names: [...NAMES, 'Fábio Moura'], categories: CATS });
+  assert.equal(a.listVersion, 1_700_000_000_002);
+});
+
+test('seeded is true until the first admin save', () => {
+  const v = fresh();
+  assert.equal(v.screenState().seeded, true);
+  v.configure({ names: NAMES, categories: [{ ...CATS[0], id: v.categories[0].id, title: 'MVP 2026' }, { ...CATS[1], id: v.categories[1].id }] });
+  assert.equal(v.screenState().seeded, false);
+});
+
+test('rev moves only when a category’s ballots change', () => {
+  const v = fresh();
+  const mvp = v.categories[0];
+  v.open([mvp.id], undefined, 0);
+  const r0 = mvp.rev;
+  v.submit('a', ballot(v, mvp, [0, 1]), 1);
+  assert.equal(mvp.rev, r0 + 1);
+  v.submit('a', ballot(v, mvp, [1, 0]), 2); // identical
+  assert.equal(mvp.rev, r0 + 1);
+  v.reset([mvp.id]);
+  assert.ok(mvp.rev > r0 + 1, 'a cleared round is a change');
+});

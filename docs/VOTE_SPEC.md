@@ -122,8 +122,11 @@ and is accepted for the current and previous epoch, so a code works for 30–60 
 A link or photo forwarded to a group chat goes dead within a minute. The phone
 calls `POST /vote/enter`, then strips `k` from the address bar.
 - Brute force: 31⁵ ≈ 28.6 M codes, 2 valid at a time. Wrong codes are throttled
-  per IP (20 failures/min, then 429 for a minute). Successful entries are *not*
-  limited per IP — a whole event behind one NAT scans at once.
+  per IP at 600 failures/min, then 429 for a minute — far above anything a venue
+  produces (a whole event shares one NAT address), yet guessing still takes weeks
+  per IP. A real code from the last 5 minutes answers "expired" and never counts
+  as a failure, so stale photos and slow typists can't lock the room out.
+  Successful entries are never counted.
 
 **2. Device cookie (one ballot per device per category).** Entering sets
 `tv_voter=<id>.<hmac>`: HttpOnly, `SameSite=Strict`, Secure on TLS, 12 h.
@@ -157,7 +160,10 @@ category:
 The fraud panel lists flags live, tagged with their category. **Void** removes
 that group's ballots in that category from the counts (the screen updates
 immediately) and bars those devices from it for the rest of the round;
-**Restore** undoes it. The IP used is the client address as Google's front end
+**Restore** undoes it. A voided *cluster* also voids newcomers to that exact
+group (same network, browser, entry window and identical ballot). A voided
+*burst* never spreads: later voters for that candidate are shown as "N new since
+void" and the host decides with one click ("Void N new"). The IP used is the client address as Google's front end
 saw it (the rightmost `X-Forwarded-For` entry), never a client-supplied value.
 
 **What still gets through:** one person with several phones, or one person

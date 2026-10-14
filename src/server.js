@@ -204,7 +204,14 @@ const batucada = new Batucada({
 // stream under Cloud Run's 1.000-connection cap). VOTE_CODE_MS and
 // VOTE_MIN_DURATION_MS exist for the test harnesses only — an expired-code or
 // deadline check should not take a minute.
-const vote = new Vote({ names: SEED_NAMES, categories: SEED_CATEGORIES, minDurationMs: numEnv('VOTE_MIN_DURATION_MS') });
+// listVersionBase: list versions must never repeat across a restart — a phone
+// that slept through one would otherwise send ids from the old list.
+const vote = new Vote({
+  names: SEED_NAMES,
+  categories: SEED_CATEGORIES,
+  minDurationMs: numEnv('VOTE_MIN_DURATION_MS'),
+  listVersionBase: Date.now(),
+});
 const voteGuard = new VoteGuard({ epochMs: numEnv('VOTE_CODE_MS') });
 // Restarts reuse listVersion/roundId numbers from 1; this tells a phone (and
 // its HTTP cache) that a "v2" from before a restart is not this "v2".
@@ -964,10 +971,15 @@ app.post('/vote/ballot', (req, res) => {
   const voterId = voterOf(req);
   if (!voterId) return res.status(401).json({ ok: false, reason: 'not_entered' });
   const b = req.body || {};
-  const gate = voteGuard.allowSubmit(voterId, b.categoryId, b.roundId, now);
+  const live = { ...vote.phoneState(), boot: VOTE_BOOT };
+  const cat = vote.categories.find((c) => c.id === b.categoryId);
+  if (!cat) return res.status(400).json({ ok: false, reason: 'unknown_category', live });
+  // The limiter keys on the server's own category id and round, never on body
+  // values: those a script could vary to mint unbounded keys (memory on the
+  // one instance) or to sidestep the 1/s limit.
+  const gate = voteGuard.allowSubmit(voterId, cat.id, cat.roundId, now);
   if (!gate.ok) return res.status(429).json({ ok: false, reason: gate.reason });
   const r = vote.submit(voterId, { categoryId: b.categoryId, roundId: b.roundId, listVersion: b.listVersion, picks: b.picks }, now);
-  const live = { ...vote.phoneState(), boot: VOTE_BOOT };
   if (!r.ok) return res.status(BALLOT_STATUS[r.reason] ?? 400).json({ ok: false, reason: r.reason, live });
   if (r.changed) voteGuard.noteSubmit(b.categoryId, voterId, r.added, r.ballot, now);
   res.json({ ok: true, ballot: r.ballot, live });

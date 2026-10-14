@@ -289,6 +289,8 @@ async function applyLive(live) {
     dropOtherBoots();
     if (restarted) {
       S.ballots = {}; // the server forgot them, and our cookie died with its secret
+      S.listVersion = -1; // never trust a name list from before the restart
+      S.picks = [];
       refreshMe().then(render);
     }
   }
@@ -323,7 +325,8 @@ async function enter(code, fromQr) {
   $('gateMsg').textContent =
     reason === 'entry_closed' ? 'Entry is closed' :
     reason === 'throttled' ? 'Too many tries — wait a minute and scan again' :
-    reason === 'bad_code' ? (fromQr ? 'That code expired — scan the screen again' : "That code isn't right — check the big screen") :
+    reason === 'expired' ? 'That code expired — scan the screen again' :
+    reason === 'bad_code' ? (fromQr ? "That code isn't valid — scan the screen again" : "That code isn't right — check the big screen") :
     "Couldn't reach the server — try again";
 }
 
@@ -343,7 +346,9 @@ function openBallot(id, push = true) {
   S.catId = id;
   S.query = '';
   $('q').value = '';
-  S.picks = loadDraft(cat) ?? [...(submittedPicks(cat) ?? [])];
+  const sub = submittedPicks(cat);
+  // Open: carry on with the draft. Closed: show what actually counted first.
+  S.picks = isOpen(cat) ? loadDraft(cat) ?? [...(sub ?? [])] : [...(sub ?? loadDraft(cat) ?? [])];
   if (push) history.pushState({ cat: id }, '', '/vote');
   render();
   scrollTo(0, 0);
@@ -369,6 +374,7 @@ function maybeAutoOpen() {
 // ---- rendering ------------------------------------------------------------
 function statusOf(cat) {
   const sub = submittedPicks(cat);
+  if (S.voided.has(cat.id)) return 'Removed by the organizer';
   if (cat.phase === 'setup') return 'Opens soon';
   if (!isOpen(cat)) return sub ? 'Closed · your votes counted ✓' : 'Closed';
   const draft = loadDraft(cat);
@@ -434,18 +440,22 @@ function renderTray() {
   const cat = currentCat();
   if (!cat) return;
   const sub = submittedPicks(cat);
-  const same = sameSet(sub, S.picks);
+  const voided = S.voided.has(cat.id);
   const open = isOpen(cat);
+  // Once voting closes the tray shows the ballot that counted, never a later draft.
+  const shown = !open && sub ? sub : S.picks;
+  const changedLate = !open && !!sub && !sameSet(sub, S.picks);
+  const same = !voided && sameSet(sub, shown);
   $('tray').classList.toggle('submitted', same);
-  $('chips').innerHTML = S.picks.map((id) => `<button type="button" class="chip" data-id="${id}"><span>${esc(S.byId.get(id)?.name ?? '?')}</span><b aria-label="Remove">×</b></button>`).join('');
-  $('picked').textContent = `${S.picks.length} of ${cat.picks}`;
+  $('chips').innerHTML = shown.map((id) => `<button type="button" class="chip" data-id="${id}"><span>${esc(S.byId.get(id)?.name ?? '?')}</span><b aria-label="Remove">×</b></button>`).join('');
+  $('picked').textContent = `${shown.length} of ${cat.picks}`;
   const btn = $('submit');
-  btn.disabled = !S.entered || !open || S.inflight || same || S.picks.length !== cat.picks || S.voided.has(cat.id);
-  btn.textContent = S.inflight ? 'Submitting…' : same ? 'Submitted ✓' : sub ? 'Update votes' : `Submit ${cat.picks} vote${cat.picks > 1 ? 's' : ''}`;
+  btn.disabled = !S.entered || !open || S.inflight || same || voided || S.picks.length !== cat.picks;
+  btn.textContent = voided ? 'Removed' : S.inflight ? 'Submitting…' : same ? 'Submitted ✓' : sub ? 'Update votes' : `Submit ${cat.picks} vote${cat.picks > 1 ? 's' : ''}`;
   $('trayNote').textContent =
-    S.voided.has(cat.id) ? 'Your ballot in this category was removed by the organizer' :
+    voided ? 'Your ballot in this category was removed by the organizer' :
     cat.phase === 'setup' ? "Voting hasn't started yet" :
-    !open ? (sub ? 'Voting closed — your votes counted ✓' : 'Voting closed') :
+    !open ? (changedLate ? 'Voting closed — your submitted votes counted ✓; later changes did not' : sub ? 'Voting closed — your votes counted ✓' : 'Voting closed') :
     same ? `Your ${cat.picks} votes are in ✓ — you can change them until time runs out` : '';
 }
 
@@ -506,6 +516,7 @@ async function submit() {
     if (r.json?.live) await applyLive(r.json.live);
     if (r.status === 200) {
       S.ballots[cat.id] = { roundId: cat.roundId, picks: r.json.ballot };
+      $('deadlineMsg').hidden = true; // it counted, even if the reply arrived after the deadline
       navigator.vibrate?.(30);
       toast('Your votes are in ✓', 'ok');
       return;
@@ -583,10 +594,11 @@ function tickClock() {
   if (cat) {
     const left = cat.phase === 'open' ? cat.endsAt - now : 0;
     $('timer').textContent = cat.phase === 'open' ? mmss(left) : cat.phase === 'setup' ? 'Soon' : 'Closed';
-    const unsent = S.picks.length > 0 && !sameSet(submittedPicks(cat), S.picks);
+    const unsent = !S.inflight && S.picks.length > 0 && !sameSet(submittedPicks(cat), S.picks);
     $('warn').hidden = !(cat.phase === 'open' && left > 0 && left <= 30_000 && unsent);
     const key = `${cat.id}:${cat.roundId}`;
-    if (cat.phase !== 'setup' && left <= 0 && !S.deadlineShown.has(key)) {
+    // No verdict while a submit is in flight: its reply decides what counted.
+    if (cat.phase !== 'setup' && left <= 0 && !S.inflight && !S.deadlineShown.has(key)) {
       S.deadlineShown.add(key);
       if (unsent) {
         $('deadlineMsg').textContent = "Time's up — your unsubmitted picks didn't count.";

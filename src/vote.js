@@ -31,11 +31,16 @@ const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
  * list, so `listVersion` travels with every ballot to catch a stale phone.
  */
 export class Vote {
-  constructor({ names, categories, minDurationMs } = {}) {
+  constructor({ names, categories, minDurationMs, listVersionBase } = {}) {
     // Overridable only so browser checks can watch a deadline pass in seconds.
     this.minDurationMs = minDurationMs ?? LIMITS.minDurationMs;
     this.candidates = []; // [{id, name}], id === index
-    this.listVersion = 0;
+    // Candidate ids are list positions, and a phone can sleep through a
+    // restart: if versions restarted at 1, a "v2" from before would match a
+    // different "v2" after and votes would land on the wrong names. The server
+    // passes a per-boot base so a version is never reused.
+    this.listVersion = listVersionBase ?? 0;
+    this.seeded = false; // true until the first admin save — the admin page's restore cue
     this.categories = [];
     this.stage = { mode: 'auto', categoryIds: [] };
     this.feed = []; // [{seq, categoryId, candidateId, at}] — newest last
@@ -46,6 +51,7 @@ export class Vote {
     if (names || categories) {
       const r = this.configure({ names: names ?? [], categories: categories ?? [] });
       if (!r.ok) throw new Error(`bad seed: ${r.errors.join(' ')}`);
+      this.seeded = true;
     }
   }
 
@@ -115,6 +121,7 @@ export class Vote {
     });
     this.stage.categoryIds = this.stage.categoryIds.filter((id) => kept.has(id));
     if (this.stage.mode === 'pinned' && this.stage.categoryIds.length === 0) this.stage.mode = 'auto';
+    this.seeded = false;
     this._touch(true);
     return { ok: true };
   }
@@ -182,6 +189,7 @@ export class Vote {
     for (const p of added) cat.counts[p] += 1;
     if (!prev) cat.ballotCount += 1;
     cat.ballots.set(voterId, next);
+    cat.rev += 1;
     for (const p of added) this._pushFeed(cat.id, p, now);
     this._touch(false);
     return { ok: true, ballot: next, changed: true, added };
@@ -293,6 +301,7 @@ export class Vote {
   screenState() {
     return {
       listVersion: this.listVersion,
+      seeded: this.seeded,
       candidates: this.candidates,
       stage: { mode: this.stage.mode, pinned: this.stage.categoryIds, show: this.resolveStage() },
       categories: this.categories.map((c) => ({
@@ -327,6 +336,7 @@ export class Vote {
       voided: new Set(),
       counts: [],
       ballotCount: 0,
+      rev: 0, // bumps whenever this category's ballots change — the fraud scan's dirty flag
     };
     this._clear(cat);
     return cat;
@@ -342,6 +352,7 @@ export class Vote {
     cat.voided = new Set();
     cat.counts = new Array(this.candidates.length).fill(0);
     cat.ballotCount = 0;
+    cat.rev += 1;
     this.feed = this.feed.filter((e) => e.categoryId !== cat.id);
   }
 

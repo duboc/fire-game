@@ -62,7 +62,8 @@
   .flag .cat{grid-column:1; font-size:12px; color:var(--g-yellow-700); text-transform:uppercase; letter-spacing:.06em;}
   .flag .why{grid-column:1; font-weight:500;}
   .flag .names{grid-column:1; font-size:14px; color:var(--ink-2);}
-  .flag button.void{grid-column:2; grid-row:1 / span 3; align-self:center; border-color:rgba(234,67,53,.5); color:var(--g-red-700);}
+  .flag .acts{grid-column:2; grid-row:1 / span 3; align-self:center; display:flex; flex-direction:column; gap:6px;}
+  .flag button.void,.flag button.void-new{border-color:rgba(234,67,53,.5); color:var(--g-red-700);}
   .flag.voided{opacity:.6;}
   .flag.voided button.void{border-color:var(--line); color:var(--ink);}
 
@@ -248,8 +249,8 @@ function maybeOfferRestore() {
   try { d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); } catch { /* ignore */ }
   const differs = d && (d.names.join('\n') !== F.candidates.map((c) => c.name).join('\n') ||
     JSON.stringify(d.categories) !== JSON.stringify(F.categories.map(({ title, picks }) => ({ title, picks }))));
-  // listVersion 1 = the server is still on its boot seed: memory was wiped.
-  $('restoreBar').hidden = !(F.listVersion === 1 && differs);
+  // seeded = the server is still on its boot setup: memory was wiped.
+  $('restoreBar').hidden = !(F.seeded && differs);
 }
 
 $('names').addEventListener('input', () => { dirty = true; validate(); });
@@ -360,7 +361,7 @@ $('entryBtn').addEventListener('click', () => post('/vote/admin/entry', { open: 
 
 // ---- fraud panel -------------------------------------------------------------
 function renderFlags() {
-  const key = F.flags.map((f) => `${f.id}:${f.voided}:${f.devices}`).join('|') + `|${F.categories.reduce((s, c) => s + c.voidedCount, 0)}`;
+  const key = F.flags.map((f) => `${f.id}:${f.voided}:${f.devices}:${f.newSinceVoid}`).join('|') + `|${F.categories.reduce((s, c) => s + c.voidedCount, 0)}`;
   if (key === flagsKey) return;
   flagsKey = key;
   const title = new Map(F.categories.map((c) => [c.id, c.title]));
@@ -369,19 +370,24 @@ function renderFlags() {
     const why = f.kind === 'cluster'
       ? `${f.devices} devices · same network & browser · joined within ${Math.round(F.codeMs / 1000)} s · identical ballot${f.weak ? ' (pick-1 category: a weaker signal)' : ''}`
       : `+${f.gained} votes in 10 s · on ${f.sharePct}% of ballots in that window`;
-    return `<div class="flag ${f.voided ? 'voided' : ''}" data-id="${esc(f.id)}"><span class="cat">${esc(title.get(f.categoryId) ?? '')}</span>` +
+    // A voided burst never spreads by itself: newcomers since the void wait
+    // for the host's one-click decision.
+    const more = f.voided && f.newSinceVoid > 0 ? `<button class="void-new">Void ${f.newSinceVoid} new</button>` : '';
+    return `<div class="flag ${f.kind} ${f.voided ? 'voided' : ''}" data-id="${esc(f.id)}"><span class="cat">${esc(title.get(f.categoryId) ?? '')}</span>` +
       `<span class="why">${esc(why)}</span><span class="names">${esc(f.candidateIds.map(name).join(', '))}</span>` +
-      `<button class="void">${f.voided ? 'Restore' : 'Void'}</button></div>`;
+      `<span class="acts">${more}<button class="void">${f.voided ? 'Restore' : 'Void'}</button></span></div>`;
   }).join('') : '<p class="muted">No suspicious patterns.</p>';
   const voided = F.categories.reduce((s, c) => s + c.voidedCount, 0);
   $('voidedTotal').textContent = `${voided} voided ballot${voided === 1 ? '' : 's'}`;
 }
 $('flags').addEventListener('click', async (e) => {
-  const b = e.target.closest('button.void');
+  const b = e.target.closest('button.void, button.void-new');
   if (!b) return;
   const id = b.closest('.flag').dataset.id;
   const f = F.flags.find((x) => x.id === id);
-  await post('/vote/admin/void', { flagId: id, restore: !!f?.voided });
+  // "Void N new" re-voids the whole flag (idempotent for those already out).
+  const restore = b.classList.contains('void') && !!f?.voided;
+  await post('/vote/admin/void', { flagId: id, restore });
 });
 
 // ---- results ------------------------------------------------------------------

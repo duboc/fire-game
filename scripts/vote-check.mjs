@@ -135,9 +135,12 @@ async function apiChecks() {
     const bad = client(A.base, { ip: '198.51.100.1' });
     const b1 = await enterWith(bad, 'ZZZZZ');
     ok(b1.status === 403 && b1.json.reason === 'bad_code', 'wrong code → 403 bad_code');
-    for (let i = 0; i < 19; i++) await enterWith(bad, 'ZZZZZ');
-    const thr = await enterWith(bad, (await frame(admin)).code);
-    ok(thr.status === 429 && thr.json.reason === 'throttled', '20 wrong codes from one IP → 429, even with the right code');
+    for (let i = 0; i < 598; i++) await enterWith(bad, 'ZZZZZ');
+    const below = await enterWith(client(A.base, { ip: '198.51.100.1' }), (await frame(admin)).code);
+    ok(below.status === 200, '599 wrong codes from one IP (a whole venue on one NAT) still let a right one in');
+    await enterWith(bad, 'ZZZZZ');
+    const thr = await enterWith(client(A.base, { ip: '198.51.100.1' }), (await frame(admin)).code);
+    ok(thr.status === 429 && thr.json.reason === 'throttled', '600 wrong codes from one IP → 429 (brute force), even with the right code');
     const x = await client(A.base).req('/vote/enter', { method: 'POST', body: { code: f0.code }, headers: { 'sec-fetch-site': 'cross-site' } });
     ok(x.status === 403 && x.json.reason === 'cross_site', 'cross-site POST refused');
     const dev = client(A.base, { ip: '198.51.100.2' });
@@ -174,6 +177,10 @@ async function apiChecks() {
     ok(leaks(g.json).length === 0, 'the ballot response carries no counts');
     const tf = await ballot(dev, cat, live.listVersion, [0, 1, 3]);
     ok(tf.status === 429 && tf.json.reason === 'too_fast', 'a second submit within 1 s → too_fast');
+    const tr = await ballot(dev, cat, live.listVersion, [0, 1, 3], { roundId: 999 });
+    ok(tr.status === 429 && tr.json.reason === 'too_fast', "the 1/s limit keys on the server's category and round, not the request body");
+    const junk = await ballot(dev, { id: 'x'.repeat(5000), roundId: 1 }, live.listVersion, [0, 1, 2]);
+    ok(junk.status === 400 && junk.json.reason === 'unknown_category', 'an unknown category is refused before the rate limiter sees it');
     let f = await frame(admin);
     let fc = f.categories.find((c) => c.id === cat.id);
     ok(fc.counts.slice(0, 4).join() === '1,1,1,0' && fc.ballotCount === 1, 'the admin frame shows the counts');
@@ -191,7 +198,7 @@ async function apiChecks() {
     const old = (await frame(admin)).code;
     await sleep(CODE_MS * 2 + 200);
     const late = await enterWith(client(A.base, { ip: '198.51.100.3' }), old);
-    ok(late.status === 403 && late.json.reason === 'bad_code', 'a code older than two epochs is refused');
+    ok(late.status === 403 && late.json.reason === 'expired', 'a code older than two epochs is refused as "expired" (not counted as a guess)');
     await admin.req('/vote/admin/entry', { method: 'POST', body: { open: false } });
     const locked = await enterWith(client(A.base, { ip: '198.51.100.4' }), (await frame(admin)).code);
     ok(locked.status === 403 && locked.json.reason === 'entry_closed', 'entry closed → new devices refused');
@@ -243,6 +250,7 @@ async function apiChecks() {
       ok((await moved.req('/vote/me')).json.entered === false, 'a cookie from before a restart is not honoured');
       const liveB = (await moved.req('/vote/live')).json;
       ok(liveB.boot !== live0.json.boot, 'a new boot id after restart');
+      ok(liveB.listVersion !== live0.json.listVersion, 'list versions never repeat across a restart');
       const mb = await ballot(moved, liveB.categories[0], liveB.listVersion, [0, 1, 2]);
       ok(mb.status === 401, '…and it cannot vote');
     } finally { B.child.kill(); }
@@ -361,7 +369,12 @@ async function phoneChecks() {
     await gp.goto(`${S.base}/vote`);
     await gp.waitForSelector('#gate:not([hidden])');
     ok((await gp.textContent('#gateMsg')).includes('Scan the QR on the big screen'), 'no cookie → "Scan the QR on the big screen to vote"');
+    const stale = (await frame(admin)).code;
     await gp.goto(`${S.base}/vote?k=ZZZZZ`);
+    await gp.waitForSelector('#gate:not([hidden])');
+    ok(/isn.t valid/.test(await gp.textContent('#gateMsg')), 'a garbage code says it isn\'t valid');
+    await sleep(CODE_MS * 2 + 200);
+    await gp.goto(`${S.base}/vote?k=${stale}`);
     await gp.waitForSelector('#gate:not([hidden])');
     ok(/expired/.test(await gp.textContent('#gateMsg')), 'an expired code says so');
     await gp.fill('#codeInput', (await frame(admin)).code.toLowerCase());
@@ -369,6 +382,77 @@ async function phoneChecks() {
     await gp.waitForSelector('#gate', { state: 'hidden' });
     ok(true, 'typing the code (any case) lets you in');
     await gp.screenshot({ path: `${SHOTS}/phone-home.png` });
+
+    console.log('\n== phone: honest about what counted ==');
+    const pick3 = async (pg, qs) => { for (const q of qs) { await pg.fill('#q', q); await pg.press('#q', 'Enter'); } };
+    const endsOf = async (id) => (await admin.req('/vote/live')).json.categories.find((c) => c.id === id).endsAt;
+    {
+      // (a) an accepted ballot whose reply lands after the deadline
+      live = (await admin.req('/vote/live')).json;
+      const c3 = live.categories[2];
+      await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [c3.id], durationMs: 9000 } });
+      await page.click('#back');
+      await page.waitForSelector(`#cards .cat-card.open[data-id="${c3.id}"]`, { timeout: 8000 });
+      await page.click(`#cards .cat-card[data-id="${c3.id}"]`);
+      await pick3(page, ['ana souza', 'bruno lima', 'carla dias']);
+      await page.route('**/vote/ballot', async (route) => { const resp = await route.fetch(); await sleep(2500); await route.fulfill({ response: resp }); });
+      await sleep(Math.max(0, (await endsOf(c3.id)) - Date.now() - 1200));
+      await page.click('#submit');
+      await sleep(4000);
+      await page.unroute('**/vote/ballot');
+      ok((await frame(admin)).categories.find((c) => c.id === c3.id).ballotCount === 1, '(setup) the late-replying ballot was counted');
+      ok(await page.isHidden('#deadlineMsg'), 'a counted ballot whose reply lands after the deadline never says "didn\'t count"');
+      ok(/counted/.test(await page.textContent('#trayNote')), '…and the tray says it counted');
+    }
+    {
+      // (b) submitted A, changed to B, then the deadline: only A counted
+      const c4 = live.categories[3];
+      await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [c4.id], durationMs: 9000 } });
+      await page.click('#back');
+      await page.waitForSelector(`#cards .cat-card.open[data-id="${c4.id}"]`, { timeout: 8000 });
+      await page.click(`#cards .cat-card[data-id="${c4.id}"]`);
+      await pick3(page, ['ana souza', 'bruno lima', 'carla dias']);
+      await page.click('#submit');
+      await page.waitForSelector('#tray.submitted');
+      await page.locator('#chips .chip').first().click();
+      await pick3(page, ['mei lin']);
+      await sleep(Math.max(0, (await endsOf(c4.id)) - Date.now() + 800));
+      const chipsText = await page.textContent('#chips');
+      ok(chipsText.includes('Ana Souza') && !chipsText.includes('Mei Lin'), 'after close the tray shows the ballot that actually counted');
+      ok(/later changes/.test(await page.textContent('#trayNote')), '…and says the later changes did not');
+    }
+    {
+      // (c) a voided ballot is never shown as counted
+      const ua = devices['iPhone 13'].userAgent;
+      await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [c1.id] } }); // fresh round, the only one open
+      const fr = await frame(admin);
+      await sleep(fr.codeRotatesAt - fr.now + 50); // phone and look-alikes share one entry window
+      const vcode = (await frame(admin)).code;
+      const vp = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage();
+      await vp.goto(`${S.base}/vote?k=${vcode}`);
+      const lv = (await admin.req('/vote/live')).json;
+      const c1now = lv.categories.find((c) => c.id === c1.id);
+      for (let i = 0; i < 4; i++) {
+        const b = client(S.base, { ua });
+        await enterWith(b, vcode);
+        await ballot(b, c1now, lv.listVersion, [0, 1, 4]);
+      }
+      await vp.waitForSelector('#ballot:not([hidden])');
+      await pick3(vp, ['ana souza', 'joao pedro', 'bruno lima']);
+      await vp.click('#submit');
+      await vp.waitForSelector('#tray.submitted');
+      await sleep(1300);
+      const vflag = (await frame(admin)).flags.find((x) => x.kind === 'cluster' && x.categoryId === c1.id && x.devices === 5);
+      ok(!!vflag, '(setup) the phone and four look-alikes form a cluster');
+      if (vflag) await admin.req('/vote/admin/void', { method: 'POST', body: { flagId: vflag.id } });
+      await vp.reload();
+      await vp.waitForSelector('#ballot:not([hidden])');
+      ok(!(await vp.textContent('#submit')).includes('Submitted'), 'a voided ballot is never shown as "Submitted ✓"');
+      ok(/removed by the organizer/.test(await vp.textContent('#trayNote')), '…the tray says it was removed');
+      await vp.click('#back');
+      await vp.waitForSelector('#home:not([hidden])');
+      ok(/Removed/.test(await vp.textContent(`#cards .cat-card[data-id="${c1.id}"] .s`)), '…and so does its home card');
+    }
 
     console.log('\n== phone: 360 px, 60-char names ==');
     const long = 'Maria Eduarda Quintela de Albuquerque Vasconcelos e Silva Jr';
@@ -554,6 +638,36 @@ async function adminChecks() {
     await page.waitForFunction(() => document.querySelector('#flags .flag button.void')?.textContent.trim() === 'Restore');
     ok((await frame(admin)).categories.find((c) => c.id === cat.id).voidedCount === 5, 'Void removes the five ballots');
     ok(/5/.test(await page.textContent('#voidedTotal')), 'voided total updates');
+
+    // A burst flag never spreads on its own: newcomers wait for the host.
+    {
+      const c3 = live.categories[2];
+      await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [c3.id], durationMs: 120_000 } });
+      const l3 = (await admin.req('/vote/live')).json;
+      const cat3 = l3.categories.find((c) => c.id === c3.id);
+      const wave = async (tag) => {
+        const code3 = (await frame(admin)).code;
+        for (let i = 0; i < 20; i++) {
+          const b = client(S.base, { ip: `198.18.${tag}.${i + 1}`, ua: `Wave${tag}-${i}` });
+          await enterWith(b, code3);
+          await ballot(b, cat3, l3.listVersion, [10, (i % 50) + 20, (i % 50) + 70]);
+        }
+      };
+      await wave(1);
+      await page.waitForSelector(`#flags .flag.burst`, { timeout: 4000 });
+      await page.click('#flags .flag.burst button.void');
+      await page.waitForFunction(() => document.querySelector('#flags .flag.burst button.void')?.textContent.trim() === 'Restore');
+      await sleep(11_000); // a fresh 10 s window
+      await wave(2);
+      await page.waitForSelector('#flags .flag.burst button.void-new', { timeout: 4000 });
+      let fc3 = (await frame(admin)).categories.find((c) => c.id === c3.id);
+      ok(fc3.voidedCount === 20 && fc3.ballotCount === 20, 'the second wave is NOT auto-voided');
+      ok(/Void 20 new/.test(await page.textContent('#flags .flag.burst button.void-new')), 'the panel offers "Void 20 new"');
+      await page.click('#flags .flag.burst button.void-new');
+      await sleep(400);
+      fc3 = (await frame(admin)).categories.find((c) => c.id === c3.id);
+      ok(fc3.voidedCount === 40 && fc3.ballotCount === 0, 'one click voids the newcomers');
+    }
 
     await page.click(`#resTabs button[data-id="${c2.id}"]`);
     await page.fill('#resFilter', 'joao');
