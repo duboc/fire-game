@@ -469,9 +469,133 @@ async function screenChecks() {
   }
 }
 
+async function adminChecks() {
+  let S = startServer(8149);
+  const browser = await chromium.launch();
+  try {
+    await S.ready;
+    console.log('\n== admin: login and setup ==');
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
+    const page = await ctx.newPage();
+    const login = async () => {
+      await page.goto(`${S.base}/vote/admin`);
+      await page.waitForSelector('#login:not([hidden])');
+      await page.fill('#token', TOKEN);
+      await page.click('#loginBtn');
+      await page.waitForSelector('#app:not([hidden])');
+    };
+    await login();
+    ok(true, 'login reveals the admin app');
+    await page.waitForFunction(() => document.getElementById('names').value.split('\n').length === 120);
+    ok(/120/.test(await page.textContent('#namesCount')), 'names textarea holds the 120 seed names');
+
+    await page.fill('#names', (await page.inputValue('#names')) + '\nana souza');
+    ok(/same name/.test(await page.textContent('#namesErr')), 'a duplicate (any case/accents) is flagged inline');
+    ok(await page.isDisabled('#saveConfig'), '…and Save is disabled');
+    await page.fill('#names', SEED_NAMES.join('\n'));
+    await page.locator('#cats .cat-row').first().locator('input.title').fill('MVP 2026');
+    await page.locator('#cats .cat-row').first().locator('input.picks').fill('2');
+    await page.click('#saveConfig');
+    const admin = await adminClient(S.base);
+    await sleep(300);
+    let live = (await admin.req('/vote/live')).json;
+    ok(live.categories[0].title === 'MVP 2026' && live.categories[0].picks === 2, 'saving updates title and N');
+
+    console.log('\n== admin: control board ==');
+    const [c1, c2] = live.categories;
+    await page.check(`#board .board-row[data-id="${c1.id}"] input.sel`);
+    await page.check(`#board .board-row[data-id="${c2.id}"] input.sel`);
+    await page.click('#dur button[data-min="1"]');
+    await page.click('#openSelected');
+    await sleep(300);
+    live = (await admin.req('/vote/live')).json;
+    const o1 = live.categories.find((c) => c.id === c1.id);
+    ok(o1.phase === 'open' && Math.abs(o1.endsAt - Date.now() - 60_000) < 5000, 'open selected with the 1-min chip');
+    ok(live.categories.find((c) => c.id === c2.id).phase === 'open', '…both categories');
+    ok(await page.isDisabled('#saveConfig'), 'setup is locked while a category is open');
+
+    const v = client(S.base, { ip: '192.0.2.77' });
+    await enterWith(v, (await frame(admin)).code);
+    await ballot(v, o1, live.listVersion, [0, 1]);
+    await page.waitForFunction((id) => document.querySelector(`#board .board-row[data-id="${id}"] .bc`)?.textContent.includes('1'), c1.id);
+    ok(true, 'the board shows the ballot count live');
+    await page.click(`#board .board-row[data-id="${c1.id}"] button.close`);
+    let dialog = '';
+    page.once('dialog', async (d) => { dialog = d.message(); await d.accept(); });
+    await page.click(`#board .board-row[data-id="${c1.id}"] button.open`);
+    await sleep(300);
+    ok(/clears its 1 ballot/.test(dialog), 'reopening a category with ballots asks first');
+    await page.click(`#board .board-row[data-id="${c2.id}"] button.onscreen`);
+    await sleep(300);
+    ok((await frame(admin)).stage.show.join() === c2.id, '"On screen" pins the stage');
+    await page.click('#stageAuto');
+    await sleep(300);
+    ok((await frame(admin)).stage.mode === 'auto', '"Auto" restores the automatic stage');
+    await page.click('#entryBtn');
+    await sleep(300);
+    ok((await admin.req('/vote/live')).json.entryOpen === false, 'Close entry works');
+    await page.click('#entryBtn');
+
+    console.log('\n== admin: fraud panel and results ==');
+    live = (await admin.req('/vote/live')).json;
+    const cat = live.categories.find((c) => c.id === c2.id);
+    const fr = await frame(admin);
+    await sleep(fr.codeRotatesAt - fr.now + 50);
+    const code = (await frame(admin)).code;
+    for (let i = 0; i < 5; i++) {
+      const b = client(S.base, { ip: '203.0.113.60', ua: 'BotPhone/2.0' });
+      await enterWith(b, code);
+      await ballot(b, cat, live.listVersion, [7, 8, 9]);
+    }
+    await page.waitForSelector('#flags .flag', { timeout: 4000 });
+    ok(/identical ballot/.test(await page.textContent('#flags .flag .why')), 'cluster flag explained in plain English');
+    ok((await page.textContent('#flags .flag .names')).includes(SEED_NAMES[7]), '…naming the ballot');
+    await page.click('#flags .flag button.void');
+    await page.waitForFunction(() => document.querySelector('#flags .flag button.void')?.textContent.trim() === 'Restore');
+    ok((await frame(admin)).categories.find((c) => c.id === cat.id).voidedCount === 5, 'Void removes the five ballots');
+    ok(/5/.test(await page.textContent('#voidedTotal')), 'voided total updates');
+
+    await page.click(`#resTabs button[data-id="${c2.id}"]`);
+    await page.fill('#resFilter', 'joao');
+    ok((await page.locator('#resTable tbody tr').count()) >= 1 && (await page.textContent('#resTable tbody')).includes('João'), 'results filter uses the same search');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#csv')]);
+    const csv = await (await import('node:fs/promises')).readFile(await dl.path(), 'utf8');
+    ok(csv.startsWith('category,rank,name,votes\n') && csv.includes('"MVP 2026"'), 'CSV export covers every category');
+    await page.screenshot({ path: `${SHOTS}/admin.png`, fullPage: true });
+
+    console.log('\n== admin: restore after restart ==');
+    await admin.req('/vote/admin/close', { method: 'POST', body: { categoryIds: [c1.id, c2.id] } });
+    const exited = new Promise((r) => S.child.once('exit', r));
+    S.child.kill();
+    await exited; // the port must be free before the restart binds it
+    S = startServer(8149);
+    await S.ready;
+    await login();
+    await page.waitForSelector('#restoreBar:not([hidden])');
+    await page.click('#restoreBtn');
+    await page.click('#saveConfig');
+    await sleep(300);
+    const after = (await (await adminClient(S.base)).req('/vote/live')).json;
+    ok(after.categories[0].title === 'MVP 2026', 'the saved setup is restored after a restart');
+
+    console.log('\n== admin: phone width ==');
+    const m = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage();
+    await m.goto(`${S.base}/vote/admin`);
+    await m.fill('#token', TOKEN);
+    await m.click('#loginBtn');
+    await m.waitForSelector('#app:not([hidden])');
+    ok(await m.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth), 'admin has no horizontal scroll on a phone');
+    await m.screenshot({ path: `${SHOTS}/admin-phone.png`, fullPage: true });
+  } finally {
+    await browser.close();
+    S.child.kill();
+  }
+}
+
 await apiChecks();
 await phoneChecks();
 await screenChecks();
+await adminChecks();
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Live Vote · admin</title>
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  /* Views toggle with the hidden attribute; keep it stronger than any display: rule. */
+  [hidden]{display:none !important;}
+
+  body{min-height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  button{font:inherit; color:inherit; cursor:pointer; min-height:44px; padding:0 14px; border-radius:var(--r-sm);
+    border:1px solid var(--line); background:var(--surface-2);}
+  button:disabled{opacity:.45; cursor:not-allowed;}
+  button.primary{background:var(--primary); border-color:transparent; color:#fff; font-weight:600;}
+  button[aria-pressed="true"]{background:var(--primary-dim); border-color:var(--primary); color:var(--g-blue-700);}
+  input,textarea{font:16px var(--font); color:var(--ink); background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm);}
+  input{min-height:44px; padding:0 12px;}
+  textarea{width:100%; padding:10px 12px; line-height:1.45; resize:vertical; font-family:var(--font-mono); font-size:15px;}
+  a{color:var(--g-blue-700);}
+  h1,h2,h3{font-family:var(--font-display); margin:0;}
+  h2{font-size:18px; margin-bottom:12px;}
+  h3{font-size:15px; margin:16px 0 8px; color:var(--ink-2);}
+  .mono{font-family:var(--font-mono);}
+  .muted{color:var(--ink-3); font-weight:400; font-size:14px;}
+  .err{color:var(--g-red-700); min-height:1em; margin:8px 0; font-size:14px;}
+  .warn{color:var(--g-yellow-700); font-size:14px; margin:8px 0; min-height:1em;}
+  div.warn{padding:10px 12px; border-radius:var(--r-sm); background:rgba(251,188,4,.1); border:1px solid rgba(251,188,4,.35);}
+  .pill{display:inline-flex; align-items:center; min-height:28px; padding:0 10px; border-radius:var(--r-full); background:var(--surface-2); font-size:13px; color:var(--ink-2);}
+
+  .center{min-height:100dvh; display:grid; place-items:center; padding:16px;}
+  .box{display:flex; flex-direction:column; gap:12px; padding:28px; width:min(100%, 420px);}
+
+  .bar{position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; padding:12px 16px;
+    background:rgba(0,0,0,.88); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid var(--line);}
+  .bar h1{font-size:20px; margin-right:auto;}
+  .grid{display:grid; grid-template-columns:1fr; gap:16px; padding:16px; max-width:1400px; margin:0 auto;}
+  @media (min-width:960px){ .grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); align-items:start;} }
+  .col{display:flex; flex-direction:column; gap:16px; min-width:0;}
+  .gcard{padding:16px; min-width:0;}
+
+  /* control board */
+  .board-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.06);}
+  .board-row input.sel{width:22px; height:22px; min-height:0; accent-color:var(--primary);}
+  .board-row .t{flex:1 1 110px; min-width:0; font-weight:600; overflow-wrap:anywhere;}
+  .board-row .acts{display:flex; flex-wrap:wrap; gap:6px; margin-left:auto;}
+  .board-row .acts button{padding:0 10px;}
+  .board-row .ph{padding:2px 10px; border-radius:var(--r-full); font-size:12px; text-transform:uppercase; letter-spacing:.06em; background:var(--surface-2); color:var(--ink-2);}
+  .board-row.open .ph{background:rgba(52,168,83,.18); color:var(--g-green-700);}
+  .board-row.closed .ph{background:rgba(234,67,53,.14); color:var(--g-red-700);}
+  .board-row .tm{min-width:48px; color:var(--g-blue-700);}
+  .board-row .bc{min-width:76px; color:var(--ink-2); font-size:14px;}
+  .openbar{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:14px;}
+  #dur{display:flex; flex-wrap:wrap; gap:6px;}
+  #dur button.on{background:var(--primary-dim); border-color:var(--primary); color:var(--g-blue-700);}
+  #durCustom{width:84px;}
+  .stagebar{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; color:var(--ink-2);}
+
+  /* fraud */
+  .flag{display:grid; grid-template-columns:1fr auto; gap:4px 12px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.06);}
+  .flag .cat{grid-column:1; font-size:12px; color:var(--g-yellow-700); text-transform:uppercase; letter-spacing:.06em;}
+  .flag .why{grid-column:1; font-weight:500;}
+  .flag .names{grid-column:1; font-size:14px; color:var(--ink-2);}
+  .flag button.void{grid-column:2; grid-row:1 / span 3; align-self:center; border-color:rgba(234,67,53,.5); color:var(--g-red-700);}
+  .flag.voided{opacity:.6;}
+  .flag.voided button.void{border-color:var(--line); color:var(--ink);}
+
+  /* results */
+  #resTabs{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;}
+  #resTabs button.on{background:var(--primary-dim); border-color:var(--primary); color:var(--g-blue-700);}
+  #resFilter{width:100%; margin-bottom:8px;}
+  #resTable{width:100%; border-collapse:collapse; font-size:15px;}
+  #resTable th{text-align:left; color:var(--ink-3); font-weight:500; padding:6px 8px;}
+  #resTable td{padding:6px 8px; border-top:1px solid rgba(255,255,255,.05); overflow-wrap:anywhere;}
+  #resTable td:first-child,#resTable th:first-child{width:3.5em;}
+  #resTable td:last-child,#resTable th:last-child{width:4.5em; text-align:right;}
+  #resTable tbody{display:block; max-height:420px; overflow:auto;}
+  #resTable thead,#resTable tbody tr{display:table; width:100%; table-layout:fixed;}
+  #csv{margin-top:10px;}
+
+  /* setup */
+  label{display:block; font-weight:500; margin:4px 0 6px;}
+  .cat-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:6px 0;}
+  .cat-row input.title{flex:1 1 130px; min-width:0;}
+  .cat-row label{display:flex; align-items:center; gap:6px; margin:0; font-weight:400; color:var(--ink-2);}
+  .cat-row input.picks{width:64px;}
+  .cat-row button{min-width:44px; padding:0;}
+  #addCat{margin-top:6px;}
+  #saveConfig{width:100%; margin-top:6px;}
+</style>
+</head>
+<body class="noise-bg">
+<div id="login" class="center" hidden>
+  <div class="gcard box">
+    <h1>Live Vote · admin</h1>
+    <input id="token" type="password" placeholder="Admin password" autocomplete="current-password">
+    <button id="loginBtn">Log in</button>
+    <p id="loginErr" class="err"></p>
+  </div>
+</div>
+<div id="app" hidden>
+  <header class="bar">
+    <h1>Live Vote</h1><span id="devices" class="pill"></span>
+    <button id="entryBtn"></button>
+    <a href="/vote" target="_blank">Phone page</a><a href="/vote/screen" target="_blank">Big screen</a>
+  </header>
+  <div class="grid">
+    <section class="col">
+      <div class="gcard"><h2>Control board</h2>
+        <div id="board"></div>
+        <div class="openbar">
+          <div id="dur"><button data-min="1">1 min</button><button data-min="2">2 min</button><button data-min="3" class="on">3 min</button><button data-min="5">5 min</button><button data-min="10">10 min</button></div>
+          <label>Custom <input id="durCustom" type="number" min="0.5" max="240" step="0.5" placeholder="min"></label>
+          <button id="openSelected" class="primary">Open selected</button>
+        </div>
+        <div class="stagebar">Big screen: <button id="stageAuto">Auto</button> <span class="muted">or pin categories with "On screen"</span></div>
+      </div>
+      <div class="gcard"><h2>Fraud panel <span id="voidedTotal" class="muted"></span></h2><div id="flags"></div></div>
+      <div class="gcard"><h2>Results</h2>
+        <div id="resTabs"></div>
+        <input id="resFilter" type="search" placeholder="Filter names" autocomplete="off">
+        <table id="resTable"><thead><tr><th>#</th><th>Name</th><th>Votes</th></tr></thead><tbody></tbody></table>
+        <button id="csv">Download CSV</button>
+      </div>
+    </section>
+    <section class="col">
+      <div class="gcard"><h2>Setup</h2>
+        <div id="restoreBar" class="warn" hidden>The server restarted with the sample setup. <button id="restoreBtn">Restore the setup saved in this browser</button></div>
+        <label for="names">Names, one per line <span id="namesCount" class="muted"></span></label>
+        <textarea id="names" rows="14" spellcheck="false"></textarea>
+        <p id="namesErr" class="err"></p>
+        <h3>Categories</h3>
+        <div id="cats"></div>
+        <button id="addCat">+ Add category</button>
+        <p id="saveWarn" class="warn"></p>
+        <button id="saveConfig" class="primary">Save names &amp; categories</button>
+        <p id="configErr" class="err"></p>
+      </div>
+    </section>
+  </div>
+</div>
+<script type="module">
+import { buildIndex, search, rankCounts, fold } from '/vote/search.js';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const DRAFT = 'tv_admin_draft';
+let F = null;
+let dirty = false; // the setup form has edits the server doesn't
+let lastCfgKey = ''; // refill the form only when the server's setup actually changed
+let boardKey = '';
+let flagsKey = '';
+let tabsKey = '';
+let cats = []; // setup form rows: [{id?, title, picks}]
+let resTab = null;
+let durMin = 3;
+let es = null;
+
+async function post(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) });
+  const json = await r.json().catch(() => ({}));
+  if (r.status === 401) showLogin();
+  return { status: r.status, json };
+}
+
+// ---- login (same flow as public/host.html:182-213) ------------------------
+function showLogin() { $('login').hidden = false; $('app').hidden = true; es?.close(); }
+async function login() {
+  const r = await fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: $('token').value }) });
+  if (!r.ok) { $('loginErr').textContent = 'Wrong password'; return; }
+  $('token').value = '';
+  start();
+}
+function start() {
+  $('login').hidden = true;
+  $('app').hidden = false;
+  es?.close();
+  es = new EventSource('/vote/events');
+  es.onmessage = (e) => onFrame(JSON.parse(e.data));
+  es.onerror = async () => {
+    const s = await fetch('/admin/session').then((r) => r.json()).catch(() => null);
+    if (s && !s.authenticated) showLogin();
+  };
+}
+
+// ---- setup form ------------------------------------------------------------
+const anyOpen = () => !!F?.categories.some((c) => c.phase === 'open');
+const formNames = () => $('names').value.split('\n').map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
+
+function validate() {
+  const names = formNames();
+  const errs = [];
+  const seen = new Map();
+  names.forEach((n, i) => {
+    if (n.length > 60) errs.push(`Line ${i + 1} is over 60 characters.`);
+    const k = fold(n).text;
+    if (seen.has(k)) errs.push(`"${n}" (line ${i + 1}) is the same name as line ${seen.get(k) + 1}.`);
+    else seen.set(k, i);
+  });
+  if (names.length < 2 || names.length > 300) errs.push(`Between 2 and 300 names (now ${names.length}).`);
+  const max = Math.min(10, names.length);
+  cats.forEach((c, i) => {
+    if (!c.title.trim()) errs.push(`Category ${i + 1} needs a title.`);
+    if (!(Number.isInteger(c.picks) && c.picks >= 1 && c.picks <= max)) errs.push(`Category ${i + 1} must ask for 1–${max} picks.`);
+  });
+  if (cats.length < 1 || cats.length > 6) errs.push('Between 1 and 6 categories.');
+  $('namesCount').textContent = `${names.length} names`;
+  $('namesErr').textContent = errs.join(' ');
+  $('saveConfig').disabled = errs.length > 0 || anyOpen();
+  $('saveWarn').textContent = anyOpen() ? 'Close every open category to edit.' : clearWarning(names);
+  return errs.length === 0;
+}
+
+function clearWarning(names) {
+  if (!F) return '';
+  const namesChanged = names.length !== F.candidates.length || names.some((n, i) => n !== F.candidates[i].name);
+  const total = F.categories.reduce((s, c) => s + c.ballotCount, 0);
+  if (namesChanged && total) return `Changing the names clears all ${total} ballots in every category.`;
+  return cats.map((c) => {
+    const cur = F.categories.find((x) => x.id === c.id);
+    return cur && cur.picks !== c.picks && cur.ballotCount ? `Changing N clears ${cur.ballotCount} ballots in ${cur.title}.` : '';
+  }).filter(Boolean).join(' ');
+}
+
+function renderCats() {
+  $('cats').innerHTML = cats.map((c, i) => `<div class="cat-row" data-i="${i}">` +
+    `<input class="title" value="${esc(c.title)}" maxlength="60" aria-label="Category title">` +
+    `<label>Pick exactly <input class="picks" type="number" min="1" max="10" value="${c.picks}"></label>` +
+    `<button class="up" aria-label="Move up">↑</button><button class="down" aria-label="Move down">↓</button><button class="del" aria-label="Remove">✕</button></div>`).join('');
+}
+
+function fillFromServer() {
+  $('names').value = F.candidates.map((c) => c.name).join('\n');
+  cats = F.categories.map((c) => ({ id: c.id, title: c.title, picks: c.picks }));
+  renderCats();
+  dirty = false;
+  validate();
+}
+
+function saveDraft() {
+  try { localStorage.setItem(DRAFT, JSON.stringify({ names: formNames(), categories: cats.map(({ title, picks }) => ({ title, picks })) })); } catch { /* ignore */ }
+}
+
+function maybeOfferRestore() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); } catch { /* ignore */ }
+  const differs = d && (d.names.join('\n') !== F.candidates.map((c) => c.name).join('\n') ||
+    JSON.stringify(d.categories) !== JSON.stringify(F.categories.map(({ title, picks }) => ({ title, picks }))));
+  // listVersion 1 = the server is still on its boot seed: memory was wiped.
+  $('restoreBar').hidden = !(F.listVersion === 1 && differs);
+}
+
+$('names').addEventListener('input', () => { dirty = true; validate(); });
+$('cats').addEventListener('input', (e) => {
+  const row = e.target.closest('.cat-row');
+  if (!row) return;
+  const c = cats[Number(row.dataset.i)];
+  if (e.target.classList.contains('title')) c.title = e.target.value;
+  if (e.target.classList.contains('picks')) c.picks = Number(e.target.value);
+  dirty = true;
+  validate();
+});
+$('cats').addEventListener('click', (e) => {
+  const row = e.target.closest('.cat-row');
+  if (!row) return;
+  const i = Number(row.dataset.i);
+  if (e.target.classList.contains('up') && i > 0) [cats[i - 1], cats[i]] = [cats[i], cats[i - 1]];
+  else if (e.target.classList.contains('down') && i < cats.length - 1) [cats[i + 1], cats[i]] = [cats[i], cats[i + 1]];
+  else if (e.target.classList.contains('del')) cats.splice(i, 1);
+  else return;
+  dirty = true;
+  renderCats();
+  validate();
+});
+$('addCat').addEventListener('click', () => { if (cats.length < 6) { cats.push({ title: '', picks: 3 }); dirty = true; renderCats(); validate(); } });
+$('saveConfig').addEventListener('click', async () => {
+  if (!validate()) return;
+  const r = await post('/vote/admin/config', { names: formNames(), categories: cats });
+  $('configErr').textContent = r.status === 200 ? '' : (r.json.errors ?? ['Save failed']).join(' ');
+  if (r.status === 200) { saveDraft(); dirty = false; $('restoreBar').hidden = true; }
+});
+$('restoreBtn').addEventListener('click', () => {
+  const d = JSON.parse(localStorage.getItem(DRAFT));
+  $('names').value = d.names.join('\n');
+  cats = d.categories.map((c) => ({ ...c }));
+  renderCats();
+  dirty = true;
+  validate();
+  $('restoreBar').hidden = true;
+});
+
+// ---- control board -----------------------------------------------------------
+// Frames arrive up to 10×/s while votes pour in. Rebuilding the buttons that
+// often would eat the host's clicks (mousedown on one node, mouseup on its
+// replacement), so rows are rebuilt only when their shape changes and the
+// live numbers are patched in place.
+function renderBoard() {
+  const pinned = F.stage.mode === 'pinned' ? new Set(F.stage.pinned) : new Set();
+  const key = F.categories.map((c) => `${c.id}:${c.phase}:${c.title}:${pinned.has(c.id)}`).join('|');
+  if (key !== boardKey) {
+    boardKey = key;
+    const sel = new Set([...document.querySelectorAll('#board input.sel:checked')].map((x) => x.closest('.board-row').dataset.id));
+    $('board').innerHTML = F.categories.map((c) => `<div class="board-row ${c.phase}" data-id="${esc(c.id)}">` +
+      `<input type="checkbox" class="sel" ${sel.has(c.id) ? 'checked' : ''} aria-label="Select ${esc(c.title)}">` +
+      `<span class="t">${esc(c.title)}</span><span class="ph">${c.phase}</span><span class="tm mono"></span>` +
+      `<span class="bc mono"></span>` +
+      `<span class="acts"><button class="open">Open</button><button class="close" ${c.phase === 'open' ? '' : 'disabled'}>Close</button>` +
+      `<button class="reset">Reset</button><button class="onscreen" aria-pressed="${pinned.has(c.id)}">On screen</button></span></div>`).join('');
+  }
+  for (const c of F.categories) {
+    const bc = document.querySelector(`#board .board-row[data-id="${CSS.escape(c.id)}"] .bc`);
+    if (bc) bc.textContent = `${c.ballotCount} ballot${c.ballotCount === 1 ? '' : 's'}`;
+  }
+  $('stageAuto').setAttribute('aria-pressed', String(F.stage.mode === 'auto'));
+  $('devices').textContent = `${F.devices} device${F.devices === 1 ? '' : 's'} in`;
+  $('entryBtn').textContent = F.entryOpen ? 'Close entry' : 'Reopen entry';
+}
+
+const durationMs = () => {
+  const custom = Number($('durCustom').value);
+  return Math.round((custom > 0 ? custom : durMin) * 60_000);
+};
+async function openCats(ids) {
+  const withBallots = F.categories.filter((c) => ids.includes(c.id) && c.ballotCount > 0);
+  for (const c of withBallots) {
+    if (!confirm(`Opening "${c.title}" again clears its ${c.ballotCount} ballot${c.ballotCount === 1 ? '' : 's'}. Continue?`)) return;
+  }
+  const r = await post('/vote/admin/open', { categoryIds: ids, durationMs: durationMs() });
+  if (r.status !== 200) alert((r.json.errors ?? ['Could not open']).join(' '));
+}
+$('board').addEventListener('click', async (e) => {
+  const row = e.target.closest('.board-row');
+  if (!row || e.target.tagName !== 'BUTTON') return;
+  const id = row.dataset.id;
+  const cat = F.categories.find((c) => c.id === id);
+  if (e.target.classList.contains('open')) await openCats([id]);
+  if (e.target.classList.contains('close')) await post('/vote/admin/close', { categoryIds: [id] });
+  if (e.target.classList.contains('reset') && confirm(`Reset "${cat.title}"? This clears its ${cat.ballotCount} ballots.`)) await post('/vote/admin/reset', { categoryIds: [id] });
+  if (e.target.classList.contains('onscreen')) {
+    const cur = F.stage.mode === 'pinned' ? new Set(F.stage.pinned) : new Set();
+    if (cur.has(id)) cur.delete(id); else cur.add(id);
+    await post('/vote/admin/stage', cur.size ? { mode: 'pinned', categoryIds: [...cur] } : { mode: 'auto' });
+  }
+});
+$('openSelected').addEventListener('click', () => {
+  const ids = [...document.querySelectorAll('#board input.sel:checked')].map((x) => x.closest('.board-row').dataset.id);
+  if (ids.length) openCats(ids);
+});
+$('dur').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-min]');
+  if (!b) return;
+  durMin = Number(b.dataset.min);
+  $('durCustom').value = '';
+  for (const x of $('dur').children) x.classList.toggle('on', x === b);
+});
+$('stageAuto').addEventListener('click', () => post('/vote/admin/stage', { mode: 'auto' }));
+$('entryBtn').addEventListener('click', () => post('/vote/admin/entry', { open: !F.entryOpen }));
+
+// ---- fraud panel -------------------------------------------------------------
+function renderFlags() {
+  const key = F.flags.map((f) => `${f.id}:${f.voided}:${f.devices}`).join('|') + `|${F.categories.reduce((s, c) => s + c.voidedCount, 0)}`;
+  if (key === flagsKey) return;
+  flagsKey = key;
+  const title = new Map(F.categories.map((c) => [c.id, c.title]));
+  const name = (id) => F.candidates[id]?.name ?? '?';
+  $('flags').innerHTML = F.flags.length ? F.flags.map((f) => {
+    const why = f.kind === 'cluster'
+      ? `${f.devices} devices · same network & browser · joined within ${Math.round(F.codeMs / 1000)} s · identical ballot${f.weak ? ' (pick-1 category: a weaker signal)' : ''}`
+      : `+${f.gained} votes in 10 s · on ${f.sharePct}% of ballots in that window`;
+    return `<div class="flag ${f.voided ? 'voided' : ''}" data-id="${esc(f.id)}"><span class="cat">${esc(title.get(f.categoryId) ?? '')}</span>` +
+      `<span class="why">${esc(why)}</span><span class="names">${esc(f.candidateIds.map(name).join(', '))}</span>` +
+      `<button class="void">${f.voided ? 'Restore' : 'Void'}</button></div>`;
+  }).join('') : '<p class="muted">No suspicious patterns.</p>';
+  const voided = F.categories.reduce((s, c) => s + c.voidedCount, 0);
+  $('voidedTotal').textContent = `${voided} voided ballot${voided === 1 ? '' : 's'}`;
+}
+$('flags').addEventListener('click', async (e) => {
+  const b = e.target.closest('button.void');
+  if (!b) return;
+  const id = b.closest('.flag').dataset.id;
+  const f = F.flags.find((x) => x.id === id);
+  await post('/vote/admin/void', { flagId: id, restore: !!f?.voided });
+});
+
+// ---- results ------------------------------------------------------------------
+function renderResults() {
+  if (!resTab || !F.categories.some((c) => c.id === resTab)) resTab = F.categories[0]?.id ?? null;
+  const tk = `${resTab}|${F.categories.map((c) => `${c.id}:${c.title}`).join('|')}`;
+  if (tk !== tabsKey) {
+    tabsKey = tk;
+    $('resTabs').innerHTML = F.categories.map((c) => `<button data-id="${esc(c.id)}" class="${c.id === resTab ? 'on' : ''}">${esc(c.title)}</button>`).join('');
+  }
+  const cat = F.categories.find((c) => c.id === resTab);
+  if (!cat) return;
+  const q = $('resFilter').value;
+  const keep = q.trim() ? new Set(search(buildIndex(F.candidates), q).map((r) => r.id)) : null;
+  const rows = rankCounts(F.candidates, cat.counts).filter((r) => !keep || keep.has(r.id));
+  $('resTable').querySelector('tbody').innerHTML = rows.map((r) => `<tr><td class="mono">${r.rank}</td><td>${esc(r.name)}</td><td class="mono">${r.votes}</td></tr>`).join('');
+}
+$('resTabs').addEventListener('click', (e) => { const b = e.target.closest('button[data-id]'); if (b) { resTab = b.dataset.id; renderResults(); } });
+$('resFilter').addEventListener('input', renderResults);
+$('csv').addEventListener('click', () => {
+  const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
+  let out = 'category,rank,name,votes\n';
+  for (const c of F.categories) for (const r of rankCounts(F.candidates, c.counts)) out += `${q(c.title)},${r.rank},${q(r.name)},${r.votes}\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([out], { type: 'text/csv' }));
+  a.download = `live-vote-results-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+// ---- frames & clock -------------------------------------------------------------
+let clockOffset = 0;
+function onFrame(f) {
+  clockOffset = f.now - Date.now(); // admin-grade precision is plenty here
+  const first = !F;
+  F = f;
+  const cfgKey = `${f.listVersion}|${f.categories.map((c) => `${c.id}:${c.title}:${c.picks}`).join('|')}`;
+  if (first || (cfgKey !== lastCfgKey && !dirty)) fillFromServer();
+  lastCfgKey = cfgKey;
+  if (first) maybeOfferRestore();
+  validate();
+  renderBoard();
+  renderFlags();
+  renderResults();
+}
+function tick() {
+  if (F) {
+    const now = Date.now() + clockOffset;
+    for (const row of document.querySelectorAll('#board .board-row')) {
+      const c = F.categories.find((x) => x.id === row.dataset.id);
+      row.querySelector('.tm').textContent = c?.phase === 'open' ? mmss(c.endsAt - now) : '';
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+$('loginBtn').addEventListener('click', login);
+$('token').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+fetch('/admin/session').then((r) => r.json()).then((s) => (s.authenticated ? start() : showLogin())).catch(showLogin);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

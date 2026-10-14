@@ -311,6 +311,7 @@ precompress('batucada/screen.html', HTML, ['/batucada/screen', '/batucada/screen
 precompress('vote/search.js', 'text/javascript; charset=utf-8', ['/vote/search.js']);
 precompress('vote/phone.html', HTML, ['/vote', '/vote/', '/vote/phone.html']);
 precompress('vote/screen.html', HTML, ['/vote/screen', '/vote/screen.html']);
+precompress('vote/admin.html', HTML, ['/vote/admin', '/vote/admin.html']);
 
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
