@@ -1,0 +1,104 @@
+/* ============================================================
+   Live Vote — Google Cloud look (light "Cloud console" palette).
+   Its own stylesheet, so the vote app is self-contained and Tap Race /
+   Sequência keep their dark /theme.css. Near-white canvas, white cards with
+   grey borders and Material elevation, Google Blue 600 primary, the four
+   Google colours as accents, darker *-700 shades for readable accent text.
+   Self-hosted Roboto (Google Sans if the device has it) + JetBrains Mono —
+   no external font requests, so it survives event wifi.
+   test/theme.test.js keeps every text/background pair at WCAG AA.
+   ============================================================ */
+
+/* Roboto = graceful fallback if the Google Sans CDN is unreachable (event wifi) */
+@font-face{font-family:Roboto;font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/roboto-400.woff2) format('woff2');}
+@font-face{font-family:Roboto;font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/roboto-500.woff2) format('woff2');}
+@font-face{font-family:Roboto;font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/roboto-700.woff2) format('woff2');}
+@font-face{font-family:Roboto;font-style:normal;font-weight:900;font-display:swap;src:url(/fonts/roboto-900.woff2) format('woff2');}
+/* JetBrains Mono = self-hosted, for all numerics (counts, ranks, timers) */
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/jbmono-400.woff2) format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/jbmono-500.woff2) format('woff2');}
+
+:root{
+  --bg:#F8F9FA;
+  --surface:#FFFFFF; --surface-2:#F1F3F4; --surface-glass:rgba(255,255,255,.92);
+  --ink:#202124; --ink-2:#5F6368; --ink-3:#6A6E73;
+  --line:#DADCE0;
+  --primary:#1A73E8; --primary-dark:#1765CC; --primary-dim:#E8F0FE;
+
+  --g-blue:#4285F4; --g-red:#EA4335; --g-yellow:#FBBC04; --g-green:#34A853;
+  /* darker shades for accent *text* on white (the brand colours above are for fills) */
+  --g-blue-700:#1967D2; --g-green-700:#188038; --g-red-700:#C5221F; --g-yellow-700:#A05A00;
+
+  /* Material elevation instead of the old blue glows (names kept for the pages) */
+  --glow:0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+  --glow-strong:0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15);
+  --e1:0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+  --e2:0 1px 2px rgba(60,64,67,.3), 0 2px 6px 2px rgba(60,64,67,.15);
+  --e3:0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15);
+  --e4:0 2px 3px rgba(60,64,67,.3), 0 6px 10px 4px rgba(60,64,67,.15);
+
+  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-xl:24px; --r-full:999px;
+
+  --font:'Google Sans Text', Roboto, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  color-scheme:light;
+  --font-display:'Google Sans', 'Google Sans Text', Roboto, system-ui, sans-serif;
+  --font-mono:'JetBrains Mono', ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;}
+body{
+  font-family:var(--font); color:var(--ink); background:var(--bg);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+
+/* .noise-bg was the old dark theme's texture; the Cloud look is flat. Kept as
+   a no-op so pages that still carry the class need no edit. */
+.noise-bg::before{content:none;}
+
+/* glassmorphism surface */
+.glass{background:var(--surface-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid var(--line);}
+.gcard{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--e1);}
+
+/* 4-color Google shimmer text */
+.shimmer{
+  background:linear-gradient(110deg,#4285F4 0%,#EA4335 25%,#FBBC04 50%,#34A853 75%,#4285F4 100%);
+  background-size:200% auto; -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; color:transparent; animation:shimmer 4s ease-in-out infinite;
+}
+@keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
+
+/* smooth Google gradient (bars / accents) */
+.ggrad{background:linear-gradient(90deg,#EA4335,#FBBC04,#34A853,#4285F4);}
+
+/* blue glow */
+.glow{box-shadow:var(--glow);}
+@keyframes glowPulse{0%,100%{box-shadow:var(--e1)}50%{box-shadow:var(--e3)}}
+.glow-pulse{animation:glowPulse 3s ease-in-out infinite;}
+
+/* entrance animations */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes reveal{from{opacity:0; transform:translateY(16px)}to{opacity:1; transform:translateY(0)}}
+.reveal{animation:reveal .6s cubic-bezier(.22,1,.36,1) both;}
+
+/* numerics in mono */
+.mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums;}
+
+/* Google wordmark (multi-color "Google" + grey "Cloud") */
+.gwm{font-family:var(--font-display); font-weight:500; letter-spacing:-.01em; white-space:nowrap;}
+.gwm .b{color:var(--g-blue);} .gwm .r{color:var(--g-red);} .gwm .y{color:var(--g-yellow);}
+.gwm .g{color:var(--g-green);} .gwm .cloud{color:var(--ink-2);}
+
+:focus-visible{outline:2px solid var(--primary); outline-offset:2px;}
+
+/* iOS: never let inputs trigger focus-zoom; no text auto-resize */
+html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
+input,textarea,select{font-size:16px;}
+
+/* Respect reduced-motion: kill animations/transitions, drop blur to solid, hide noise.
+   Glass surfaces are inlined per-page, so name them explicitly with !important. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important;}
+  .glass,.id-card,.chip,.champ,.panel{backdrop-filter:none!important; -webkit-backdrop-filter:none!important; background:rgba(255,255,255,.98)!important;}
+  .noise-bg::before{display:none!important;}
+}

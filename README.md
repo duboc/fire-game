@@ -36,6 +36,7 @@ npm run check:contract  # HTTP contract against a live server: compression, ETag
 npm run check:browser   # real Chromium: host login, a full round, the dashboard
 npm run check:load      # 5.000-player load run (spawns its own server; ~40s)
 npm run check:vote      # Live Vote: HTTP contract + real-Chromium phone, screen and admin (~2 min)
+npm run check:look      # Live Vote screenshots + a WCAG contrast audit of every visible text (~30 s)
 ```
 
 `check:load` also does the A/B behind the grace window — `LOAD_SPREAD=0
@@ -44,7 +45,9 @@ room. `check:browser` needs Chromium: `npx playwright install chromium`.
 
 ## Live Vote
 
-A real-time voting app in the same server (`docs/VOTE_SPEC.md`). The room scans a
+A real-time voting app in the same server, in a light Google Cloud look of its
+own (`public/vote/theme.css` — Tap Race and Sequência keep their dark theme);
+see `docs/VOTE_SPEC.md`. The room scans a
 QR on the big screen, then votes in up to 6 categories — the same list of names
 (120 by default) runs in every category, and in each one a voter picks exactly N
 names. The host opens categories whenever they like, one or several at a time,
@@ -84,9 +87,15 @@ The admin page keeps the last saved setup in the browser and offers to restore i
 ## Deploy to Cloud Run (single instance)
 
 ```bash
-./deploy.sh                                    # riojucu / us-central1
+./deploy.sh                                    # live-vote: Live Vote only (APPS=vote), riojucu / us-central1
+SERVICE=tap-race APPS=all ./deploy.sh          # the original service with every app
 PROJECT=other-project REGION=europe-west1 ./deploy.sh
 ```
+
+The default target is the **`live-vote`** service, which runs with `APPS=vote`:
+only Live Vote is served (`/` redirects to `/vote`; every Tap Race and Sequência
+page and API answers 404 — an allow-list in `src/server.js`). `tap-race` is the
+original all-apps service.
 
 `PROJECT` defaults to **`riojucu`**, where the live service runs — deliberately a
 constant rather than `gcloud config get-value project`, so whatever the laptop
@@ -256,6 +265,7 @@ but it means a deploy that sets it disables the built-in one.
 | `TICK_MS` | `100` | Snapshot + broadcast cadence |
 | `PERSIST` | `off` | `on` to write results to Firestore (needs ADC + `@google-cloud/firestore`) |
 | `FIRESTORE_COLLECTION` | `tap_race_rounds` | Where round results are stored |
+| `APPS` | *(all)* | `vote` serves Live Vote alone (the `live-vote` service). Anything else serves every app. |
 | `VOTE_CODE_MS` | `30000` | Live Vote room-code rotation. Test harnesses only. |
 | `VOTE_MIN_DURATION_MS` | `30000` | Shortest Live Vote timer the admin may set. Test harnesses only. |
 

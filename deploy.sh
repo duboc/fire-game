@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy Tap Race to Cloud Run as a SINGLE pinned instance.
+# Deploy to Cloud Run as a SINGLE pinned instance (default: the vote-only `live-vote` service).
 #
 # Why these flags matter (this is the whole game's correctness, not tuning):
 #   --min-instances 1 --max-instances 1  -> exactly ONE in-memory counter.
@@ -17,7 +17,8 @@
 #        lived response; don't let the default 300s cut it mid-session.
 #
 # Usage:
-#   ./deploy.sh                                   # riojucu / us-central1
+#   ./deploy.sh                                   # live-vote (vote app only), riojucu / us-central1
+#   SERVICE=tap-race APPS=all ./deploy.sh         # the original all-games service
 #   PROJECT=other-project REGION=europe-west1 ./deploy.sh
 #
 # The host password is NOT deployed. Only a scrypt hash of it is compiled into
@@ -33,7 +34,10 @@ set -euo pipefail
 # copy of the game somewhere nobody is looking. An explicit PROJECT= still wins.
 PROJECT="${PROJECT:-riojucu}"
 REGION="${REGION:-us-central1}"
-SERVICE="${SERVICE:-tap-race}"
+SERVICE="${SERVICE:-live-vote}"
+# APPS=vote serves Live Vote alone (/ redirects to /vote; every Tap Race and
+# Sequência route is a 404). APPS=all serves every app, as tap-race does.
+APPS="${APPS:-vote}"
 
 if [[ -z "${PROJECT}" || "${PROJECT}" == "(unset)" ]]; then
   echo "Set PROJECT=your-gcp-project (or run: gcloud config set project ...)" >&2
@@ -46,8 +50,8 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   echo "         The service uses the built-in password (see README, Admin access)." >&2
 fi
 
-echo "Deploying ${SERVICE} to ${PROJECT}/${REGION}"
-echo "Admin auth: built-in password (host panel: <url>/host)"
+echo "Deploying ${SERVICE} (APPS=${APPS}) to ${PROJECT}/${REGION}"
+echo "Admin auth: built-in password"
 
 gcloud run deploy "${SERVICE}" \
   --project "${PROJECT}" \
@@ -62,15 +66,17 @@ gcloud run deploy "${SERVICE}" \
   --no-cpu-throttling \
   --timeout 3600 \
   --port 8080 \
-  --set-env-vars "PERSIST=${PERSIST:-off}"
+  --set-env-vars "PERSIST=${PERSIST:-off},APPS=${APPS}"
 
 echo
 echo "Done. URLs:"
 URL="$(gcloud run services describe "${SERVICE}" --project "${PROJECT}" --region "${REGION}" --format='value(status.url)')"
-echo "  Players : ${URL}/"
-echo "  Screen  : ${URL}/screen"
-echo "  Host    : ${URL}/host   (asks for the password once)"
-echo "  Dash    : ${URL}/dashboard   (public, read-only)"
+if [[ "${APPS}" != "vote" ]]; then
+  echo "  Players : ${URL}/"
+  echo "  Screen  : ${URL}/screen"
+  echo "  Host    : ${URL}/host   (asks for the password once)"
+  echo "  Dash    : ${URL}/dashboard   (public, read-only)"
+fi
 echo "  Vote    : ${URL}/vote   (phones — scan the QR on the vote screen)"
 echo "  Vote screen : ${URL}/vote/screen   (projector, asks for the password once)"
 echo "  Vote admin  : ${URL}/vote/admin"
