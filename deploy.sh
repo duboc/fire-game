@@ -23,7 +23,7 @@
 #
 # The host password is NOT deployed. Only a scrypt hash of it is compiled into
 # src/server.js, so there is no secret to plumb through here. Note that
-# --set-env-vars replaces the whole env: deploying with this script therefore
+# --env-vars-file replaces the whole env: deploying with this script therefore
 # also *removes* any ADMIN_TOKEN a previous deploy left behind, which is what
 # we want — an ADMIN_TOKEN on the service silently disables the password.
 set -euo pipefail
@@ -53,6 +53,12 @@ fi
 echo "Deploying ${SERVICE} (APPS=${APPS}) to ${PROJECT}/${REGION}"
 echo "Admin auth: built-in password"
 
+# The service env, as a file: it carries the private name list (vote-names.txt,
+# git-ignored) as VOTE_NAMES, validated before anything is built.
+ENV_FILE="$(mktemp)"
+trap 'rm -f "${ENV_FILE}"' EXIT
+PERSIST="${PERSIST:-off}" APPS="${APPS}" node scripts/deploy-env.mjs "${ENV_FILE}"
+
 gcloud run deploy "${SERVICE}" \
   --project "${PROJECT}" \
   --region "${REGION}" \
@@ -66,7 +72,7 @@ gcloud run deploy "${SERVICE}" \
   --no-cpu-throttling \
   --timeout 3600 \
   --port 8080 \
-  --set-env-vars "PERSIST=${PERSIST:-off},APPS=${APPS}"
+  --env-vars-file "${ENV_FILE}"
 
 echo
 echo "Done. URLs:"

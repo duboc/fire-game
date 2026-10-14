@@ -731,8 +731,54 @@ async function voteOnlyChecks() {
   } finally { S.child.kill(); }
 }
 
+// VOTE_NAMES: the event's real list, kept out of the public repo.
+async function seedChecks() {
+  console.log('\n== VOTE_NAMES (the private event list) ==');
+  const S = startServer(8153, { APPS: 'vote', VOTE_NAMES: "Ana Exemplo\nBruno d'Ávila Teste\n  \nCarla Demonstração\n" });
+  try {
+    await S.ready;
+    const names = (await (await fetch(S.base + '/vote/candidates')).json()).candidates.map((x) => x.name);
+    ok(names.join('|') === "Ana Exemplo|Bruno d'Ávila Teste|Carla Demonstração", 'VOTE_NAMES replaces the sample list (blank lines dropped)');
+  } finally { S.child.kill(); }
+  // A broken list must stop the boot loudly — never start with the wrong names.
+  const bad = spawn(process.execPath, [ROOT + 'src/server.js'], {
+    env: { ...process.env, PORT: '8154', ADMIN_TOKEN: TOKEN, NODE_ENV: 'test', VOTE_NAMES: 'Ana Souza\nana souza' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let out = '';
+  bad.stdout.on('data', (d) => { out += d; });
+  bad.stderr.on('data', (d) => { out += d; });
+  const code = await new Promise((r) => { bad.on('exit', r); setTimeout(() => { bad.kill(); r('timeout'); }, 6000); });
+  ok(code !== 0 && code !== 'timeout' && /VOTE_NAMES/.test(out) && /same name/.test(out), `a broken VOTE_NAMES stops the boot with a clear message (exit ${code})`);
+
+  // deploy.sh's env file: names ride along when the private file exists, and a
+  // broken list stops the deploy before anything is built.
+  const { mkdtempSync, writeFileSync, readFileSync } = await import('node:fs');
+  const dir = mkdtempSync('/tmp/vote-deploy-env-');
+  const run = (names, extra = {}) => new Promise((resolve) => {
+    if (names !== null) writeFileSync(`${dir}/names.txt`, names);
+    const c = spawn(process.execPath, [ROOT + 'scripts/deploy-env.mjs', `${dir}/env.json`], {
+      env: { ...process.env, APPS: 'vote', PERSIST: 'off', VOTE_NAMES_FILE: `${dir}/${names === null ? 'missing.txt' : 'names.txt'}`, ...extra },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let o = '';
+    c.stdout.on('data', (d) => { o += d; });
+    c.stderr.on('data', (d) => { o += d; });
+    c.on('exit', (code) => resolve({ code, out: o }));
+  });
+  let r = await run("Ana Exemplo\nBruno d'Ávila Teste\n\nCarla Demonstração\n");
+  let env = r.code === 0 ? JSON.parse(readFileSync(`${dir}/env.json`, 'utf8')) : {};
+  ok(r.code === 0 && env.APPS === 'vote' && env.PERSIST === 'off' && env.VOTE_NAMES === "Ana Exemplo\nBruno d'Ávila Teste\nCarla Demonstração", 'deploy env carries APPS, PERSIST and the cleaned names');
+  r = await run(null);
+  env = r.code === 0 ? JSON.parse(readFileSync(`${dir}/env.json`, 'utf8')) : {};
+  ok(r.code === 0 && !('VOTE_NAMES' in env) && /sample/.test(r.out), 'no names file → no VOTE_NAMES, and it says the sample list will be used');
+  r = await run('Ana Souza\nana souza\n');
+  ok(r.code !== 0 && /same name/.test(r.out), 'a broken names file stops the deploy with the reason');
+}
+
 await apiChecks();
 await voteOnlyChecks();
+await seedChecks();
 await phoneChecks();
 await screenChecks();
 await adminChecks();
