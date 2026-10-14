@@ -22,6 +22,7 @@ npm start
 # Big screen → http://localhost:8080/screen
 # Host panel → http://localhost:8080/host
 # Dashboard  → http://localhost:8080/dashboard
+# Live Vote  → phone http://localhost:8080/vote · screen /vote/screen · admin /vote/admin
 ```
 
 Open `/screen` on a projector, `/host` on your laptop, and `/` on phones.
@@ -34,11 +35,49 @@ npm run check:contract  # HTTP contract against a live server: compression, ETag
                         # 304s, admin auth, a full round, /metrics, the heartbeat
 npm run check:browser   # real Chromium: host login, a full round, the dashboard
 npm run check:load      # 5.000-player load run (spawns its own server; ~40s)
+npm run check:vote      # Live Vote: HTTP contract + real-Chromium phone, screen and admin (~2 min)
 ```
 
 `check:load` also does the A/B behind the grace window — `LOAD_SPREAD=0
 npm run check:load` reproduces the unspread buzzer herd that loses a third of the
 room. `check:browser` needs Chromium: `npx playwright install chromium`.
+
+## Live Vote
+
+A real-time voting app in the same server (`docs/VOTE_SPEC.md`). The room scans a
+QR on the big screen, then votes in up to 6 categories — the same list of names
+(120 by default) runs in every category, and in each one a voter picks exactly N
+names. The host opens categories whenever they like, one or several at a time,
+each on its own timer (3 min by default). Counts appear only on the big screen.
+
+- **Admin:** `/vote/admin` — names, categories (title + N), open/close/reset,
+  what's on the big screen, entry lock, the fraud panel and a CSV of the results.
+  Same password and login as `/host`.
+- **Big screen:** open `/vote/screen` on the projector and log in once. It shows
+  the rotating QR and code, the live leaderboards, a feed of names receiving
+  votes, and a podium when a category closes.
+- **Phones:** scan the QR on the big screen (or type its 5-letter code at
+  `/vote`), search, pick, submit. A ballot can be changed until time runs out.
+
+Anti-fraud, in layers:
+- **Room code** — `HMAC(secret, 30 s epoch)`, valid 30–60 s, so a forwarded link
+  dies within a minute. Wrong codes are throttled per IP; right ones never are.
+- **Device cookie** — signed, HttpOnly, `SameSite=Strict`; one ballot per device
+  per category. The secret is random per boot, so a restart means a rescan.
+- **Limits** — 1 submit/s and 30 per round per device and category; same-origin
+  check on every write.
+- **Entry lock** — once the room is in, close entry from the admin page.
+- **Flags, not blocks** — identical-ballot clusters (same IP + browser + entry
+  window) and sudden bursts are flagged for the host to Void or Restore.
+
+Still gets through, by design: one person with several devices (or a private tab
+and a fresh scan) gets several ballots. Client IP for flags is the rightmost
+`X-Forwarded-For` entry — correct on plain Cloud Run; behind an external load
+balancer it would be the LB's address, which collapses clusters to user-agent +
+entry window.
+
+Votes and setup live in memory, like Tap Race: a restart or deploy wipes them.
+The admin page keeps the last saved setup in the browser and offers to restore it.
 
 ## Deploy to Cloud Run (single instance)
 
@@ -215,6 +254,8 @@ but it means a deploy that sets it disables the built-in one.
 | `TICK_MS` | `100` | Snapshot + broadcast cadence |
 | `PERSIST` | `off` | `on` to write results to Firestore (needs ADC + `@google-cloud/firestore`) |
 | `FIRESTORE_COLLECTION` | `tap_race_rounds` | Where round results are stored |
+| `VOTE_CODE_MS` | `30000` | Live Vote room-code rotation. Test harnesses only. |
+| `VOTE_MIN_DURATION_MS` | `30000` | Shortest Live Vote timer the admin may set. Test harnesses only. |
 
 ### Scale knobs
 

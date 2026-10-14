@@ -621,11 +621,11 @@ Executes `docs/VOTE_SPEC.md` via the step-by-step plan in `docs/VOTE_PLAN.md`.
 Ships next to Tap Race and Sequência, in the same process: one 100ms tick, one
 admin session, additive routes only.
 
-- [ ] Task 1 — `public/vote/search.js` + `test/vote-search.test.js`: folding, ranked tiers, highlights, suggestions, remap by name, ranking.
-- [ ] Task 2 — `src/vote.js` + `src/vote-seed.js` + `test/vote.test.js`: categories, exactly-N ballots, deadlines, void/restore, stage.
-- [ ] Task 3 — `src/vote-guard.js` + `test/vote-guard.test.js`: rotating room code, device cookie, throttles, limits, cluster/burst flags.
-- [ ] Task 4 — `src/server.js` wiring + `scripts/vote-check.mjs` HTTP contract + `npm run check:vote`.
-- [ ] Task 5 — `public/vote/phone.html` (`/vote`) + phone browser checks.
-- [ ] Task 6 — `public/vote/screen.html` (`/vote/screen`) + screen browser checks.
-- [ ] Task 7 — `public/vote/admin.html` (`/vote/admin`) + admin browser checks.
-- [ ] Task 8 — README, full regression (`npm test`, `check:contract`, `check:browser`, `check:vote`), screenshot review.
+- [x] Task 1 — `public/vote/search.js` + `test/vote-search.test.js`: folding, ranked tiers, highlights, suggestions, remap by name, ranking.
+- [x] Task 2 — `src/vote.js` + `src/vote-seed.js` + `test/vote.test.js`: categories, exactly-N ballots, deadlines, void/restore, stage.
+- [x] Task 3 — `src/vote-guard.js` + `test/vote-guard.test.js`: rotating room code, device cookie, throttles, limits, cluster/burst flags.
+- [x] Task 4 — `src/server.js` wiring + `scripts/vote-check.mjs` HTTP contract + `npm run check:vote`.
+- [x] Task 5 — `public/vote/phone.html` (`/vote`) + phone browser checks.
+- [x] Task 6 — `public/vote/screen.html` (`/vote/screen`) + screen browser checks.
+- [x] Task 7 — `public/vote/admin.html` (`/vote/admin`) + admin browser checks.
+- [x] Task 8 — README, full regression (`npm test`, `check:contract`, `check:browser`, `check:vote`), screenshot review.
