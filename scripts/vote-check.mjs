@@ -396,8 +396,82 @@ async function phoneChecks() {
   }
 }
 
+async function screenChecks() {
+  const S = startServer(8148);
+  const browser = await chromium.launch();
+  try {
+    await S.ready;
+    const admin = await adminClient(S.base);
+    console.log('\n== screen: login and lobby ==');
+    const anon = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
+    await anon.goto(`${S.base}/vote/screen`);
+    await anon.waitForSelector('#login:not([hidden])');
+    ok(true, 'no admin session → the screen asks for the password');
+
+    const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    const page = await ctx.newPage();
+    await page.goto(`${S.base}/vote/screen`);
+    await page.fill('#token', TOKEN);
+    await page.click('#loginBtn');
+    await page.waitForSelector('#lobby:not([hidden])');
+    const code1 = (await page.textContent('#lobbyCode')).trim();
+    ok(/^[A-HJKMNP-Z2-9]{5}$/.test(code1), 'lobby shows the 5-char room code');
+    ok((await page.locator('#lobbyQr svg').count()) === 1, 'lobby shows the QR');
+    ok((await page.locator('#lobbyCats li').count()) === 5, 'lobby lists the categories');
+    await page.screenshot({ path: `${SHOTS}/screen-lobby.png` });
+    await page.waitForFunction((c) => document.getElementById('lobbyCode').textContent.trim() !== c, code1, { timeout: CODE_MS + 2000 });
+    ok(true, 'the code rotates on its own');
+
+    console.log('\n== screen: live stage ==');
+    let live = (await admin.req('/vote/live')).json;
+    const [c1, c2] = live.categories;
+    await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [c1.id, c2.id] } });
+    await page.waitForSelector('#stage.n2');
+    ok((await page.locator('#stage .panel').count()) === 2, 'two open categories → two panels');
+    live = (await admin.req('/vote/live')).json;
+    const cat1 = live.categories.find((c) => c.id === c1.id);
+    const code = (await page.textContent('#code')).trim();
+    for (const [i, picks] of [[0, [0, 1, 2]], [1, [0, 1, 3]], [2, [0, 4, 5]]]) {
+      const v = client(S.base, { ip: `192.0.2.${i + 10}`, ua: `Phone${i}` });
+      await enterWith(v, code);
+      await ballot(v, cat1, live.listVersion, picks);
+    }
+    const top = page.locator(`#stage .panel[data-id="${c1.id}"] li.prow`).first();
+    await page.waitForFunction((id) => document.querySelector(`#stage .panel[data-id="${id}"] li.prow .pvotes`)?.textContent.trim() === '3', c1.id, { timeout: 2000 });
+    ok((await top.locator('.pname').textContent()).includes('Ana Souza'), 'Ana Souza leads with 3 within ~1 s');
+    ok((await top.locator('.ppct').textContent()).includes('100'), '…on 100 % of ballots');
+    ok((await page.locator('#feed li.item').count()) >= 3, 'the live feed shows the +1s');
+    ok((await page.textContent('#feed')).includes(c1.title), '…tagged with the category');
+    ok(/^\d+:\d\d$/.test((await page.locator(`#stage .panel[data-id="${c1.id}"] .ptimer`).textContent()).trim()), 'each panel has its own countdown');
+    await sleep(900); // let the FLIP reorder and the feed slide-ins finish
+    await page.screenshot({ path: `${SHOTS}/screen-live.png` });
+
+    await admin.req('/vote/admin/entry', { method: 'POST', body: { open: false } });
+    await page.waitForSelector('#entryClosed:not([hidden])');
+    ok(await page.isHidden('#qrBox'), 'entry closed → the QR is hidden');
+    await admin.req('/vote/admin/entry', { method: 'POST', body: { open: true } });
+
+    console.log('\n== screen: reveal and stage ==');
+    await admin.req('/vote/admin/close', { method: 'POST', body: { categoryIds: [c1.id] } });
+    await page.waitForSelector(`#stage.n1 .panel[data-id="${c2.id}"]`);
+    ok(true, 'auto stage follows the categories still open');
+    await admin.req('/vote/admin/close', { method: 'POST', body: { categoryIds: [c2.id] } });
+    await admin.req('/vote/admin/stage', { method: 'POST', body: { mode: 'pinned', categoryIds: [c1.id] } });
+    await page.waitForSelector(`#stage .panel.podium[data-id="${c1.id}"]`);
+    ok((await page.textContent(`#stage .panel[data-id="${c1.id}"]`)).includes('Ana Souza'), 'pinned closed category shows its podium');
+    // Bruno, Carla, Lucas and Mariana all tie for 3rd: nobody tied may silently vanish.
+    ok(/\+1 more tied/.test(await page.textContent(`#stage .panel[data-id="${c1.id}"] .step.s3`)), 'a 4-way tie for 3rd shows 3 names and "+1 more tied"');
+    await sleep(1500); // the podium steps rise in turn
+    await page.screenshot({ path: `${SHOTS}/screen-podium.png` });
+  } finally {
+    await browser.close();
+    S.child.kill();
+  }
+}
+
 await apiChecks();
 await phoneChecks();
+await screenChecks();
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

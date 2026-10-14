@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Live Vote · screen</title>
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  /* Views toggle with the hidden attribute; keep it stronger than any display: rule. */
+  [hidden]{display:none !important;}
+
+  /* Sized in vh throughout: this is read off a projector from the back of the room. */
+  html,body{height:100vh; overflow:hidden;}
+  body{background:radial-gradient(1200px 700px at 30% -10%, rgba(66,133,244,.10), transparent 60%), var(--bg);}
+  .mono{font-family:var(--font-mono);}
+
+  main{display:grid; grid-template-columns:1fr 26vw; gap:2vh; height:100vh; padding:2.4vh;}
+
+  /* ---- stage ---- */
+  #stage{display:grid; gap:2vh; min-height:0;}
+  #stage.n1{grid-template-columns:1fr;}
+  #stage.n2{grid-template-columns:repeat(2,1fr);}
+  #stage.n3{grid-template-columns:repeat(3,1fr);}
+  #stage.n4{grid-template-columns:repeat(2,1fr); grid-template-rows:1fr 1fr;}
+  #stage.n5,#stage.n6{grid-template-columns:repeat(3,1fr); grid-template-rows:1fr 1fr;}
+
+  .panel{display:flex; flex-direction:column; min-height:0; min-width:0; padding:2vh 2.2vh;
+    border-radius:var(--r-lg); background:var(--surface); border:1px solid var(--line); box-shadow:var(--e2); overflow:hidden;}
+  .panel header{display:flex; align-items:baseline; gap:1.5vh;}
+  .ptitle{flex:1; min-width:0; margin:0; font:700 3.2vh/1.15 var(--font-display); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #stage.n1 .ptitle{font-size:4.5vh;}
+  .ptimer{flex:none; font-size:3.2vh; color:var(--g-blue-700);}
+  #stage.n1 .ptimer{font-size:4.5vh;}
+  .pmeta{margin:.4vh 0 1.4vh; font-size:1.9vh; color:var(--ink-2);}
+
+  ol.rows{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.8vh; flex:1; min-height:0;}
+  .prow{position:relative; display:grid; grid-template-columns:4.2ch 1fr auto 5ch; align-items:center; gap:1.4vh;
+    flex:1 1 0; max-height:9vh; min-height:0; padding:0 1.6vh; border-radius:var(--r-sm); overflow:hidden; background:rgba(255,255,255,.03);}
+  .prow .bar{position:absolute; inset:0 auto 0 0; width:0; border-radius:var(--r-sm);
+    background:linear-gradient(90deg, rgba(66,133,244,.42), rgba(66,133,244,.16)); transition:width .5s cubic-bezier(.2,.8,.2,1);}
+  .prow:first-child .bar{background:linear-gradient(90deg, rgba(251,188,4,.45), rgba(251,188,4,.14));}
+  .prow > span:not(.bar){position:relative;}
+  .prank{font-size:2.2vh; color:var(--ink-2);}
+  .pname{min-width:0; font:600 2.6vh/1.15 var(--font); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #stage.n1 .pname{font-size:3.4vh;}
+  #stage.n5 .pname,#stage.n6 .pname{font-size:2.3vh;}
+  .pvotes{font-size:2.8vh; font-weight:500;}
+  #stage.n1 .pvotes{font-size:3.6vh;}
+  .ppct{font-size:1.9vh; color:var(--ink-2); text-align:right;}
+  .prow.pulse{animation:pulse .7s ease-out;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,168,83,.0)}25%{box-shadow:0 0 0 .4vh rgba(52,168,83,.55), 0 0 3vh rgba(52,168,83,.35)}100%{box-shadow:0 0 0 0 rgba(52,168,83,0)}}
+
+  /* ---- podium ---- */
+  .podium-wrap{flex:1; display:flex; flex-direction:column; min-height:0;}
+  .tie{align-self:center; margin:.5vh 0 1vh; padding:.6vh 2vh; border-radius:var(--r-full);
+    background:rgba(251,188,4,.15); color:var(--g-yellow-700); font:700 2.4vh var(--font-display);}
+  .steps{flex:1; display:grid; grid-template-columns:1fr 1.15fr 1fr; align-items:end; gap:1.5vh; min-height:0;}
+  .step{display:flex; flex-direction:column; justify-content:flex-start; gap:.6vh; padding:1.6vh 1vh; text-align:center;
+    border-radius:var(--r-md) var(--r-md) 0 0; overflow:hidden; animation:rise .7s cubic-bezier(.2,.8,.2,1) both;}
+  .step.s1{height:80%; background:linear-gradient(180deg, rgba(251,188,4,.35), rgba(251,188,4,.08)); border-top:.5vh solid var(--g-yellow);}
+  .step.s2{height:60%; background:linear-gradient(180deg, rgba(232,234,237,.22), rgba(232,234,237,.05)); border-top:.5vh solid #c0c4c9; animation-delay:.25s;}
+  .step.s3{height:45%; background:linear-gradient(180deg, rgba(205,127,50,.3), rgba(205,127,50,.06)); border-top:.5vh solid #cd7f32; animation-delay:.45s;}
+  .pod-name{font:700 2.6vh/1.15 var(--font-display); overflow-wrap:anywhere;}
+  .step.s1 .pod-name{font-size:3.2vh;}
+  #stage.n1 .pod-name{font-size:4vh;}
+  #stage.n1 .step.s1 .pod-name{font-size:5vh;}
+  .pod-votes{font-size:2.2vh; color:var(--ink-2); margin-bottom:.6vh;}
+  .pod-more{font-size:2vh; color:var(--ink-2); font-style:italic;}
+  @keyframes rise{from{transform:translateY(30%); opacity:0}to{transform:none; opacity:1}}
+
+  /* ---- side rail ---- */
+  #side{display:flex; flex-direction:column; gap:2vh; min-height:0;}
+  #qrBox{display:flex; flex-direction:column; align-items:center; gap:1.4vh; padding:2vh;
+    border-radius:var(--r-lg); background:var(--surface); border:1px solid var(--line);}
+  .qr{background:#fff; border-radius:var(--r-md); padding:1.2vh; line-height:0;}
+  #qr{width:min(22vw, 34vh); aspect-ratio:1;}
+  .qr svg{width:100%; height:100%; display:block;}
+  .codeline{display:flex; align-items:center; gap:1.4vh;}
+  #code{font-size:5vh; font-weight:500; letter-spacing:.25em; color:#fff;}
+  #ring{width:4vh; height:4vh;}
+  #ring circle{fill:none; stroke:var(--primary); stroke-width:3.5; stroke-linecap:round; stroke-dasharray:100;
+    stroke-dashoffset:calc((1 - var(--p, 1)) * 100); transform:rotate(-90deg); transform-origin:center; transition:stroke-dashoffset .25s linear;}
+  #entryClosed{padding:2vh; border-radius:var(--r-lg); text-align:center; font:700 3vh var(--font-display);
+    background:rgba(234,67,53,.12); color:var(--g-red-700); border:1px solid rgba(234,67,53,.35);}
+  .total{font-size:2.4vh; color:var(--ink-2);}
+  #total{font-size:5vh; color:var(--ink); margin-right:.6vh;}
+  #feed{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1vh; min-height:0; overflow:hidden;}
+  #feed .item{padding:1.1vh 1.6vh; border-radius:var(--r-sm); background:var(--surface); border:1px solid var(--line);
+    font-size:2.1vh; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:in .4s cubic-bezier(.2,.8,.2,1);}
+  #feed .item b{color:var(--g-green-700); margin-right:.6vh;}
+  #feed .item span{color:var(--ink-3);}
+  @keyframes in{from{transform:translateX(40%); opacity:0}to{transform:none; opacity:1}}
+
+  /* ---- overlays ---- */
+  .overlay{position:fixed; inset:0; z-index:40; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2.4vh; background:var(--bg);}
+  .lobby h1{margin:0; font:700 6vh var(--font-display);}
+  #lobbyQr{width:42vh; height:42vh;}
+  .lobby .codeline{display:block; margin:0; font-size:3vh; color:var(--ink-2);}
+  .lobby .codeline b{color:var(--ink);}
+  #lobbyCode{font-size:5vh; letter-spacing:.25em; color:#fff; margin-left:1vh;}
+  .soon{margin:0; font-size:3vh; color:var(--g-blue-700);}
+  #lobbyCats{list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; justify-content:center; gap:1.2vh; max-width:80vw;}
+  #lobbyCats li{padding:1vh 2vh; border-radius:var(--r-full); background:var(--surface); border:1px solid var(--line); font-size:2.4vh;}
+  #lobbyCats li span{color:var(--ink-3);}
+  #login .box{display:flex; flex-direction:column; gap:1.6vh; padding:4vh; width:min(90vw, 460px);}
+  #login h2{margin:0; font:600 3vh var(--font-display);}
+  #login input{min-height:48px; padding:0 14px; border-radius:var(--r-sm); border:1px solid var(--line); background:var(--surface-2); color:var(--ink);}
+  #login button{min-height:48px; border:0; border-radius:var(--r-sm); background:var(--primary); color:#fff; font:600 16px var(--font); cursor:pointer;}
+  .err{margin:0; color:var(--g-red-700); min-height:1em;}
+  #confetti{position:fixed; inset:0; pointer-events:none; z-index:60;}
+</style>
+</head>
+<body class="noise-bg">
+<div id="login" class="overlay" hidden>
+  <div class="gcard box">
+    <h2>Live Vote · screen</h2>
+    <input id="token" type="password" placeholder="Admin password" autocomplete="current-password">
+    <button id="loginBtn">Show the screen</button>
+    <p id="loginErr" class="err"></p>
+  </div>
+</div>
+<div id="lobby" class="overlay lobby" hidden>
+  <h1>Live Vote</h1>
+  <div id="lobbyQr" class="qr"></div>
+  <p class="codeline">or open <b id="lobbyHost"></b>/vote and type <span id="lobbyCode" class="mono"></span></p>
+  <p class="soon">Voting starts soon</p>
+  <ul id="lobbyCats"></ul>
+</div>
+<main>
+  <div id="stage" class="n1"></div>
+  <aside id="side">
+    <div id="qrBox">
+      <div id="qr" class="qr"></div>
+      <div class="codeline"><span id="code" class="mono"></span>
+        <svg id="ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" pathLength="100"/></svg></div>
+    </div>
+    <div id="entryClosed" hidden>Entry closed</div>
+    <div class="total"><span id="total" class="mono">0</span> ballots</div>
+    <ol id="feed"></ol>
+  </aside>
+</main>
+<canvas id="confetti"></canvas>
+<script type="module">
+import { rankCounts } from '/vote/search.js';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const TOP = { 1: 10, 2: 8, 3: 6, 4: 5, 5: 3, 6: 3 };
+
+let clockOffset = 0;
+let bestRtt = Infinity;
+const serverNow = () => Date.now() + clockOffset;
+async function sampleClock() { // same min-RTT rule as public/screen.html:159-170
+  const t0 = Date.now();
+  try {
+    const r = await fetch('/vote/live', { cache: 'no-store' });
+    const t1 = Date.now();
+    const sn = Number(r.headers.get('x-server-now'));
+    const rtt = t1 - t0;
+    if (!sn || rtt < 0 || rtt > 5000) return;
+    if (Math.abs(sn - t1 - clockOffset) > 5000) bestRtt = Infinity;
+    if (rtt > bestRtt) return;
+    bestRtt = rtt;
+    clockOffset = sn + rtt / 2 - t1;
+  } catch { /* next sample */ }
+}
+
+let F = null; // latest frame
+let shownCode = null;
+let lastFeedSeq = 0;
+const prevPhase = new Map(); // categoryId -> phase in the previous frame
+const prevVotes = new Map(); // `${cat}:${cand}` -> votes in the previous frame
+let es = null;
+
+async function setQr(code) {
+  const url = `${location.origin}/vote?k=${code}`;
+  const svg = await fetch(`/qr.svg?data=${encodeURIComponent(url)}`).then((r) => r.text()).catch(() => '');
+  if (code !== shownCode) return; // rotated again while fetching
+  $('qr').innerHTML = svg;
+  $('lobbyQr').innerHTML = svg;
+}
+
+function connect() {
+  es?.close();
+  es = new EventSource('/vote/events');
+  es.onmessage = (e) => onFrame(JSON.parse(e.data));
+  es.onerror = async () => {
+    const s = await fetch('/admin/session').then((r) => r.json()).catch(() => null);
+    if (s && !s.authenticated) { es.close(); $('login').hidden = false; }
+  };
+}
+
+function onFrame(f) {
+  if (bestRtt === Infinity) clockOffset = f.now - Date.now(); // until sampleClock lands
+  F = f;
+  $('login').hidden = true;
+  if (f.code !== shownCode) {
+    shownCode = f.code;
+    $('code').textContent = f.code;
+    $('lobbyCode').textContent = f.code;
+    setQr(f.code);
+  }
+  $('qrBox').hidden = !f.entryOpen;
+  $('entryClosed').hidden = f.entryOpen;
+  $('total').textContent = new Intl.NumberFormat('en').format(f.totalBallots);
+  renderFeed(f);
+  const show = f.stage.show;
+  $('lobby').hidden = show.length > 0;
+  if (!show.length) {
+    $('lobbyCats').innerHTML = f.categories.map((c) => `<li>${esc(c.title)} <span>· pick ${c.picks}</span></li>`).join('');
+  }
+  renderStage(f, show);
+  for (const c of f.categories) prevPhase.set(c.id, c.phase);
+}
+
+function renderFeed(f) {
+  const titles = new Map(f.categories.map((c) => [c.id, c.title]));
+  const fresh = f.feed.filter((e) => e.seq > lastFeedSeq);
+  if (!fresh.length) return;
+  lastFeedSeq = fresh[fresh.length - 1].seq;
+  for (const e of fresh) {
+    const li = document.createElement('li');
+    li.className = 'item';
+    li.innerHTML = `<b>+1</b> ${esc(f.candidates[e.candidateId]?.name ?? '')} <span>· ${esc(titles.get(e.categoryId) ?? '')}</span>`;
+    $('feed').prepend(li);
+  }
+  while ($('feed').children.length > 8) $('feed').lastElementChild.remove();
+}
+
+function renderStage(f, show) {
+  let reveal = 0; // several closing in one frame get their moments in turn
+  const stage = $('stage');
+  stage.className = `n${Math.max(1, show.length)}`;
+  const keep = new Set(show);
+  for (const p of [...stage.children]) if (!keep.has(p.dataset.id)) p.remove();
+  show.forEach((id, i) => {
+    const cat = f.categories.find((c) => c.id === id);
+    let panel = stage.querySelector(`.panel[data-id="${id}"]`);
+    const isNew = !panel;
+    if (isNew) {
+      panel = document.createElement('section');
+      panel.className = 'panel';
+      panel.dataset.id = id;
+      panel.innerHTML = '<header><h2 class="ptitle"></h2><span class="ptimer mono"></span></header><div class="pmeta"></div><ol class="rows"></ol>';
+    }
+    if (stage.children[i] !== panel) stage.insertBefore(panel, stage.children[i] ?? null);
+    panel.querySelector('.ptitle').textContent = cat.title;
+    panel.querySelector('.pmeta').textContent = `Pick ${cat.picks} · ${cat.ballotCount} ballot${cat.ballotCount === 1 ? '' : 's'}`;
+    const ranked = rankCounts(f.candidates, cat.counts);
+    const justClosed = prevPhase.get(id) === 'open' && cat.phase === 'closed';
+    if (cat.phase === 'closed') {
+      const k = cat.counts.join(',');
+      if (justClosed) {
+        panel.dataset.pending = '1';
+        setTimeout(() => {
+          delete panel.dataset.pending;
+          renderPodium(panel, ranked);
+          panel.dataset.k = k;
+          burst();
+        }, reveal++ * 1500);
+      } else if (!panel.dataset.pending && (panel.dataset.k !== k || !panel.classList.contains('podium'))) {
+        // Counts can still move after the close (the admin can void): keep the podium true.
+        renderPodium(panel, ranked);
+        panel.dataset.k = k;
+      }
+    } else {
+      delete panel.dataset.k;
+      panel.classList.remove('podium');
+      renderRows(panel, cat, ranked.slice(0, TOP[show.length] ?? 3));
+    }
+  });
+}
+
+// FLIP: the same technique as public/screen.html:243-307 — measure, reorder,
+// then animate each row from where it was.
+function renderRows(panel, cat, rows) {
+  let list = panel.querySelector('ol.rows');
+  if (!list) { panel.querySelector('.podium-wrap')?.remove(); list = document.createElement('ol'); list.className = 'rows'; panel.append(list); }
+  const first = new Map([...list.children].map((el) => [el.dataset.id, el.getBoundingClientRect().top]));
+  const existing = new Map([...list.children].map((el) => [el.dataset.id, el]));
+  const max = Math.max(1, rows[0]?.votes ?? 0);
+  const els = rows.map((r) => {
+    let el = existing.get(String(r.id));
+    existing.delete(String(r.id));
+    if (!el) {
+      el = document.createElement('li');
+      el.className = 'prow';
+      el.dataset.id = String(r.id);
+      el.innerHTML = '<span class="bar"></span><span class="prank mono"></span><span class="pname"></span><span class="pvotes mono"></span><span class="ppct mono"></span>';
+    }
+    el.querySelector('.prank').textContent = r.votes ? r.rank : '–';
+    el.querySelector('.pname').textContent = r.name;
+    el.querySelector('.pvotes').textContent = r.votes;
+    el.querySelector('.ppct').textContent = cat.ballotCount ? `${Math.round((r.votes / cat.ballotCount) * 100)}%` : '0%';
+    el.querySelector('.bar').style.width = `${(r.votes / max) * 100}%`;
+    const key = `${cat.id}:${r.id}`;
+    if ((prevVotes.get(key) ?? 0) < r.votes) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+    prevVotes.set(key, r.votes);
+    return el;
+  });
+  for (const el of existing.values()) el.remove();
+  for (const el of els) list.appendChild(el);
+  for (const el of els) {
+    const was = first.get(el.dataset.id);
+    if (was === undefined) continue;
+    const dy = was - el.getBoundingClientRect().top;
+    if (!dy) continue;
+    el.style.transition = 'none';
+    el.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.style.transition = 'transform .45s cubic-bezier(.2,.8,.2,1)';
+      el.style.transform = '';
+    }));
+  }
+}
+
+function renderPodium(panel, ranked) {
+  panel.classList.add('podium');
+  panel.querySelector('ol.rows')?.remove();
+  panel.querySelector('.podium-wrap')?.remove();
+  const top = ranked.filter((r) => r.votes > 0 && r.rank <= 3);
+  const tie = ranked.length > 1 && ranked[0].votes > 0 && ranked[1].votes === ranked[0].votes;
+  // At most 3 names per step, but a tie never silently drops anyone: the rest are counted.
+  const step = (rank) => {
+    const at = top.filter((r) => r.rank === rank);
+    const shown = at.slice(0, 3).map((r) => `<div class="pod-name">${esc(r.name)}</div><div class="pod-votes mono">${r.votes}</div>`).join('');
+    return shown + (at.length > 3 ? `<div class="pod-more">+${at.length - 3} more tied</div>` : '');
+  };
+  const wrap = document.createElement('div');
+  wrap.className = 'podium-wrap';
+  wrap.innerHTML = (tie ? '<div class="tie">It\'s a tie!</div>' : '') +
+    `<div class="steps"><div class="step s2">${step(2)}</div><div class="step s1">${step(1)}</div><div class="step s3">${step(3)}</div></div>`;
+  panel.append(wrap);
+}
+
+function tick() {
+  const now = serverNow();
+  if (F) {
+    for (const panel of document.querySelectorAll('#stage .panel')) {
+      const cat = F.categories.find((c) => c.id === panel.dataset.id);
+      if (!cat) continue;
+      panel.querySelector('.ptimer').textContent = cat.phase === 'open' ? mmss(cat.endsAt - now) : cat.phase === 'closed' ? 'Closed' : 'Soon';
+    }
+    // The server sends a frame at every rotation, so codeRotatesAt is always the next one.
+    const frac = Math.min(1, Math.max(0, (F.codeRotatesAt - now) / F.codeMs));
+    $('ring').style.setProperty('--p', frac.toFixed(3));
+  }
+  requestAnimationFrame(tick);
+}
+
+// Confetti: the self-contained block from public/screen.html:350-385, verbatim.
+// ---- confetti (self-contained, no CDN) ----
+const cvs=$('confetti'), ctx=cvs.getContext('2d');
+let parts=[], confettiOn=false, confettiActive=false;
+function resize(){ cvs.width=innerWidth; cvs.height=innerHeight; }
+resize(); addEventListener('resize',resize);
+const COLORS=['#4285F4','#EA4335','#FBBC04','#34A853']; // Google brand colors
+function launchConfetti(){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; // respect reduced-motion
+  parts=[];
+  const N=280;
+  for(let i=0;i<N;i++){
+    parts.push({
+      x:Math.random()*cvs.width, y:Math.random()*cvs.height*0.4-60,
+      vx:(Math.random()-0.5)*10, vy:-5+Math.random()*6,   // some shoot up then fall: instant burst
+      s:7+Math.random()*11, rot:Math.random()*6.28, vr:(Math.random()-0.5)*0.35,
+      c:COLORS[i%COLORS.length],
+    });
+  }
+  confettiActive=true;
+  if(!confettiOn){ confettiOn=true; requestAnimationFrame(raf); }
+}
+function stopConfetti(){ confettiActive=false; }
+function raf(){
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  let alive=0;
+  for(const p of parts){
+    p.vy+=0.13; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
+    if(p.y<cvs.height+40){
+      alive++;
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.c;
+      ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.6); ctx.restore();
+    }
+  }
+  if(alive>0 && confettiActive){ requestAnimationFrame(raf); }
+  else { ctx.clearRect(0,0,cvs.width,cvs.height); confettiOn=false; }
+}
+function burst() { launchConfetti(); }
+
+$('loginBtn').addEventListener('click', async () => {
+  const r = await fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: $('token').value }) });
+  if (r.ok) { $('token').value = ''; connect(); } else $('loginErr').textContent = 'Wrong password';
+});
+$('token').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('loginBtn').click(); });
+$('lobbyHost').textContent = location.host;
+fetch('/admin/session').then((r) => r.json()).then((s) => { if (s.authenticated) connect(); else $('login').hidden = false; });
+for (let i = 0; i < 4; i++) setTimeout(sampleClock, i * 200);
+setInterval(sampleClock, 15000);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
