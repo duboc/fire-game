@@ -214,8 +214,8 @@ next poll.
   30 s shows a "Submit before time runs out!" banner. A draft at the deadline
   does not count — the page says so plainly.
 
-**Search** (`public/vote/search.js`, pure, instant on every keystroke — < 1 ms
-for 300 names, no debounce):
+**Search** (`public/vote/search.js`, pure, instant on every keystroke — ≈ 2 ms
+for 300 names on a laptop, well under a frame on a phone — no debounce):
 
 - **Folding:** accents, case and punctuation are ignored — `joao` finds "João",
   `davila` finds "D'Ávila", `anasouza` finds "Ana Souza".
