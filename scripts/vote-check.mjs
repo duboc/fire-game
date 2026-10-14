@@ -515,6 +515,8 @@ async function screenChecks() {
     live = (await admin.req('/vote/live')).json;
     const cat1 = live.categories.find((c) => c.id === c1.id);
     const code = (await page.textContent('#code')).trim();
+    const sawBubble = page.waitForSelector('#stage .bubble', { timeout: 4000 }).then(() => true, () => false);
+    const sawLeader = page.waitForSelector('#stage .lead-tag', { timeout: 5000 }).then(() => true, () => false);
     for (const [i, picks] of [[0, [0, 1, 2]], [1, [0, 1, 3]], [2, [0, 4, 5]]]) {
       const v = client(S.base, { ip: `192.0.2.${i + 10}`, ua: `Phone${i}` });
       await enterWith(v, code);
@@ -527,6 +529,20 @@ async function screenChecks() {
     ok((await page.locator('#feed li.item').count()) >= 3, 'the live feed shows the +1s');
     ok((await page.textContent('#feed')).includes(c1.title), '…tagged with the category');
     ok(/^\d+:\d\d$/.test((await page.locator(`#stage .panel[data-id="${c1.id}"] .ptimer`).textContent()).trim()), 'each panel has its own countdown');
+    ok(await sawBubble, 'effects: +1 bubbles float up when a name gets votes');
+    ok(await sawLeader, 'effects: a "New leader!" tag when someone takes the lead');
+    const leadChange = page.waitForFunction((id) => {
+      const p = document.querySelector(`#stage .panel[data-id="${id}"]`);
+      return !!p?.querySelector('.lead-tag') && p.querySelector('li.prow .pname')?.textContent.includes('João');
+    }, c1.id, { timeout: 5000 }).then(() => true, () => false);
+    for (const [i, picks] of [[3, [1, 6, 7]], [4, [1, 8, 9]]]) {
+      const v = client(S.base, { ip: `192.0.2.${i + 10}`, ua: `Phone${i}` });
+      await enterWith(v, code);
+      await ballot(v, cat1, live.listVersion, picks);
+    }
+    ok(await leadChange, 'effects: when the lead changes, the new leader gets the moment');
+    await page.waitForFunction((id) => document.querySelector(`#stage .panel[data-id="${id}"] li.prow .pvotes`)?.textContent.trim() === '4', c1.id, { timeout: 3000 });
+    ok(true, 'effects: counts tween up to the exact final number');
     await sleep(900); // let the FLIP reorder and the feed slide-ins finish
     await page.screenshot({ path: `${SHOTS}/screen-live.png` });
 
@@ -544,9 +560,19 @@ async function screenChecks() {
     await page.waitForSelector(`#stage .panel.podium[data-id="${c1.id}"]`);
     ok((await page.textContent(`#stage .panel[data-id="${c1.id}"]`)).includes('Ana Souza'), 'pinned closed category shows its podium');
     // Bruno, Carla, Lucas and Mariana all tie for 3rd: nobody tied may silently vanish.
-    ok(/\+1 more tied/.test(await page.textContent(`#stage .panel[data-id="${c1.id}"] .step.s3`)), 'a 4-way tie for 3rd shows 3 names and "+1 more tied"');
+    ok(/\+\d+ more tied/.test(await page.textContent(`#stage .panel[data-id="${c1.id}"] .step.s3`)), 'a many-way tie for 3rd shows 3 names and "+N more tied"');
     await sleep(1500); // the podium steps rise in turn
     await page.screenshot({ path: `${SHOTS}/screen-podium.png` });
+
+    console.log('\n== screen: final countdown ==');
+    await admin.req('/vote/admin/stage', { method: 'POST', body: { mode: 'auto' } });
+    const c3 = live.categories[2];
+    await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [c3.id], durationMs: 13_000 } });
+    const urgent = await page.waitForSelector(`#stage .panel[data-id="${c3.id}"] .ptimer.urgent`, { timeout: 9000 }).then(() => true, () => false);
+    ok(urgent, 'effects: the last 10 s turn the timer urgent');
+    const fc = await page.waitForSelector(`#stage .panel[data-id="${c3.id}"] .finalcount:not([hidden])`, { timeout: 9000 }).then(() => true, () => false);
+    ok(fc && /^[123]$/.test((await page.textContent(`#stage .panel[data-id="${c3.id}"] .finalcount`)).trim()), 'effects: the last 3 s show a big 3-2-1');
+    await page.screenshot({ path: `${SHOTS}/screen-final-countdown.png` });
   } finally {
     await browser.close();
     S.child.kill();
@@ -731,8 +757,54 @@ async function voteOnlyChecks() {
   } finally { S.child.kill(); }
 }
 
+// VOTE_NAMES: the event's real list, kept out of the public repo.
+async function seedChecks() {
+  console.log('\n== VOTE_NAMES (the private event list) ==');
+  const S = startServer(8153, { APPS: 'vote', VOTE_NAMES: "Ana Exemplo\nBruno d'Ávila Teste\n  \nCarla Demonstração\n" });
+  try {
+    await S.ready;
+    const names = (await (await fetch(S.base + '/vote/candidates')).json()).candidates.map((x) => x.name);
+    ok(names.join('|') === "Ana Exemplo|Bruno d'Ávila Teste|Carla Demonstração", 'VOTE_NAMES replaces the sample list (blank lines dropped)');
+  } finally { S.child.kill(); }
+  // A broken list must stop the boot loudly — never start with the wrong names.
+  const bad = spawn(process.execPath, [ROOT + 'src/server.js'], {
+    env: { ...process.env, PORT: '8154', ADMIN_TOKEN: TOKEN, NODE_ENV: 'test', VOTE_NAMES: 'Ana Souza\nana souza' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let out = '';
+  bad.stdout.on('data', (d) => { out += d; });
+  bad.stderr.on('data', (d) => { out += d; });
+  const code = await new Promise((r) => { bad.on('exit', r); setTimeout(() => { bad.kill(); r('timeout'); }, 6000); });
+  ok(code !== 0 && code !== 'timeout' && /VOTE_NAMES/.test(out) && /same name/.test(out), `a broken VOTE_NAMES stops the boot with a clear message (exit ${code})`);
+
+  // deploy.sh's env file: names ride along when the private file exists, and a
+  // broken list stops the deploy before anything is built.
+  const { mkdtempSync, writeFileSync, readFileSync } = await import('node:fs');
+  const dir = mkdtempSync('/tmp/vote-deploy-env-');
+  const run = (names, extra = {}) => new Promise((resolve) => {
+    if (names !== null) writeFileSync(`${dir}/names.txt`, names);
+    const c = spawn(process.execPath, [ROOT + 'scripts/deploy-env.mjs', `${dir}/env.json`], {
+      env: { ...process.env, APPS: 'vote', PERSIST: 'off', VOTE_NAMES_FILE: `${dir}/${names === null ? 'missing.txt' : 'names.txt'}`, ...extra },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let o = '';
+    c.stdout.on('data', (d) => { o += d; });
+    c.stderr.on('data', (d) => { o += d; });
+    c.on('exit', (code) => resolve({ code, out: o }));
+  });
+  let r = await run("Ana Exemplo\nBruno d'Ávila Teste\n\nCarla Demonstração\n");
+  let env = r.code === 0 ? JSON.parse(readFileSync(`${dir}/env.json`, 'utf8')) : {};
+  ok(r.code === 0 && env.APPS === 'vote' && env.PERSIST === 'off' && env.VOTE_NAMES === "Ana Exemplo\nBruno d'Ávila Teste\nCarla Demonstração", 'deploy env carries APPS, PERSIST and the cleaned names');
+  r = await run(null);
+  env = r.code === 0 ? JSON.parse(readFileSync(`${dir}/env.json`, 'utf8')) : {};
+  ok(r.code === 0 && !('VOTE_NAMES' in env) && /sample/.test(r.out), 'no names file → no VOTE_NAMES, and it says the sample list will be used');
+  r = await run('Ana Souza\nana souza\n');
+  ok(r.code !== 0 && /same name/.test(r.out), 'a broken names file stops the deploy with the reason');
+}
+
 await apiChecks();
 await voteOnlyChecks();
+await seedChecks();
 await phoneChecks();
 await screenChecks();
 await adminChecks();

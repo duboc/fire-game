@@ -3,3 +3,6 @@ npm-debug.log*
 .DS_Store
 *.local
 .env
+
+# The event's real name list (Live Vote). Kept out of this public repo; deploy.sh passes it as VOTE_NAMES.
+vote-names.txt

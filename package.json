@@ -16,7 +16,8 @@
     "check:load": "node scripts/load-check.mjs",
     "admin:hash": "node scripts/admin-hash.mjs",
     "check:vote": "node scripts/vote-check.mjs",
-    "check:look": "node scripts/look-check.mjs"
+    "check:look": "node scripts/look-check.mjs",
+    "load:vote": "node scripts/vote-load.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",

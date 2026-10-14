@@ -209,12 +209,25 @@ const batucada = new Batucada({
 // deadline check should not take a minute.
 // listVersionBase: list versions must never repeat across a restart — a phone
 // that slept through one would otherwise send ids from the old list.
-const vote = new Vote({
-  names: SEED_NAMES,
-  categories: SEED_CATEGORIES,
-  minDurationMs: numEnv('VOTE_MIN_DURATION_MS'),
-  listVersionBase: Date.now(),
-});
+// VOTE_NAMES: the event's real list, one per line. It stays out of the public
+// repo — deploy.sh reads a git-ignored vote-names.txt and passes it here; unset,
+// the sample list is used (tests, demos). A list the engine rejects stops the
+// boot: starting with the wrong names would be worse than not starting.
+const VOTE_NAMES = (process.env.VOTE_NAMES || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+function makeVote() {
+  try {
+    return new Vote({
+      names: VOTE_NAMES.length ? VOTE_NAMES : SEED_NAMES,
+      categories: SEED_CATEGORIES,
+      minDurationMs: numEnv('VOTE_MIN_DURATION_MS'),
+      listVersionBase: Date.now(),
+    });
+  } catch (err) {
+    console.error(`FATAL: ${VOTE_NAMES.length ? 'VOTE_NAMES rejected' : 'built-in vote seed rejected'} — ${err.message}`);
+    process.exit(1);
+  }
+}
+const vote = makeVote();
 const voteGuard = new VoteGuard({ epochMs: numEnv('VOTE_CODE_MS') });
 // Restarts reuse listVersion/roundId numbers from 1; this tells a phone (and
 // its HTTP cache) that a "v2" from before a restart is not this "v2".
@@ -1163,6 +1176,7 @@ const server = app.listen(PORT, () => {
     console.log(`   live vote  : phone:/vote  screen:/vote/screen  admin:/vote/admin`);
   }
   console.log(`   admin auth : ${ADMIN_TOKEN === null ? 'built-in password' : 'ADMIN_TOKEN override'}`);
+  console.log(`   vote names : ${VOTE_NAMES.length ? `${VOTE_NAMES.length} from VOTE_NAMES` : 'built-in sample list'}`);
   console.log(`   persistence: ${persistence.isEnabled() ? 'firestore' : 'off (in-memory only)'}`);
 });
 

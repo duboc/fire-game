@@ -24,7 +24,7 @@
   #stage.n4{grid-template-columns:repeat(2,1fr); grid-template-rows:1fr 1fr;}
   #stage.n5,#stage.n6{grid-template-columns:repeat(3,1fr); grid-template-rows:1fr 1fr;}
 
-  .panel{display:flex; flex-direction:column; min-height:0; min-width:0; padding:2vh 2.2vh;
+  .panel{position:relative; display:flex; flex-direction:column; min-height:0; min-width:0; padding:2vh 2.2vh;
     border-radius:var(--r-lg); background:var(--surface); border:1px solid var(--line); box-shadow:var(--e2); overflow:hidden;}
   .panel header{display:flex; align-items:baseline; gap:1.5vh;}
   .ptitle{flex:1; min-width:0; margin:0; font:700 3.2vh/1.15 var(--font-display); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -91,6 +91,30 @@
   #feed .item span{color:var(--ink-3);}
   @keyframes in{from{transform:translateX(40%); opacity:0}to{transform:none; opacity:1}}
 
+  /* ---- effects ---- */
+  .bubble{position:absolute; z-index:2; pointer-events:none; padding:.3vh 1.1vh; border-radius:var(--r-full);
+    background:var(--bg); color:var(--fg); font-size:2.6vh; font-weight:600; box-shadow:var(--e2);
+    transform:translate(-50%, -50%); animation:bubble 1.6s cubic-bezier(.2,.7,.3,1) forwards;}
+  @keyframes bubble{0%{opacity:0; transform:translate(-50%,-50%) scale(.6)}15%{opacity:1; transform:translate(-50%,-80%) scale(1.1)}
+    100%{opacity:0; transform:translate(-50%,-50%) translateY(-11vh) scale(.95)}}
+  .prow.newleader{box-shadow:0 0 0 .35vh var(--g-yellow), var(--e2);}
+  .prow.newleader::after{content:''; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(100deg, transparent 25%, rgba(255,255,255,.85) 50%, transparent 75%);
+    transform:translateX(-100%); animation:sweep 1.1s ease-out 2;}
+  @keyframes sweep{to{transform:translateX(100%)}}
+  .lead-tag{align-self:center; margin-left:1vh; padding:.4vh 1.4vh; border-radius:var(--r-full); white-space:nowrap;
+    background:#FEF7E0; color:var(--g-yellow-700); border:1px solid #FDE293; font:700 1.9vh var(--font);
+    animation:tagpop .5s cubic-bezier(.2,1.4,.4,1);}
+  @keyframes tagpop{from{transform:scale(.4); opacity:0}to{transform:none; opacity:1}}
+  .ptimer.urgent{color:var(--g-red-700); animation:urgent 1s ease-in-out infinite;}
+  @keyframes urgent{50%{transform:scale(1.12)}}
+  .finalcount{position:absolute; inset:0; z-index:3; display:grid; place-items:center; pointer-events:none;
+    border-radius:var(--r-lg); background:rgba(255,255,255,.6); color:var(--g-red-700);
+    font-size:min(42vh, 28vw); font-weight:700; line-height:1;}
+  #stage:not(.n1) .finalcount{font-size:min(26vh, 14vw);}
+  .finalcount.pop{animation:fcpop .9s cubic-bezier(.2,1.2,.4,1);}
+  @keyframes fcpop{0%{transform:scale(1.6); opacity:0}30%{opacity:1}100%{transform:scale(1); opacity:.9}}
+
   /* ---- overlays ---- */
   .overlay{position:fixed; inset:0; z-index:40; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2.4vh; background:var(--bg);}
   .lobby h1{margin:0; font:700 6vh var(--font-display);}
@@ -109,6 +133,7 @@
   #login button{min-height:48px; border:0; border-radius:var(--r-sm); background:var(--primary); color:#fff; font:600 16px var(--font); cursor:pointer;}
   .err{margin:0; color:var(--g-red-700); min-height:1em;}
   #confetti{position:fixed; inset:0; pointer-events:none; z-index:60;}
+  .credit{position:fixed; right:2.4vh; bottom:.8vh; z-index:45; font-size:1.6vh; color:var(--ink-2); text-decoration:none;}
 </style>
 </head>
 <body class="noise-bg">
@@ -142,6 +167,7 @@
   </aside>
 </main>
 <canvas id="confetti"></canvas>
+<a class="credit" href="https://github.com/duboc/" target="_blank" rel="noopener">by @duboc</a>
 <script type="module">
 import { rankCounts } from '/vote/search.js';
 
@@ -244,7 +270,8 @@ function renderStage(f, show) {
       panel = document.createElement('section');
       panel.className = 'panel';
       panel.dataset.id = id;
-      panel.innerHTML = '<header><h2 class="ptitle"></h2><span class="ptimer mono"></span></header><div class="pmeta"></div><ol class="rows"></ol>';
+      panel.innerHTML = '<header><h2 class="ptitle"></h2><span class="ptimer mono"></span></header><div class="pmeta"></div><ol class="rows"></ol>' +
+        '<div class="finalcount mono" hidden aria-hidden="true"></div>';
     }
     if (stage.children[i] !== panel) stage.insertBefore(panel, stage.children[i] ?? null);
     panel.querySelector('.ptitle').textContent = cat.title;
@@ -282,6 +309,7 @@ function renderRows(panel, cat, rows) {
   const first = new Map([...list.children].map((el) => [el.dataset.id, el.getBoundingClientRect().top]));
   const existing = new Map([...list.children].map((el) => [el.dataset.id, el]));
   const max = Math.max(1, rows[0]?.votes ?? 0);
+  const gained = [];
   const els = rows.map((r) => {
     let el = existing.get(String(r.id));
     existing.delete(String(r.id));
@@ -293,16 +321,20 @@ function renderRows(panel, cat, rows) {
     }
     el.querySelector('.prank').textContent = r.votes ? r.rank : '–';
     el.querySelector('.pname').textContent = r.name;
-    el.querySelector('.pvotes').textContent = r.votes;
+    countTo(el.querySelector('.pvotes'), r.votes);
     el.querySelector('.ppct').textContent = cat.ballotCount ? `${Math.round((r.votes / cat.ballotCount) * 100)}%` : '0%';
     el.querySelector('.bar').style.width = `${(r.votes / max) * 100}%`;
     const key = `${cat.id}:${r.id}`;
-    if ((prevVotes.get(key) ?? 0) < r.votes) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+    const before = prevVotes.get(key);
+    if ((before ?? 0) < r.votes) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+    if (before !== undefined && r.votes > before) gained.push([el, r.votes - before]);
     prevVotes.set(key, r.votes);
     return el;
   });
   for (const el of existing.values()) el.remove();
   for (const el of els) list.appendChild(el);
+  for (const [el, n] of gained) spawnBubble(panel, el, n);
+  celebrateLeader(panel, cat, rows, els);
   for (const el of els) {
     const was = first.get(el.dataset.id);
     if (was === undefined) continue;
@@ -314,6 +346,75 @@ function renderRows(panel, cat, rows) {
       el.style.transition = 'transform .45s cubic-bezier(.2,.8,.2,1)';
       el.style.transform = '';
     }));
+  }
+}
+
+// ---- effects -----------------------------------------------------------------
+// Counts glide to their new value instead of jumping; one rAF loop drives them all.
+const counting = new Map(); // element -> {from, to, start}
+function countTo(el, to) {
+  if (el.dataset.shown === undefined) { el.dataset.shown = String(to); el.textContent = to; return; }
+  if (Number(el.dataset.target ?? el.dataset.shown) === to) return;
+  el.dataset.target = String(to);
+  counting.set(el, { from: Number(el.dataset.shown), to, start: performance.now() });
+  if (counting.size === 1) requestAnimationFrame(stepCounts);
+}
+function stepCounts(t) {
+  for (const [el, c] of counting) {
+    const k = Math.min(1, (t - c.start) / 650);
+    const v = Math.round(c.from + (c.to - c.from) * (1 - (1 - k) ** 3));
+    if (String(v) !== el.dataset.shown) { el.dataset.shown = String(v); el.textContent = v; }
+    if (k >= 1) counting.delete(el);
+  }
+  if (counting.size) requestAnimationFrame(stepCounts);
+}
+
+// "+N" rises from a row that just gained votes. Darker Google shades, so the
+// label stays readable; decorative, so hidden from assistive tech.
+const BUBBLE = [['#1A73E8', '#fff'], ['#D93025', '#fff'], ['#F9AB00', '#202124'], ['#188038', '#fff']];
+let bubbleN = 0;
+function spawnBubble(panel, row, n) {
+  if (panel.querySelectorAll('.bubble').length >= 12) return;
+  const [bg, fg] = BUBBLE[bubbleN++ % BUBBLE.length];
+  const b = document.createElement('span');
+  b.className = 'bubble mono';
+  b.setAttribute('aria-hidden', 'true');
+  b.textContent = `+${n}`;
+  b.style.cssText = `top:${row.offsetTop + row.offsetHeight / 2}px; left:${row.offsetLeft + row.offsetWidth * (0.55 + Math.random() * 0.3)}px; --bg:${bg}; --fg:${fg};`;
+  b.addEventListener('animationend', () => b.remove());
+  panel.append(b);
+}
+
+// A clear new #1 (not a tie, not the first paint of a panel) gets its moment.
+const leaders = new Map(); // categoryId -> candidate id of the clear leader, or null
+function celebrateLeader(panel, cat, rows, els) {
+  const lead = rows[0]?.votes > 0 && !(rows[1] && rows[1].votes === rows[0].votes) ? rows[0].id : null;
+  const had = leaders.has(cat.id);
+  const prev = leaders.get(cat.id);
+  leaders.set(cat.id, lead);
+  if (!had || lead === null || lead === prev) return;
+  const row = els[0];
+  row.classList.remove('newleader'); void row.offsetWidth; row.classList.add('newleader');
+  setTimeout(() => row.classList.remove('newleader'), 2400);
+  panel.querySelector('.lead-tag')?.remove();
+  const tag = document.createElement('span');
+  tag.className = 'lead-tag';
+  tag.textContent = 'New leader!';
+  panel.querySelector('header').append(tag);
+  setTimeout(() => tag.remove(), 2800);
+}
+
+// Last 10 s: the timer turns urgent. Last 3 s: a big 3-2-1 over the panel.
+function finalCountdown(panel, cat, now) {
+  const left = cat.phase === 'open' ? cat.endsAt - now : 0;
+  panel.querySelector('.ptimer').classList.toggle('urgent', left > 0 && left <= 10_000);
+  const fc = panel.querySelector('.finalcount');
+  if (!fc) return;
+  const digit = left > 0 && left <= 3000 ? String(Math.ceil(left / 1000)) : '';
+  fc.hidden = !digit;
+  if (digit && fc.textContent !== digit) {
+    fc.textContent = digit;
+    fc.classList.remove('pop'); void fc.offsetWidth; fc.classList.add('pop');
   }
 }
 
@@ -343,6 +444,7 @@ function tick() {
       const cat = F.categories.find((c) => c.id === panel.dataset.id);
       if (!cat) continue;
       panel.querySelector('.ptimer').textContent = cat.phase === 'open' ? mmss(cat.endsAt - now) : cat.phase === 'closed' ? 'Closed' : 'Soon';
+      finalCountdown(panel, cat, now);
     }
     // The server sends a frame at every rotation, so codeRotatesAt is always the next one.
     const frac = Math.min(1, Math.max(0, (F.codeRotatesAt - now) / F.codeMs));

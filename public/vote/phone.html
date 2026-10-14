@@ -55,6 +55,9 @@
   .cat-card.open .s{color:var(--ink);}
   .cat-card.closed{opacity:.6;}
   .cat-card.new{animation:cardIn .4s ease-out;}
+  .foot{padding:4px 16px calc(20px + var(--safe-bot)); text-align:center;}
+  .credit{font-size:13px; color:var(--ink-2); text-decoration:none;}
+  .credit:hover,.credit:focus-visible{text-decoration:underline;}
   @keyframes cardIn{from{opacity:0; transform:translateY(10px) scale(.98)}to{opacity:1; transform:none}}
 
   /* ---- ballot ---- */
@@ -151,6 +154,7 @@
 <main id="home">
   <header class="top"><h1>Live Vote</h1><span class="gwm"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span> <span class="cloud">Cloud</span></span></header>
   <div id="cards" class="cards"></div>
+  <footer class="foot"><a class="credit" href="https://github.com/duboc/" target="_blank" rel="noopener">by @duboc</a></footer>
 </main>
 
 <main id="ballot" hidden>

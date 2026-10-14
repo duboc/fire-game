@@ -645,5 +645,13 @@ untouched.
 - [x] `src/server.js`: `APPS=vote` allow-list mode (`/` → `/vote`, every other app 404) with checks in `check:vote`.
 - [x] `src/server.js`: `ADMIN_PASSWORD_HASH` for the new password (plaintext never committed); login verified without `ADMIN_TOKEN`.
 - [x] `deploy.sh` defaults to `SERVICE=live-vote APPS=vote`; README updated.
-- [ ] Full regression: `npm test`, `check:contract`, `check:browser`, `check:vote`, `check:look`.
-- [ ] PR → merge → deploy `live-vote` → production smoke incl. admin login.
+- [x] Full regression: `npm test`, `check:contract`, `check:browser`, `check:vote`, `check:look`.
+- [x] PR → merge → deploy `live-vote` → production smoke incl. admin login.
+
+## Live Vote: footer, screen effects, the event's names, 300-phone load test
+
+- [x] "by @duboc" footer (→ github.com/duboc/) on the phone, big screen and admin; `check:look` asserts it.
+- [x] Big-screen effects: +1 bubbles, new-leader moment, counting numbers, final countdown (10 s urgent timer, 3-2-1); `check:vote` covers each.
+- [x] `VOTE_NAMES`: the real list from a git-ignored `vote-names.txt`, passed by `deploy.sh` (`scripts/deploy-env.mjs` validates first); a bad list stops the boot.
+- [x] `scripts/vote-load.mjs` (`npm run load:vote`): 300 phones locally — 0 failures, counts match.
+- [ ] PR → merge → deploy `live-vote` with the 119 names → 300-phone load test in production → fresh revision.
