@@ -100,6 +100,8 @@ function auditInPage() {
 
 async function capture(page, name) {
   await page.screenshot({ path: `${SHOTS}/${name}.png` });
+  const credit = page.locator('a[href="https://github.com/duboc/"]');
+  ok((await credit.count()) === 1 && (await credit.textContent()).trim() === 'by @duboc', `${name}: "by @duboc" footer links to github.com/duboc/`);
   const { contrast, dark } = await page.evaluate(auditInPage);
   ok(contrast.length === 0, `${name}: text contrast${contrast.length ? '\n      ' + contrast.slice(0, 8).join('\n      ') : ''}`);
   ok(dark.length === 0, `${name}: no large dark surfaces${dark.length ? ' — ' + dark.join(' ') : ''}`);

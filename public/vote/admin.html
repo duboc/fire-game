@@ -91,6 +91,9 @@
   .cat-row button{min-width:44px; padding:0;}
   #addCat{margin-top:6px;}
   #saveConfig{width:100%; margin-top:6px;}
+  .foot{padding:8px 16px 24px; text-align:center;}
+  .credit{font-size:13px; color:var(--ink-2); text-decoration:none;}
+  .credit:hover,.credit:focus-visible{text-decoration:underline;}
 </style>
 </head>
 <body class="noise-bg">
@@ -142,6 +145,7 @@
       </div>
     </section>
   </div>
+  <footer class="foot"><a class="credit" href="https://github.com/duboc/" target="_blank" rel="noopener">by @duboc</a></footer>
 </div>
 <script type="module">
 import { buildIndex, search, rankCounts, fold } from '/vote/search.js';
