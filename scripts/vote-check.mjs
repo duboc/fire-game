@@ -3,6 +3,7 @@
 // docs/VOTE_PLAN.md append the browser checks for each page.
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import { chromium, devices } from 'playwright';
 import { SEED_NAMES, SEED_CATEGORIES } from '../src/vote-seed.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -248,8 +249,155 @@ async function apiChecks() {
   } finally { A.child.kill(); }
 }
 
+async function phoneChecks() {
+  const S = startServer(8147);
+  const browser = await chromium.launch();
+  try {
+    await S.ready;
+    const admin = await adminClient(S.base);
+    let live = (await admin.req('/vote/live')).json;
+    const [c1, c2] = live.categories;
+    await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [c1.id] } });
+
+    console.log('\n== phone: entering and searching ==');
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    const bodies = [];
+    page.on('response', async (r) => {
+      if (r.url().includes('/vote/') && (r.headers()['content-type'] || '').includes('json')) {
+        try { bodies.push(await r.json()); } catch { /* 304 / empty */ }
+      }
+    });
+    await page.goto(`${S.base}/vote?k=${(await frame(admin)).code}`);
+    await page.waitForSelector('#ballot:not([hidden])');
+    ok(new URL(page.url()).search === '', 'the code is stripped from the address bar');
+    ok((await page.textContent('#ballotTitle')) === c1.title, 'one open category → straight into its ballot');
+    ok(/Pick exactly 3/.test(await page.textContent('#need')), '"Pick exactly 3" in the header');
+    ok((await page.locator('#results li.hdr').count()) > 10, 'empty query: alphabetical with letter headers');
+    ok((await page.locator('#rail span').count()) > 10, 'the A–Z rail is shown');
+    const railBox = await page.locator('#rail').boundingBox();
+    const trayBox = await page.locator('#tray').boundingBox();
+    const searchBox = await page.locator('#searchForm').boundingBox();
+    ok(railBox.y >= searchBox.y + searchBox.height && railBox.y + railBox.height <= trayBox.y, 'the A–Z rail fits between the search bar and the tray');
+
+    const top = () => page.locator('#results li.row').first();
+    await page.fill('#q', 'joao');
+    ok((await top().getAttribute('data-name')) === 'João Pedro Silva', '"joao" finds João Pedro Silva first');
+    ok((await top().locator('mark').allTextContents()).join('') === 'João', '…with "João" highlighted');
+    ok(/^\d+ of 120$/.test((await page.textContent('#count')).trim()), 'result count reads "N of 120"');
+    ok(await page.isHidden('#rail'), 'the rail hides while searching');
+    await page.screenshot({ path: `${SHOTS}/phone-search.png` });
+    await page.press('#q', 'Enter');
+    ok((await page.inputValue('#q')) === '', 'Enter picks the top hit and clears the field');
+    ok((await page.locator('#chips .chip').count()) === 1, 'the pick lands in the tray');
+    ok(/1 of 3/.test(await page.textContent('#picked')), 'tray reads "1 of 3"');
+
+    await page.fill('#q', 'suoza');
+    ok((await top().getAttribute('data-name')) === 'Ana Souza', 'typo "suoza" still finds Ana Souza');
+    await page.press('#q', 'Enter');
+    await page.fill('#q', 'bruno lma');
+    ok(await page.isVisible('#empty'), 'no match → empty state');
+    ok((await page.textContent('#suggest')).includes('Bruno Lima'), '…with "Did you mean Bruno Lima?"');
+    await page.click('#suggest .sug');
+    ok((await page.locator('#chips .chip').count()) === 3, 'tapping a suggestion picks it');
+    ok(await page.isEnabled('#submit'), 'Submit enabled at exactly 3');
+
+    await page.fill('#q', 'carla');
+    await top().click();
+    ok(await page.isVisible('#toast.show'), 'a 4th pick is refused with a toast');
+    ok((await page.textContent('#toast')).includes("You've picked 3"), '…"You\'ve picked 3 — remove one…"');
+    ok((await page.locator('#chips .chip').count()) === 3, '…and the tray still has 3');
+
+    console.log('\n== phone: submitting ==');
+    await page.fill('#q', '');
+    await page.locator('#submit').dblclick();
+    await page.waitForSelector('#tray.submitted');
+    await sleep(300);
+    ok(!(await page.isVisible('#toast.error')), 'double-tapping Submit shows no error');
+    let fc = (await frame(admin)).categories.find((c) => c.id === c1.id);
+    ok(fc.ballotCount === 1 && fc.counts[0] === 1 && fc.counts[1] === 1 && fc.counts[4] === 1, 'the server counted Ana, João and Bruno');
+    ok((await page.textContent('#submit')).includes('Submitted'), 'button reads "Submitted ✓"');
+    await page.reload();
+    await page.waitForSelector('#tray.submitted');
+    ok((await page.locator('#chips .chip').count()) === 3, 'after a reload the submitted ballot is still shown');
+
+    await page.locator('#chips .chip[data-id="4"]').click();
+    ok(!(await page.locator('#tray').getAttribute('class')).includes('submitted'), 'removing a pick un-marks "submitted"');
+    await page.fill('#q', 'carla');
+    await page.press('#q', 'Enter');
+    await page.click('#submit');
+    await page.waitForSelector('#tray.submitted');
+    fc = (await frame(admin)).categories.find((c) => c.id === c1.id);
+    ok(fc.counts[4] === 0 && fc.counts[5] === 1 && fc.ballotCount === 1, 'changing a pick moved one vote');
+    ok(bodies.every((b) => leaks(b).length === 0), 'no response the phone received contained counts');
+
+    console.log('\n== phone: home, deadline ==');
+    // Long enough for a 3 s poll to show the card, short enough to watch it end.
+    await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [c2.id], durationMs: 10_000 } });
+    await page.click('#back');
+    await page.waitForSelector(`#cards .cat-card.open[data-id="${c2.id}"]`, { timeout: 8000 });
+    ok((await page.textContent(`#cards .cat-card[data-id="${c1.id}"] .s`)).includes('Submitted'), 'home: category 1 reads "Submitted ✓"');
+    ok((await page.locator('#cards .cat-card.open').count()) === 2, 'home: both open categories listed first');
+    await page.screenshot({ path: `${SHOTS}/phone-categories.png` });
+    await page.click(`#cards .cat-card[data-id="${c2.id}"]`);
+    await page.fill('#q', 'mei lin');
+    await page.press('#q', 'Enter');
+    await page.waitForSelector('#deadlineMsg:not([hidden])', { timeout: 12_000 });
+    ok(/didn.t count/.test(await page.textContent('#deadlineMsg')), "deadline with an unsubmitted draft → \"…didn't count\"");
+    ok(await page.isDisabled('#submit'), 'Submit disabled after the deadline');
+    {
+      const r = await page.locator('#rail').boundingBox();
+      const t = await page.locator('#tray').boundingBox();
+      const q = await page.locator('#searchForm').boundingBox();
+      ok(r.y >= q.y + q.height && r.y + r.height <= t.y, 'with a banner showing, the rail still fits between search and tray');
+    }
+    await page.screenshot({ path: `${SHOTS}/phone-ballot.png` });
+
+    console.log('\n== phone: gate ==');
+    const g = await browser.newContext({ ...devices['iPhone 13'] });
+    const gp = await g.newPage();
+    await gp.goto(`${S.base}/vote`);
+    await gp.waitForSelector('#gate:not([hidden])');
+    ok((await gp.textContent('#gateMsg')).includes('Scan the QR on the big screen'), 'no cookie → "Scan the QR on the big screen to vote"');
+    await gp.goto(`${S.base}/vote?k=ZZZZZ`);
+    await gp.waitForSelector('#gate:not([hidden])');
+    ok(/expired/.test(await gp.textContent('#gateMsg')), 'an expired code says so');
+    await gp.fill('#codeInput', (await frame(admin)).code.toLowerCase());
+    await gp.click('#codeBtn');
+    await gp.waitForSelector('#gate', { state: 'hidden' });
+    ok(true, 'typing the code (any case) lets you in');
+    await gp.screenshot({ path: `${SHOTS}/phone-home.png` });
+
+    console.log('\n== phone: 360 px, 60-char names ==');
+    const long = 'Maria Eduarda Quintela de Albuquerque Vasconcelos e Silva Jr';
+    await admin.req('/vote/admin/close', { method: 'POST', body: { categoryIds: [c1.id, c2.id] } });
+    await admin.req('/vote/admin/config', { method: 'POST', body: { names: [long, ...SEED_NAMES.slice(1)], categories: SEED_CATEGORIES } });
+    live = (await admin.req('/vote/live')).json;
+    await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [live.categories[0].id] } });
+    const small = await browser.newContext({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3, userAgent: devices['Pixel 5'].userAgent });
+    const sp = await small.newPage();
+    await sp.goto(`${S.base}/vote?k=${(await frame(admin)).code}`);
+    await sp.waitForSelector('#ballot:not([hidden])');
+    await sp.fill('#q', 'albuquerque'); // only the long name has this word
+    await sp.press('#q', 'Enter');
+    ok((await sp.locator('#chips .chip').count()) === 1, 'the 60-char name is in the tray');
+    ok(await sp.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth), 'no horizontal scroll at 360 px with a 60-char name');
+    const h = await sp.locator('#results li.row').first().boundingBox();
+    ok(h.height >= 56, 'rows are at least 56 px tall');
+    ok(await sp.evaluate(() => parseFloat(getComputedStyle(document.getElementById('q')).fontSize) >= 16), 'search input ≥ 16 px (no iOS zoom)');
+    await sp.screenshot({ path: `${SHOTS}/phone-360.png` });
+
+    ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
+  } finally {
+    await browser.close();
+    S.child.kill();
+  }
+}
+
 await apiChecks();
-// Browser checks (Tasks 5–7) are called here.
+await phoneChecks();
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

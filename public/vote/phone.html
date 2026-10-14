@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<!-- Zoom stays allowed: this page is reading-heavy, unlike the tap games. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<title>Live Vote</title>
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  /* The page toggles views with the hidden attribute; any display: rule below
+     (e.g. .tray{display:flex}) would otherwise beat the browser default. */
+  [hidden]{display:none !important;}
+
+  :root{
+    --top-h:60px; --search-h:64px;
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+    --tray-h:168px;
+  }
+  html,body{min-height:100dvh;}
+  body{overscroll-behavior-y:none; -webkit-tap-highlight-color:transparent;}
+  button{font:inherit; color:inherit; cursor:pointer;}
+  .mono{font-family:var(--font-mono);}
+
+  /* ---- gate (no device cookie yet) ---- */
+  .gate{position:sticky; top:0; z-index:8; padding:calc(12px + var(--safe-top)) 16px 14px;
+    background:linear-gradient(180deg,#0d1a33,#0a0f1c); border-bottom:1px solid var(--line);}
+  .gate p{margin:0 0 10px; font-weight:500; line-height:1.35;}
+  .gate form{display:flex; gap:8px;}
+  .gate input{flex:1; min-width:0; min-height:48px; padding:0 14px; border-radius:var(--r-sm);
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink);
+    font:600 20px var(--font-mono); letter-spacing:.3em; text-transform:uppercase;}
+  .gate button{min-height:48px; padding:0 20px; border:0; border-radius:var(--r-sm); background:var(--primary); font-weight:600;}
+  .shake{animation:shake .35s;}
+  @keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+
+  /* ---- shared header ---- */
+  .top{position:sticky; top:0; z-index:5; min-height:var(--top-h); display:flex; align-items:center; gap:10px;
+    padding:var(--safe-top) 12px 0; background:rgba(0,0,0,.86); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    border-bottom:1px solid var(--line);}
+  .top h1{margin:0; font:600 19px var(--font-display); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+  /* ---- home ---- */
+  #home .top{padding-left:16px;}
+  .cards{display:flex; flex-direction:column; gap:12px; padding:16px 16px calc(24px + var(--safe-bot));}
+  .cat-card{display:grid; grid-template-columns:1fr auto; grid-template-areas:"t tm" "n n" "s s"; gap:4px 12px;
+    min-height:72px; padding:14px 16px; text-align:left; border-radius:var(--r-md);
+    background:var(--surface); border:1px solid var(--line); box-shadow:var(--e1);}
+  .cat-card .t{grid-area:t; font:600 18px var(--font-display); overflow-wrap:anywhere;}
+  .cat-card .n{grid-area:n; color:var(--ink-2); font-size:14px;}
+  .cat-card .s{grid-area:s; font-size:14px; color:var(--ink-2);}
+  .cat-card .tm{grid-area:tm; align-self:start; font-size:16px; color:var(--g-blue-700);}
+  .cat-card.open{border-color:rgba(66,133,244,.55); box-shadow:var(--e2), var(--glow);}
+  .cat-card.open .s{color:var(--ink);}
+  .cat-card.closed{opacity:.6;}
+  .cat-card.new{animation:cardIn .4s ease-out;}
+  @keyframes cardIn{from{opacity:0; transform:translateY(10px) scale(.98)}to{opacity:1; transform:none}}
+
+  /* ---- ballot ---- */
+  .bar #back{flex:none; width:44px; height:44px; border:0; border-radius:50%; background:var(--surface-2); font-size:26px; line-height:1;}
+  .bar .ttl{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .bar #need{font-size:13px; color:var(--ink-2);}
+  .bar #timer{flex:none; font-size:18px; color:var(--g-blue-700); min-width:52px; text-align:right;}
+  .warn{margin:0 0 10px; padding:10px 12px; border-radius:var(--r-sm); font-weight:600;
+    background:rgba(251,188,4,.12); color:var(--g-yellow-700); border:1px solid rgba(251,188,4,.35);}
+
+  .search{position:sticky; top:calc(var(--top-h) + var(--safe-top)); z-index:4; height:var(--search-h);
+    display:flex; align-items:center; padding:8px 12px; background:rgba(0,0,0,.86);
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);}
+  #q{width:100%; min-height:48px; padding:0 44px 0 16px; border-radius:var(--r-full);
+    border:1px solid rgba(66,133,244,.35); background:var(--surface); color:var(--ink);
+    font:17px var(--font); outline:none; -webkit-appearance:none; appearance:none;}
+  #q:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(66,133,244,.25);}
+  #q::-webkit-search-cancel-button{display:none;}
+  #clear{position:absolute; right:20px; width:36px; height:36px; border:0; border-radius:50%;
+    background:var(--surface-2); font-size:20px; line-height:1;}
+  .count{padding:6px 16px 2px; font-size:13px; color:var(--ink-3);}
+
+  .list{list-style:none; margin:0; padding:0 0 calc(var(--tray-h) + 24px);}
+  .list li.hdr{position:sticky; top:calc(var(--top-h) + var(--search-h) + var(--safe-top)); z-index:2;
+    scroll-margin-top:calc(var(--top-h) + var(--search-h) + var(--safe-top));
+    padding:4px 16px; font:600 13px var(--font-mono); color:var(--g-blue-700); background:#05070d;}
+  .list li.row{min-height:56px; display:flex; align-items:center; gap:12px; padding:8px 44px 8px 16px;
+    border-bottom:1px solid rgba(255,255,255,.05); cursor:pointer; user-select:none; -webkit-user-select:none;}
+  .list li.row:active{background:rgba(255,255,255,.04);}
+  .av{flex:none; width:36px; height:36px; border-radius:50%; display:grid; place-items:center;
+    background:hsl(var(--h) 55% 32%); font:600 13px var(--font); color:#fff;}
+  .nm{flex:1; min-width:0; font-size:16px; line-height:1.3; overflow-wrap:anywhere;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  li.row mark{background:none; color:var(--g-blue-700); font-weight:700;}
+  .ck{flex:none; width:26px; height:26px; border-radius:50%; border:2px solid var(--ink-3);}
+  li.row.on{background:var(--primary-dim);}
+  li.row.on .ck{border-color:var(--primary); background:var(--primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/18px no-repeat;}
+
+  /* Bounded to the band between the sticky search bar and the tray, so no
+     letter ever hides behind either — the letters share whatever height that is. */
+  .rail{position:fixed; right:2px; z-index:3; display:flex; flex-direction:column; justify-content:space-evenly;
+    top:calc(var(--top-h) + var(--search-h) + var(--safe-top) + 8px);
+    bottom:calc(var(--kb,0px) + var(--tray-h) + 8px);
+    padding:4px 2px; border-radius:var(--r-full); background:rgba(26,26,26,.6); touch-action:none;
+    font:600 11px var(--font-mono); color:var(--g-blue-700); user-select:none; -webkit-user-select:none;}
+  .rail span{flex:0 1 18px; min-height:0; min-width:22px; text-align:center; line-height:1; display:flex; align-items:center; justify-content:center;}
+
+  .empty{padding:32px 20px; text-align:center; color:var(--ink-2);}
+  .empty p{margin:0 0 12px;}
+  #suggest{display:flex; flex-wrap:wrap; gap:8px; justify-content:center;}
+  .sug{min-height:44px; padding:0 16px; border-radius:var(--r-full); border:1px solid rgba(66,133,244,.45);
+    background:var(--primary-dim); font-weight:500;}
+
+  /* ---- tray ---- */
+  .tray{position:fixed; left:0; right:0; bottom:var(--kb,0px); z-index:6;
+    padding:12px 16px calc(12px + var(--safe-bot)); background:rgba(14,14,14,.97);
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-top:1px solid var(--line);
+    box-shadow:0 -8px 30px rgba(0,0,0,.6);}
+  .chips{display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-height:36px; margin-bottom:10px;}
+  .chips:empty::before{content:'Tap names to pick them'; color:var(--ink-3); font-size:14px;}
+  .chip{display:inline-flex; align-items:center; gap:6px; max-width:46vw; min-height:36px; padding:0 6px 0 12px;
+    border-radius:var(--r-full); border:1px solid rgba(66,133,244,.45); background:var(--primary-dim); font-size:14px;}
+  .chip span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .chip b{flex:none; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; background:rgba(255,255,255,.1); font-weight:400;}
+  .trayrow{display:flex; align-items:center; gap:12px;}
+  #picked{flex:none; font-size:15px; color:var(--ink-2); min-width:52px;}
+  #submit{flex:1; min-height:52px; border:0; border-radius:var(--r-md); background:var(--primary); font:600 17px var(--font);
+    box-shadow:var(--glow);}
+  #submit:disabled{background:var(--surface-2); color:var(--ink-3); box-shadow:none;}
+  .tray.submitted #submit{background:var(--g-green); color:#fff;}
+  .note{margin-top:8px; font-size:13px; color:var(--ink-2); min-height:1em;}
+  .tray.shake{animation:shake .35s;}
+
+  /* ---- toast ---- */
+  .toast{position:fixed; left:16px; right:16px; bottom:calc(var(--kb,0px) + var(--tray-h) + 12px); z-index:9;
+    padding:12px 14px; border-radius:var(--r-md); background:var(--surface-2); border:1px solid var(--line);
+    box-shadow:var(--e3); font-weight:500; opacity:0; transform:translateY(8px); pointer-events:none;
+    transition:opacity .2s, transform .2s;}
+  #home:not([hidden]) ~ .toast{bottom:calc(16px + var(--safe-bot));}
+  .toast.show{opacity:1; transform:none;}
+  .toast.ok{border-color:rgba(52,168,83,.6);}
+  .toast.error{border-color:rgba(234,67,53,.7); background:#2a1414;}
+</style>
+</head>
+<body class="noise-bg">
+<div id="gate" class="gate" hidden>
+  <p id="gateMsg">Scan the QR on the big screen to vote</p>
+  <form id="codeForm" autocomplete="off">
+    <input id="codeInput" maxlength="5" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="CODE" aria-label="Room code">
+    <button id="codeBtn" type="submit">Enter</button>
+  </form>
+</div>
+
+<main id="home">
+  <header class="top"><h1>Live Vote</h1></header>
+  <div id="cards" class="cards"></div>
+</main>
+
+<main id="ballot" hidden>
+  <header class="top bar">
+    <button id="back" aria-label="Back">‹</button>
+    <div class="ttl"><h1 id="ballotTitle"></h1><span id="need"></span></div>
+    <span id="timer" class="mono"></span>
+  </header>
+  <form id="searchForm" class="search" role="search">
+    <input id="q" type="search" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search names" aria-label="Search names">
+    <button id="clear" type="button" aria-label="Clear" hidden>×</button>
+  </form>
+  <div id="count" class="count"></div>
+  <ul id="results" class="list"></ul>
+  <nav id="rail" class="rail" aria-label="Jump to letter"></nav>
+  <div id="empty" class="empty" hidden>
+    <p>No names found</p>
+    <div id="suggestWrap" hidden><p>Did you mean…?</p><div id="suggest"></div></div>
+  </div>
+  <footer id="tray" class="tray">
+    <!-- Banners live in the tray, next to Submit: always in view, and they
+         never push the sticky search bar (or the A–Z rail) around. -->
+    <div id="warn" class="warn" hidden>Submit before time runs out!</div>
+    <div id="deadlineMsg" class="warn" hidden></div>
+    <div id="chips" class="chips"></div>
+    <div class="trayrow"><span id="picked" class="mono"></span><button id="submit" type="button" disabled></button></div>
+    <div id="trayNote" class="note"></div>
+  </footer>
+</main>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script type="module">
+import { buildIndex, search, suggest, letterOf, remapPicks } from '/vote/search.js';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const initials = (n) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+const hue = (n) => { let h = 0; for (const c of n) h = (h * 31 + c.codePointAt(0)) % 360; return h; };
+const sameSet = (a, b) => !!a && !!b && a.length === b.length && a.every((x) => b.includes(x));
+const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+// NTP-style, RTT-compensated — same algorithm as public/batucada/phone.html:127-148,
+// fed from the X-Server-Now header (the /vote/live body is shared and may be old).
+let clockOffset = 0;
+let bestRtt = Infinity;
+const serverNow = () => Date.now() + clockOffset;
+function syncClock(r, t0, t1) {
+  const sn = Number(r.headers.get('x-server-now'));
+  if (!sn) return;
+  const rtt = t1 - t0;
+  if (rtt < 0 || rtt > 5000) return;
+  if (Math.abs(sn - t1 - clockOffset) > 5000) bestRtt = Infinity;
+  if (rtt > bestRtt) return;
+  bestRtt = rtt;
+  clockOffset = sn + rtt / 2 - t1;
+}
+
+async function api(path, { method = 'GET', body } = {}) {
+  const t0 = Date.now();
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch(path, {
+      method, signal: ctl.signal,
+      headers: body ? { 'content-type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    syncClock(r, t0, Date.now());
+    return { status: r.status, json: await r.json().catch(() => null) };
+  } catch {
+    return { status: 0, json: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const S = {
+  boot: null, entered: false, entryOpen: true, pollMs: 3000,
+  live: null, listVersion: -1, candidates: [], index: [], byId: new Map(), byName: new Map(),
+  ballots: {}, voided: new Set(),
+  view: 'home', catId: null, query: '', picks: [], results: [],
+  inflight: false, autoOpened: new Set(), deadlineShown: new Set(), booting: true,
+};
+const currentCat = () => S.live?.categories.find((c) => c.id === S.catId) ?? null;
+const closedLocally = (cat) => cat.phase === 'open' && serverNow() >= cat.endsAt;
+const isOpen = (cat) => cat.phase === 'open' && !closedLocally(cat);
+const submittedPicks = (cat) => {
+  const b = S.ballots[cat.id];
+  return b && b.roundId === cat.roundId ? b.picks : null;
+};
+
+// Drafts hold NAMES, keyed by boot + category + round: ids are list positions,
+// and a restart reuses every number from 1 (docs/VOTE_PLAN.md, Review Focus 2–3).
+const draftKey = (cat) => `tv_draft:${S.boot}:${cat.id}:${cat.roundId}`;
+function loadDraft(cat) {
+  try {
+    const names = JSON.parse(localStorage.getItem(draftKey(cat)) || 'null');
+    return Array.isArray(names) ? names.map((n) => S.byName.get(n)).filter((id) => id !== undefined) : null;
+  } catch { return null; }
+}
+function saveDraft(cat) {
+  try { localStorage.setItem(draftKey(cat), JSON.stringify(S.picks.map((id) => S.byId.get(id).name))); } catch { /* private mode */ }
+}
+function dropOtherBoots() {
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (k?.startsWith('tv_draft:') && !k.startsWith(`tv_draft:${S.boot}:`)) localStorage.removeItem(k);
+  }
+}
+
+let toastTimer = 0;
+function toast(msg, kind = 'info') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = `toast show ${kind}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 2600);
+}
+
+// ---- server state ---------------------------------------------------------
+async function loadCandidates() {
+  const r = await api('/vote/candidates');
+  if (r.status !== 200 || !r.json) return;
+  const before = S.candidates;
+  S.candidates = r.json.candidates;
+  S.listVersion = r.json.listVersion;
+  S.index = buildIndex(S.candidates);
+  S.byId = new Map(S.candidates.map((c) => [c.id, c]));
+  S.byName = new Map(S.candidates.map((c) => [c.name, c.id]));
+  if (before.length) S.picks = remapPicks(before, S.candidates, S.picks);
+}
+
+async function applyLive(live) {
+  if (live.boot && live.boot !== S.boot) {
+    const restarted = S.boot !== null; // null = first load, not a restart
+    S.boot = live.boot;
+    dropOtherBoots();
+    if (restarted) {
+      S.ballots = {}; // the server forgot them, and our cookie died with its secret
+      refreshMe().then(render);
+    }
+  }
+  const prevCat = currentCat();
+  S.live = { ...(S.live ?? {}), ...live };
+  if (typeof live.entryOpen === 'boolean') S.entryOpen = live.entryOpen;
+  if (live.pollMs) S.pollMs = live.pollMs;
+  if (live.listVersion !== S.listVersion) await loadCandidates();
+  const cat = currentCat();
+  if (cat && prevCat && cat.roundId !== prevCat.roundId) S.picks = loadDraft(cat) ?? submittedPicks(cat) ?? S.picks;
+  maybeAutoOpen();
+}
+
+async function refreshLive() {
+  const r = await api('/vote/live');
+  if (r.status === 200 && r.json) await applyLive(r.json);
+}
+
+async function refreshMe() {
+  const r = await api('/vote/me');
+  if (r.status !== 200 || !r.json) return;
+  S.entered = r.json.entered;
+  S.entryOpen = r.json.entryOpen;
+  S.ballots = r.json.ballots;
+  S.voided = new Set(r.json.voided);
+}
+
+async function enter(code, fromQr) {
+  const r = await api('/vote/enter', { method: 'POST', body: { code } });
+  if (r.status === 200) { S.entered = true; return; }
+  const reason = r.json?.reason;
+  $('gateMsg').textContent =
+    reason === 'entry_closed' ? 'Entry is closed' :
+    reason === 'throttled' ? 'Too many tries — wait a minute and scan again' :
+    reason === 'bad_code' ? (fromQr ? 'That code expired — scan the screen again' : "That code isn't right — check the big screen") :
+    "Couldn't reach the server — try again";
+}
+
+let polls = 0;
+async function poll() {
+  await refreshLive();
+  if (++polls % 5 === 0) await refreshMe(); // voids and entry changes; ballots we already know
+  render();
+  setTimeout(poll, S.pollMs * (0.8 + Math.random() * 0.4));
+}
+
+// ---- navigation -----------------------------------------------------------
+function openBallot(id, push = true) {
+  const cat = S.live?.categories.find((c) => c.id === id);
+  if (!cat) return;
+  S.view = 'ballot';
+  S.catId = id;
+  S.query = '';
+  $('q').value = '';
+  S.picks = loadDraft(cat) ?? [...(submittedPicks(cat) ?? [])];
+  if (push) history.pushState({ cat: id }, '', '/vote');
+  render();
+  scrollTo(0, 0);
+}
+function goHome() {
+  S.view = 'home';
+  S.catId = null;
+  render();
+}
+addEventListener('popstate', () => goHome());
+
+function maybeAutoOpen() {
+  if (S.booting || S.view !== 'home' || !S.live) return;
+  const open = S.live.categories.filter(isOpen);
+  if (open.length !== 1) return;
+  const cat = open[0];
+  const key = `${cat.id}:${cat.roundId}`;
+  if (submittedPicks(cat) || S.autoOpened.has(key)) return;
+  S.autoOpened.add(key);
+  openBallot(cat.id);
+}
+
+// ---- rendering ------------------------------------------------------------
+function statusOf(cat) {
+  const sub = submittedPicks(cat);
+  if (cat.phase === 'setup') return 'Opens soon';
+  if (!isOpen(cat)) return sub ? 'Closed · your votes counted ✓' : 'Closed';
+  const draft = loadDraft(cat);
+  if (sub && (!draft || sameSet(draft, sub))) return 'Submitted ✓';
+  if (draft?.length) return `${draft.length} of ${cat.picks} picked — not submitted`;
+  return 'Not voted';
+}
+
+const cardClass = (cat) => (isOpen(cat) ? 'open' : cat.phase === 'setup' ? 'setup' : 'closed');
+const CARD_ORDER = { open: 0, setup: 1, closed: 2 };
+
+const seenOpen = new Set(); // `${id}:${roundId}` already shown open — only new ones animate in
+
+function renderHome() {
+  const cats = [...(S.live?.categories ?? [])].sort((a, b) => CARD_ORDER[cardClass(a)] - CARD_ORDER[cardClass(b)]);
+  $('cards').innerHTML = cats.map((cat) => {
+    let cls = cardClass(cat);
+    const key = `${cat.id}:${cat.roundId}`;
+    if (cls === 'open' && !seenOpen.has(key)) { seenOpen.add(key); cls += ' new'; }
+    return `<button class="cat-card ${cls}" data-id="${esc(cat.id)}"><span class="t">${esc(cat.title)}</span>` +
+      `<span class="n">Pick ${cat.picks}</span><span class="s">${esc(statusOf(cat))}</span><span class="tm mono"></span></button>`;
+  }).join('');
+}
+
+function highlight(name, ranges) {
+  let out = '';
+  let at = 0;
+  for (const [s, e] of ranges) { out += `${esc(name.slice(at, s))}<mark>${esc(name.slice(s, e))}</mark>`; at = e; }
+  return out + esc(name.slice(at));
+}
+
+function renderResults() {
+  const q = S.query.trim();
+  const results = search(S.index, S.query);
+  const picked = new Set(S.picks);
+  let html = '';
+  let letter = null;
+  for (const r of results) {
+    if (!q) {
+      const L = letterOf(r.name);
+      if (L !== letter) { letter = L; html += `<li class="hdr" id="L-${L}">${L}</li>`; }
+    }
+    html += `<li class="row${picked.has(r.id) ? ' on' : ''}" data-id="${r.id}" data-name="${esc(r.name)}">` +
+      `<span class="av" style="--h:${hue(r.name)}">${esc(initials(r.name))}</span>` +
+      `<span class="nm">${highlight(r.name, r.ranges)}</span><span class="ck" aria-hidden="true"></span></li>`;
+  }
+  $('results').innerHTML = html;
+  $('count').textContent = q ? `${results.length} of ${S.candidates.length}` : `${S.candidates.length} names`;
+  $('clear').hidden = !S.query;
+  const empty = !!q && results.length === 0;
+  $('empty').hidden = !empty;
+  if (empty) {
+    const sug = suggest(S.index, S.query);
+    $('suggest').innerHTML = sug.map((s) => `<button type="button" class="sug" data-id="${s.id}">${esc(s.name)}</button>`).join('');
+    $('suggestWrap').hidden = sug.length === 0;
+  }
+  $('rail').hidden = !!q;
+  if (!q) $('rail').innerHTML = [...new Set(results.map((r) => letterOf(r.name)))].map((L) => `<span data-l="${L}">${L}</span>`).join('');
+  S.results = results;
+}
+
+function renderTray() {
+  const cat = currentCat();
+  if (!cat) return;
+  const sub = submittedPicks(cat);
+  const same = sameSet(sub, S.picks);
+  const open = isOpen(cat);
+  $('tray').classList.toggle('submitted', same);
+  $('chips').innerHTML = S.picks.map((id) => `<button type="button" class="chip" data-id="${id}"><span>${esc(S.byId.get(id)?.name ?? '?')}</span><b aria-label="Remove">×</b></button>`).join('');
+  $('picked').textContent = `${S.picks.length} of ${cat.picks}`;
+  const btn = $('submit');
+  btn.disabled = !S.entered || !open || S.inflight || same || S.picks.length !== cat.picks || S.voided.has(cat.id);
+  btn.textContent = S.inflight ? 'Submitting…' : same ? 'Submitted ✓' : sub ? 'Update votes' : `Submit ${cat.picks} vote${cat.picks > 1 ? 's' : ''}`;
+  $('trayNote').textContent =
+    S.voided.has(cat.id) ? 'Your ballot in this category was removed by the organizer' :
+    cat.phase === 'setup' ? "Voting hasn't started yet" :
+    !open ? (sub ? 'Voting closed — your votes counted ✓' : 'Voting closed') :
+    same ? `Your ${cat.picks} votes are in ✓ — you can change them until time runs out` : '';
+}
+
+function renderGate() {
+  $('gate').hidden = S.entered;
+  $('codeForm').hidden = !S.entryOpen;
+  if (!S.entered && !S.entryOpen) $('gateMsg').textContent = 'Entry is closed';
+}
+
+function render() {
+  renderGate();
+  $('home').hidden = S.view !== 'home';
+  $('ballot').hidden = S.view !== 'ballot';
+  if (S.view === 'home') return renderHome();
+  const cat = currentCat();
+  if (!cat) return goHome();
+  $('ballotTitle').textContent = cat.title;
+  $('need').textContent = `Pick exactly ${cat.picks}`;
+  renderResults();
+  renderTray();
+}
+
+// ---- actions --------------------------------------------------------------
+function togglePick(id) {
+  const cat = currentCat();
+  if (!cat) return;
+  if (!S.entered) { $('gate').classList.remove('shake'); void $('gate').offsetWidth; $('gate').classList.add('shake'); return; }
+  if (!isOpen(cat)) return toast(cat.phase === 'setup' ? "Voting hasn't started yet" : 'Voting closed');
+  const i = S.picks.indexOf(id);
+  if (i >= 0) S.picks.splice(i, 1);
+  else if (S.picks.length >= cat.picks) {
+    $('tray').classList.remove('shake'); void $('tray').offsetWidth; $('tray').classList.add('shake');
+    return toast(`You've picked ${cat.picks} — remove one to add ${S.byId.get(id)?.name}`);
+  } else S.picks.push(id);
+  saveDraft(cat);
+  renderResults();
+  renderTray();
+}
+
+const BALLOT_MSG = {
+  closed: 'Voting closed — this ballot did not count.',
+  stale_list: 'The list was updated — check your picks and submit again.',
+  stale_round: 'This category was restarted — check your picks and submit again.',
+  voided: 'Your ballot in this category was removed by the organizer',
+  not_entered: 'Scan the QR on the big screen to vote',
+  too_many: 'Too many changes in this category.',
+};
+
+async function submit() {
+  const cat = currentCat();
+  if (!cat || S.inflight || S.picks.length !== cat.picks) return; // in-flight guard: a double tap is one submit
+  S.inflight = true;
+  renderTray();
+  const body = { categoryId: cat.id, roundId: cat.roundId, listVersion: S.listVersion, picks: S.picks };
+  try {
+    let r = await api('/vote/ballot', { method: 'POST', body });
+    if (r.status === 429 && r.json?.reason === 'too_fast') { await sleep(1100); r = await api('/vote/ballot', { method: 'POST', body }); }
+    if (r.json?.live) await applyLive(r.json.live);
+    if (r.status === 200) {
+      S.ballots[cat.id] = { roundId: cat.roundId, picks: r.json.ballot };
+      navigator.vibrate?.(30);
+      toast('Your votes are in ✓', 'ok');
+      return;
+    }
+    const reason = r.json?.reason;
+    if (reason === 'not_entered') S.entered = false;
+    if (reason === 'voided') S.voided.add(cat.id);
+    if (reason === 'stale_list') await loadCandidates();
+    toast(BALLOT_MSG[reason] ?? "Couldn't submit — try again", 'error');
+  } finally {
+    S.inflight = false;
+    render();
+  }
+}
+
+// ---- events ---------------------------------------------------------------
+$('cards').addEventListener('click', (e) => { const c = e.target.closest('.cat-card'); if (c) openBallot(c.dataset.id); });
+$('back').addEventListener('click', () => history.back());
+$('q').addEventListener('input', () => { S.query = $('q').value; renderResults(); });
+$('clear').addEventListener('click', () => { S.query = ''; $('q').value = ''; renderResults(); $('q').focus(); });
+$('searchForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (!S.query.trim() || !S.results.length) return;
+  togglePick(S.results[0].id);
+  S.query = '';
+  $('q').value = '';
+  renderResults(); // the keyboard stays up for the next name
+});
+$('results').addEventListener('click', (e) => { const row = e.target.closest('li.row'); if (row) togglePick(Number(row.dataset.id)); });
+$('suggest').addEventListener('click', (e) => {
+  const b = e.target.closest('.sug');
+  if (!b) return;
+  togglePick(Number(b.dataset.id));
+  S.query = '';
+  $('q').value = '';
+  renderResults();
+});
+$('chips').addEventListener('click', (e) => { const c = e.target.closest('.chip'); if (c) togglePick(Number(c.dataset.id)); });
+$('submit').addEventListener('click', submit);
+$('codeForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await enter($('codeInput').value, false);
+  if (S.entered) await refreshMe();
+  render();
+});
+function railJump(e) {
+  const p = e.touches ? e.touches[0] : e;
+  const L = document.elementFromPoint(p.clientX, p.clientY)?.dataset?.l;
+  if (L) document.getElementById(`L-${L}`)?.scrollIntoView({ block: 'start' });
+  e.preventDefault();
+}
+$('rail').addEventListener('touchstart', railJump, { passive: false });
+$('rail').addEventListener('touchmove', railJump, { passive: false });
+$('rail').addEventListener('click', railJump);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLive().then(render); });
+// The tray grows with banners and wrapped chips; everything laid out around it
+// (list padding, the rail's bottom, the toast) reads its real height.
+new ResizeObserver(() => document.documentElement.style.setProperty('--tray-h', `${$('tray').offsetHeight}px`)).observe($('tray'));
+// Keep the fixed tray above the on-screen keyboard (iOS doesn't resize the layout viewport).
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const fit = () => document.documentElement.style.setProperty('--kb', `${Math.max(0, innerHeight - vv.height - vv.offsetTop)}px`);
+  vv.addEventListener('resize', fit);
+  vv.addEventListener('scroll', fit);
+}
+
+// ---- clock: countdowns, last-30-s warning, the deadline -------------------
+function tickClock() {
+  const now = serverNow();
+  for (const el of document.querySelectorAll('.cat-card.open .tm')) {
+    const cat = S.live?.categories.find((c) => c.id === el.parentElement.dataset.id);
+    if (cat) el.textContent = mmss(cat.endsAt - now);
+  }
+  const cat = S.view === 'ballot' ? currentCat() : null;
+  if (cat) {
+    const left = cat.phase === 'open' ? cat.endsAt - now : 0;
+    $('timer').textContent = cat.phase === 'open' ? mmss(left) : cat.phase === 'setup' ? 'Soon' : 'Closed';
+    const unsent = S.picks.length > 0 && !sameSet(submittedPicks(cat), S.picks);
+    $('warn').hidden = !(cat.phase === 'open' && left > 0 && left <= 30_000 && unsent);
+    const key = `${cat.id}:${cat.roundId}`;
+    if (cat.phase !== 'setup' && left <= 0 && !S.deadlineShown.has(key)) {
+      S.deadlineShown.add(key);
+      if (unsent) {
+        $('deadlineMsg').textContent = "Time's up — your unsubmitted picks didn't count.";
+        $('deadlineMsg').hidden = false;
+      }
+      renderTray();
+    }
+    if (left > 0 && S.deadlineShown.has(key)) S.deadlineShown.delete(key);
+    if (left > 0) $('deadlineMsg').hidden = true;
+  }
+  requestAnimationFrame(tickClock);
+}
+
+// ---- boot -----------------------------------------------------------------
+(async () => {
+  const k = new URLSearchParams(location.search).get('k');
+  if (k) history.replaceState(null, '', '/vote');
+  await refreshMe();
+  if (k && !S.entered) await enter(k, true);
+  await refreshLive();
+  if (S.entered) await refreshMe();
+  S.booting = false;
+  // A reload keeps you in the ballot you were on: the browser keeps history.state.
+  const back = history.state?.cat;
+  if (back && S.live?.categories.some((c) => c.id === back)) openBallot(back, false);
+  else maybeAutoOpen();
+  render();
+  for (let i = 1; i < 4; i++) setTimeout(refreshLive, i * 250); // min-RTT needs a few samples
+  setTimeout(poll, S.pollMs);
+  requestAnimationFrame(tickClock);
+})();
+</script>
+</body>
+</html>

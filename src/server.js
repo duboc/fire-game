@@ -309,6 +309,7 @@ precompress('theme.css', 'text/css; charset=utf-8', ['/theme.css']);
 precompress('batucada/phone.html', HTML, ['/batucada', '/batucada/', '/batucada/phone.html']);
 precompress('batucada/screen.html', HTML, ['/batucada/screen', '/batucada/screen.html']);
 precompress('vote/search.js', 'text/javascript; charset=utf-8', ['/vote/search.js']);
+precompress('vote/phone.html', HTML, ['/vote', '/vote/', '/vote/phone.html']);
 
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
