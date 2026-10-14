@@ -14,7 +14,8 @@
     "check:contract": "node scripts/contract-check.mjs",
     "check:browser": "node scripts/browser-check.mjs",
     "check:load": "node scripts/load-check.mjs",
-    "admin:hash": "node scripts/admin-hash.mjs"
+    "admin:hash": "node scripts/admin-hash.mjs",
+    "check:vote": "node scripts/vote-check.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",

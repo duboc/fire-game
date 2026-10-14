@@ -52,8 +52,8 @@ API:
 | Method & path | Auth | Purpose |
 |---|---|---|
 | `POST /vote/enter` | room code | `{code}` → sets the device cookie. The only way in. |
-| `GET /vote/candidates` | – | `{listVersion, candidates:[{id,name}]}`; ETag = listVersion → 304 on repeat |
-| `GET /vote/live` | – | shared phone state: `{listVersion, entryOpen, now, pollMs, categories:[{id, title, picks, phase, roundId, endsAt}]}` — no counts; one precompressed buffer for every phone |
+| `GET /vote/candidates` | – | `{listVersion, candidates:[{id,name}]}`; ETag = boot + listVersion → 304 on repeat |
+| `GET /vote/live` | – | shared phone state: `{listVersion, boot, entryOpen, pollMs, categories:[{id, title, picks, phase, roundId, endsAt}]}` — no counts; one precompressed buffer for every phone. The server clock rides in an `X-Server-Now` header (the body is shared and may be older than the request); `boot` changes on every restart so phones drop drafts from before it |
 | `GET /vote/me` | device | `{entered, ballots:{[categoryId]:{roundId, picks[]}}, voided:[categoryId]}` |
 | `POST /vote/ballot` | device | `{categoryId, roundId, listVersion, picks[]}` → `{ballot, category}` — never counts |
 | `GET /vote/events` | admin | SSE for screen + admin: counts, feed, stage, room code, fraud flags |

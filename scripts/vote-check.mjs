@@ -1,0 +1,255 @@
+// Live Vote verification — docs/VOTE_SPEC.md, "Testing". Spawns its own
+// servers on localhost. Part 1 is the HTTP contract; Tasks 5–7 of
+// docs/VOTE_PLAN.md append the browser checks for each page.
+import { spawn } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { SEED_NAMES, SEED_CATEGORIES } from '../src/vote-seed.js';
+
+const ROOT = new URL('..', import.meta.url).pathname;
+const TOKEN = 'votetok';
+const CODE_MS = 3000;
+const SHOTS = '/tmp/vote-check';
+mkdirSync(SHOTS, { recursive: true });
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let pass = 0;
+let fail = 0;
+const ok = (c, m) => {
+  if (c) { pass++; console.log('  ✔', m); } else { fail++; console.log('  ✘', m); }
+};
+const FORBIDDEN = ['counts', 'ballotCount', 'votes', 'code', 'flags'];
+// Every key at any depth — "no counts on phones" is about structure, not text.
+const keysDeep = (o, out = new Set()) => {
+  if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) { out.add(k); keysDeep(v, out); }
+  return out;
+};
+const leaks = (o) => FORBIDDEN.filter((k) => keysDeep(o).has(k));
+
+function startServer(port, env = {}) {
+  const child = spawn(process.execPath, [ROOT + 'src/server.js'], {
+    env: {
+      ...process.env, PORT: String(port), ADMIN_TOKEN: TOKEN, VOTE_CODE_MS: String(CODE_MS),
+      VOTE_MIN_DURATION_MS: '2000', NODE_ENV: 'test', HEARTBEAT_MS: '60000', ...env,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let log = '';
+  child.stdout.on('data', (d) => { log += d; });
+  child.stderr.on('data', (d) => { log += d; });
+  const base = `http://127.0.0.1:${port}`;
+  const ready = (async () => {
+    for (let i = 0; i < 100; i++) {
+      try { if ((await fetch(`${base}/livez`)).ok) return; } catch { /* not up yet */ }
+      await sleep(100);
+    }
+    throw new Error(`server on ${port} did not start:\n${log}`);
+  })();
+  return { child, ready, base, log: () => log };
+}
+
+// One simulated device: its own cookie jar, IP (via X-Forwarded-For — honoured
+// because clientIp() takes the rightmost entry and there is no proxy locally)
+// and user-agent.
+function client(base, { ip, ua = 'vote-check' } = {}) {
+  const jar = new Map();
+  const cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+  const req = async (path, { method = 'GET', body, headers = {} } = {}) => {
+    const h = { 'user-agent': ua, ...headers };
+    if (ip) h['x-forwarded-for'] = ip;
+    if (jar.size) h.cookie = cookie();
+    if (body !== undefined) h['content-type'] = 'application/json';
+    const r = await fetch(base + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+    for (const c of r.headers.getSetCookie()) {
+      const kv = c.split(';')[0];
+      const i = kv.indexOf('=');
+      jar.set(kv.slice(0, i), kv.slice(i + 1));
+    }
+    const text = await r.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch { /* not JSON */ }
+    return { status: r.status, headers: r.headers, json, text };
+  };
+  return { base, jar, cookie, req };
+}
+
+async function adminClient(base) {
+  const a = client(base);
+  const r = await a.req('/admin/login', { method: 'POST', body: { token: TOKEN } });
+  if (r.status !== 200) throw new Error('admin login failed');
+  return a;
+}
+
+// The first frame of the admin SSE stream: counts, room code, flags.
+async function frame(admin) {
+  const ctl = new AbortController();
+  const r = await fetch(admin.base + '/vote/events', { headers: { cookie: admin.cookie() }, signal: ctl.signal });
+  if (r.status !== 200) { ctl.abort(); return { status: r.status }; }
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return { status: 0 };
+      buf += dec.decode(value, { stream: true });
+      const m = buf.match(/data: (.*)\n\n/);
+      if (m) return { status: 200, ...JSON.parse(m[1]) };
+    }
+  } finally { ctl.abort(); }
+}
+
+const enterWith = (c, code) => c.req('/vote/enter', { method: 'POST', body: { code } });
+const ballot = (c, cat, listVersion, picks, extra = {}) =>
+  c.req('/vote/ballot', { method: 'POST', body: { categoryId: cat.id, roundId: cat.roundId, listVersion, picks, ...extra } });
+
+async function apiChecks() {
+  const A = startServer(8145);
+  try {
+    await A.ready;
+    const admin = await adminClient(A.base);
+
+    console.log('\n== public surface ==');
+    const anon = client(A.base);
+    const live0 = await anon.req('/vote/live');
+    ok(live0.status === 200 && live0.json.categories.length === 5, '/vote/live lists the 5 seed categories');
+    ok(Number(live0.headers.get('x-server-now')) > 0, '/vote/live carries X-Server-Now');
+    ok(leaks(live0.json).length === 0, '/vote/live has no counts, code or flags');
+    ok(live0.json.pollMs >= 3000 && live0.json.pollMs <= 6000, 'pollMs is within 3–6 s');
+    ok(typeof live0.json.boot === 'string' && live0.json.boot.length >= 8, '/vote/live carries a boot id');
+    const cands = await anon.req('/vote/candidates');
+    ok(cands.json.candidates.length === 120, '120 seed names');
+    const etag = cands.headers.get('etag');
+    ok(etag.includes(live0.json.boot), 'candidates ETag includes the boot id');
+    ok((await anon.req('/vote/candidates', { headers: { 'if-none-match': etag } })).status === 304, 'candidates revalidate to 304');
+    ok((await anon.req('/vote/events')).status === 401, '/vote/events refuses without an admin session');
+    ok((await anon.req('/vote/me')).json.entered === false, '/vote/me: not entered without a cookie');
+    const c0 = live0.json.categories[0];
+    const nb = await ballot(anon, c0, live0.json.listVersion, [0, 1, 2]);
+    ok(nb.status === 401 && nb.json.reason === 'not_entered', 'ballot without a device cookie → 401 not_entered');
+    ok((await anon.req('/state')).status === 200 && (await anon.req('/batucada/state')).status === 200, 'Tap Race and Sequência still answer');
+
+    console.log('\n== entering ==');
+    const f0 = await frame(admin);
+    ok(f0.status === 200 && /^[A-HJKMNP-Z2-9]{5}$/.test(f0.code), 'admin frame carries the 5-char room code');
+    const bad = client(A.base, { ip: '198.51.100.1' });
+    const b1 = await enterWith(bad, 'ZZZZZ');
+    ok(b1.status === 403 && b1.json.reason === 'bad_code', 'wrong code → 403 bad_code');
+    for (let i = 0; i < 19; i++) await enterWith(bad, 'ZZZZZ');
+    const thr = await enterWith(bad, (await frame(admin)).code);
+    ok(thr.status === 429 && thr.json.reason === 'throttled', '20 wrong codes from one IP → 429, even with the right code');
+    const x = await client(A.base).req('/vote/enter', { method: 'POST', body: { code: f0.code }, headers: { 'sec-fetch-site': 'cross-site' } });
+    ok(x.status === 403 && x.json.reason === 'cross_site', 'cross-site POST refused');
+    const dev = client(A.base, { ip: '198.51.100.2' });
+    const e = await enterWith(dev, (await frame(admin)).code);
+    const sc = e.headers.getSetCookie()[0] ?? '';
+    ok(e.status === 200 && /^tv_voter=[^;]+; Path=\/vote; HttpOnly; SameSite=Strict/.test(sc), 'right code → device cookie (HttpOnly, Strict, /vote)');
+    ok(!/Secure/.test(sc), 'no Secure flag over plain http');
+    ok((await dev.req('/vote/me')).json.entered === true, '/vote/me: entered');
+    const re = await enterWith(dev, 'ZZZZZ');
+    ok(re.status === 200 && re.headers.getSetCookie().length === 0, 're-entering with a valid cookie is a no-op, whatever the code');
+
+    console.log('\n== config ==');
+    const big = Array.from({ length: 300 }, (_, i) => `Person ${String(i).padStart(3, '0')} ${'x'.repeat(46)}`);
+    const cfg = await admin.req('/vote/admin/config', { method: 'POST', body: { names: big, categories: [{ title: 'Big', picks: 3 }] } });
+    ok(cfg.status === 200, '300 × 57-char names save (body well over 8 KB)');
+    const dup = await admin.req('/vote/admin/config', { method: 'POST', body: { names: ['Élio', 'ELIO'], categories: [{ title: 'X', picks: 1 }] } });
+    ok(dup.status === 400 && /same name/.test(dup.json.errors.join(' ')), 'duplicate names → 400 naming the lines');
+    const anonCfg = await client(A.base).req('/vote/admin/config', { method: 'POST', body: { names: ['A', 'B'], categories: [{ title: 'X', picks: 1 }] } });
+    ok(anonCfg.status === 401, 'config needs the admin session');
+    ok((await admin.req('/vote/admin/config', { method: 'POST', body: { names: SEED_NAMES, categories: SEED_CATEGORIES } })).status === 200, 'seed restored');
+
+    console.log('\n== ballots ==');
+    let live = (await anon.req('/vote/live')).json;
+    const [c1] = live.categories;
+    ok((await admin.req('/vote/admin/open', { method: 'POST', body: { categoryIds: [c1.id] } })).status === 200, 'open one category');
+    live = (await anon.req('/vote/live')).json;
+    let cat = live.categories.find((c) => c.id === c1.id);
+    ok(cat.phase === 'open' && Math.abs(cat.endsAt - Date.now() - 180_000) < 5000, 'no duration → 3 min');
+    const w = await ballot(dev, cat, live.listVersion, [0, 1]);
+    ok(w.status === 400 && w.json.reason === 'wrong_count', 'a 2-pick ballot in a 3-pick category → wrong_count');
+    await sleep(1100);
+    const g = await ballot(dev, cat, live.listVersion, [2, 0, 1]);
+    ok(g.status === 200 && g.json.ballot.join() === '0,1,2', 'a valid ballot lands (sorted)');
+    ok(leaks(g.json).length === 0, 'the ballot response carries no counts');
+    const tf = await ballot(dev, cat, live.listVersion, [0, 1, 3]);
+    ok(tf.status === 429 && tf.json.reason === 'too_fast', 'a second submit within 1 s → too_fast');
+    let f = await frame(admin);
+    let fc = f.categories.find((c) => c.id === cat.id);
+    ok(fc.counts.slice(0, 4).join() === '1,1,1,0' && fc.ballotCount === 1, 'the admin frame shows the counts');
+    ok(f.feed.filter((x) => x.categoryId === cat.id).length === 3, 'the feed has the three +1s');
+    ok((await dev.req('/vote/me')).json.ballots[cat.id].picks.join() === '0,1,2', '/vote/me returns my ballot');
+    await sleep(1100);
+    await ballot(dev, cat, live.listVersion, [0, 1, 3]);
+    fc = (await frame(admin)).categories.find((c) => c.id === cat.id);
+    ok(fc.counts.slice(0, 4).join() === '1,1,0,1' && fc.ballotCount === 1, 'changing one pick moves exactly one vote');
+    await sleep(1100);
+    const sl = await ballot(dev, cat, live.listVersion - 1, [0, 1, 4]);
+    ok(sl.status === 409 && sl.json.reason === 'stale_list' && Array.isArray(sl.json.live.categories), 'stale list → 409 with fresh live state');
+
+    console.log('\n== expiry & entry lock ==');
+    const old = (await frame(admin)).code;
+    await sleep(CODE_MS * 2 + 200);
+    const late = await enterWith(client(A.base, { ip: '198.51.100.3' }), old);
+    ok(late.status === 403 && late.json.reason === 'bad_code', 'a code older than two epochs is refused');
+    await admin.req('/vote/admin/entry', { method: 'POST', body: { open: false } });
+    const locked = await enterWith(client(A.base, { ip: '198.51.100.4' }), (await frame(admin)).code);
+    ok(locked.status === 403 && locked.json.reason === 'entry_closed', 'entry closed → new devices refused');
+    ok((await dev.req('/vote/me')).json.entered === true, '…devices already in stay in');
+    ok((await anon.req('/vote/live')).json.entryOpen === false, 'phones learn entry is closed');
+    await admin.req('/vote/admin/entry', { method: 'POST', body: { open: true } });
+
+    console.log('\n== fraud flags ==');
+    const fr = await frame(admin);
+    await sleep(fr.codeRotatesAt - fr.now + 50); // a fresh epoch, so all six share an entry window
+    const code = (await frame(admin)).code;
+    const bots = [];
+    for (let i = 0; i < 6; i++) {
+      const b = client(A.base, { ip: '203.0.113.50', ua: 'BotPhone/1.0' });
+      await enterWith(b, code);
+      await ballot(b, cat, live.listVersion, [5, 6, 7]);
+      bots.push(b);
+    }
+    await sleep(1300);
+    f = await frame(admin);
+    const flag = f.flags.find((x) => x.kind === 'cluster' && x.categoryId === cat.id);
+    ok(flag && flag.devices === 6, 'six identical ballots from one network + browser → cluster flag');
+    ok(!keysDeep(f.flags).has('voterIds'), 'voter ids never leave the server');
+    const before = f.categories.find((c) => c.id === cat.id).counts[5];
+    await admin.req('/vote/admin/void', { method: 'POST', body: { flagId: flag.id } });
+    fc = (await frame(admin)).categories.find((c) => c.id === cat.id);
+    ok(fc.counts[5] === before - 6 && fc.voidedCount === 6, 'void takes the six ballots out of the counts');
+    await sleep(1100);
+    const vb = await ballot(bots[0], cat, live.listVersion, [5, 6, 8]);
+    ok(vb.status === 403 && vb.json.reason === 'voided', 'a voided device cannot vote again this round');
+    ok((await bots[0].req('/vote/me')).json.voided.includes(cat.id), '/vote/me reports the void');
+    await admin.req('/vote/admin/void', { method: 'POST', body: { flagId: flag.id, restore: true } });
+    ok((await frame(admin)).categories.find((c) => c.id === cat.id).counts[5] === before, 'restore puts them back');
+
+    console.log('\n== close ==');
+    await admin.req('/vote/admin/close', { method: 'POST', body: { categoryIds: [cat.id] } });
+    await sleep(1100);
+    const cl = await ballot(dev, cat, live.listVersion, [0, 1, 2]);
+    ok(cl.status === 409 && cl.json.reason === 'closed', 'a ballot after close → 409 closed');
+    const st = await admin.req('/vote/admin/stage', { method: 'POST', body: { mode: 'pinned', categoryIds: [cat.id] } });
+    ok(st.status === 200 && (await frame(admin)).stage.show.join() === cat.id, 'pinning the stage');
+
+    console.log('\n== restart ==');
+    const B = startServer(8146);
+    try {
+      await B.ready;
+      const moved = client(B.base);
+      for (const [k, v] of dev.jar) moved.jar.set(k, v);
+      ok((await moved.req('/vote/me')).json.entered === false, 'a cookie from before a restart is not honoured');
+      const liveB = (await moved.req('/vote/live')).json;
+      ok(liveB.boot !== live0.json.boot, 'a new boot id after restart');
+      const mb = await ballot(moved, liveB.categories[0], liveB.listVersion, [0, 1, 2]);
+      ok(mb.status === 401, '…and it cannot vote');
+    } finally { B.child.kill(); }
+  } finally { A.child.kill(); }
+}
+
+await apiChecks();
+// Browser checks (Tasks 5–7) are called here.
+
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
