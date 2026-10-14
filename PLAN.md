@@ -629,3 +629,21 @@ admin session, additive routes only.
 - [x] Task 6 — `public/vote/screen.html` (`/vote/screen`) + screen browser checks.
 - [x] Task 7 — `public/vote/admin.html` (`/vote/admin`) + admin browser checks.
 - [x] Task 8 — README, full regression (`npm test`, `check:contract`, `check:browser`, `check:vote`), screenshot review.
+
+## Google Cloud look, Summit password, `live-vote` service
+
+Live Vote alone, in a light "Google Cloud console" look, deployed as a new Cloud
+Run service `live-vote` (the host narrowed the scope mid-way: Tap Race and
+Sequência keep their dark theme and are not served by the new service). The
+admin password is set to the one the host chose. `tap-race` is left running,
+untouched.
+
+- [x] `test/theme.test.js`: tokens are a light palette; every text/background pair meets WCAG AA (fill colour held to the 3:1 non-text rule).
+- [x] `public/vote/theme.css`: the vote app's own Google Cloud stylesheet; vote pages link it; `/theme.css` (Tap Race, Sequência) unchanged.
+- [x] Vote pages: hard-coded dark colours replaced; "Google Cloud" wordmark in the phone, admin and screen headers.
+- [x] `scripts/look-check.mjs` (`npm run check:look`): screenshots + a contrast audit of every visible text, run in `APPS=vote`.
+- [x] `src/server.js`: `APPS=vote` allow-list mode (`/` → `/vote`, every other app 404) with checks in `check:vote`.
+- [x] `src/server.js`: `ADMIN_PASSWORD_HASH` for the new password (plaintext never committed); login verified without `ADMIN_TOKEN`.
+- [x] `deploy.sh` defaults to `SERVICE=live-vote APPS=vote`; README updated.
+- [ ] Full regression: `npm test`, `check:contract`, `check:browser`, `check:vote`, `check:look`.
+- [ ] PR → merge → deploy `live-vote` → production smoke incl. admin login.

@@ -31,7 +31,7 @@ const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.GOOGLE_CL
 // Regenerate with: npm run admin:hash
 const ADMIN_PASSWORD_HASH =
   process.env.ADMIN_PASSWORD_HASH ||
-  'scrypt$16384$8$1$7KgtFie_C32QzHXn06YxdQ$Z6JI8v-NJ5AEaZk-kSgLDiMDzM9elhJTG104slseTe8';
+  'scrypt$16384$8$1$H47kuhlNXQk9veLgnGn0oQ$ZKI4OkQyVNXHstmT4t76hampKhcWfqjvTd3O9GD2WeE';
 
 // The baked-in password is a real one, so booting with no configuration is now
 // safe. An *explicitly* weak override is not — that is how test tokens reach
